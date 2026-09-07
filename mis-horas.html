@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VGA 24 - Mi Historial de Horas y Marcaciones</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
+
+  <!-- ENCABEZADO Y MENÚ CORPORATIVO -->
+  <header class="bg-slate-900 border-b border-slate-800 shadow-md">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 bg-slate-800 border border-emerald-500/30 rounded-xl flex items-center justify-center overflow-hidden shadow-inner p-1">
+          <img src="https://i.ibb.co/qYcVxcTH/Chat-GPT-Image-3-sept-2026-13-19-18.png" alt="Logo VGA Security" class="w-full h-full object-contain">
+        </div>
+        <div>
+          <span class="text-[10px] font-extrabold tracking-widest text-emerald-400 uppercase block">VGA Security 24 S.A.</span>
+          <h1 class="text-lg font-bold text-white tracking-wide">Portal del Vigilador</h1>
+        </div>
+      </div>
+
+      <nav class="flex flex-wrap justify-center items-center gap-1 bg-slate-800/80 p-1.5 rounded-xl border border-slate-700/60">
+        <a href="index.html" class="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition flex items-center space-x-1.5">
+          <i class="fa-solid fa-camera-retro text-emerald-400"></i>
+          <span>Fichadas</span>
+        </a>
+        <a href="admin.html" class="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition flex items-center space-x-1.5">
+          <i class="fa-solid fa-building-shield text-emerald-400"></i>
+          <span>Centro de Operaciones</span>
+        </a>
+        <a href="panel.html" class="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition flex items-center space-x-1.5">
+          <i class="fa-solid fa-chart-line text-emerald-400"></i>
+          <span>Control en Tiempo Real</span>
+        </a>
+        <a href="mis-horas.html" class="px-3 py-1.5 text-xs font-medium text-white bg-slate-700 rounded-lg transition flex items-center space-x-1.5 shadow-sm">
+          <i class="fa-solid fa-clock text-emerald-400"></i>
+          <span>Control de Mis Horas</span>
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <main class="max-w-4xl mx-auto space-y-6 p-4 md:p-8 flex-grow w-full">
+    
+    <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
+      <div class="flex justify-between items-center">
+        <h2 class="text-xl font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-user-clock text-emerald-500"></i> Mi Consulta de Horas
+        </h2>
+        <button id="btnCerrarSesion" onclick="cerrarSesionVigilador()" class="hidden text-xs text-rose-400 hover:text-rose-300 font-semibold flex items-center gap-1 bg-rose-500/10 border border-rose-500/20 px-3 py-1.5 rounded-lg transition">
+          <i class="fa-solid fa-right-from-bracket"></i> Salir de mi cuenta
+        </button>
+      </div>
+
+      <!-- Formulario de Login -->
+      <div id="formLoginVigilador" class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div class="relative">
+          <i class="fa-solid fa-id-badge absolute left-3 top-3 text-slate-400 text-sm"></i>
+          <input type="text" id="legajoInput" placeholder="Número de Legajo..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+        </div>
+        <div class="relative">
+          <i class="fa-solid fa-key absolute left-3 top-3 text-slate-400 text-sm"></i>
+          <input type="password" id="pinInput" placeholder="PIN de seguridad..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+        </div>
+        <button onclick="buscarMisHoras()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-2 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
+          <i class="fa-solid fa-lock-open"></i> Verificar e Ingresar
+        </button>
+      </div>
+
+      <!-- Indicador de Sesión Activa -->
+      <div id="infoSesionActiva" class="hidden flex flex-col md:flex-row items-center justify-between bg-slate-900/60 border border-emerald-500/30 px-4 py-2.5 rounded-xl text-xs gap-2">
+        <span class="text-emerald-400 font-medium flex items-center gap-2">
+          <i class="fa-solid fa-circle-check"></i> Sesión activa para el Vigilador: <strong id="lblNombreActivo" class="text-white"></strong> (<span id="lblLegajoActivo"></span>)
+        </span>
+        <span class="text-slate-400"><i class="fa-solid fa-shield-halved text-emerald-400"></i> Bloqueo por inactividad (3 min)</span>
+      </div>
+    </div>
+
+    <!-- FILTROS DE FECHA (MES Y DÍA) -->
+    <div id="seccionFiltros" class="hidden bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3 flex-wrap">
+        <div class="flex items-center gap-2">
+          <label class="text-xs text-slate-400 font-semibold"><i class="fa-solid fa-calendar-days text-emerald-400"></i> Mes:</label>
+          <select id="filtroMes" onchange="aplicarFiltros()" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500">
+            <option value="todos">Todos los meses</option>
+          </select>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <label class="text-xs text-slate-400 font-semibold"><i class="fa-solid fa-filter text-emerald-400"></i> Día específico:</label>
+          <input type="date" id="filtroDia" onchange="aplicarFiltros()" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500">
+        </div>
+      </div>
+
+      <button onclick="limpiarFiltros()" class="text-xs text-slate-400 hover:text-white bg-slate-700/50 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition">
+        <i class="fa-solid fa-rotate-right"></i> Limpiar filtros
+      </button>
+    </div>
+
+    <!-- TARJETAS DE RESUMEN -->
+    <div id="resumenHoras" class="hidden grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
+        <p class="text-xs text-slate-400 font-semibold">HORAS DIURNAS (06-21hs)</p>
+        <p id="horasDiurnas" class="text-2xl font-bold text-amber-400 mt-1">00:00 hs</p>
+      </div>
+      <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
+        <p class="text-xs text-slate-400 font-semibold">HORAS NOCTURNAS (21-06hs)</p>
+        <p id="horasNocturnas" class="text-2xl font-bold text-indigo-400 mt-1">00:00 hs</p>
+      </div>
+      <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
+        <p class="text-xs text-slate-400 font-semibold">TOTAL TRABAJADO</p>
+        <p id="horasTotales" class="text-2xl font-bold text-emerald-400 mt-1">00:00 hs</p>
+      </div>
+    </div>
+
+    <!-- TABLA DE DETALLE -->
+    <div id="contenedorTabla" class="hidden bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm text-slate-300">
+          <thead class="bg-slate-950 text-slate-400 uppercase text-xs border-b border-slate-700">
+            <tr>
+              <th class="p-4">Entrada</th>
+              <th class="p-4">Salida</th>
+              <th class="p-4">Objetivo</th>
+              <th class="p-4 text-center">Diurnas</th>
+              <th class="p-4 text-center">Nocturnas</th>
+              <th class="p-4 text-center">Total</th>
+            </tr>
+          </thead>
+          <tbody id="cuerpoDetalle" class="divide-y divide-slate-700/50"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- MÓDULO DE NOVEDADES E INCIDENCIAS -->
+    <div id="seccionNovedades" class="hidden bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
+      <h3 class="text-lg font-bold text-white flex items-center gap-2">
+        <i class="fa-solid fa-triangle-exclamation text-amber-400"></i> Reportar Novedad o Incidencia
+      </h3>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Tipo de Incidencia:</label>
+          <select id="tipoIncidencia" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+            <option value="Novedad de Guardia">Novedad de Guardia / Operativa</option>
+            <option value="Mantenimiento">Mantenimiento / Instalaciones</option>
+            <option value="Visita Autorizada">Visita / Proveedor</option>
+            <option value="Urgencia">Urgencia / Emergencia</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Adjuntar Foto (Opcional):</label>
+          <input type="file" id="fotoNovedadInput" accept="image/*" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-1.5 text-xs text-slate-300 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500 cursor-pointer">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Descripción del evento:</label>
+        <textarea id="descNovedad" rows="3" placeholder="Detalle lo sucedido en el servicio..." class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-emerald-500"></textarea>
+      </div>
+
+      <button onclick="enviarNovedadPortal()" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-2.5 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
+        <i class="fa-solid fa-paper-plane"></i> Enviar Novedad a la Central
+      </button>
+    </div>
+
+  </main>
+
+  <script>
+    const URL_FIREBASE = "https://vga-security-24-default-rtdb.firebaseio.com";
+    let temporizadorInactividad;
+    let datosVigiladorGlobal = []; 
+
+    function reiniciarTemporizador() {
+      clearTimeout(temporizadorInactividad);
+      temporizadorInactividad = setTimeout(() => {
+        if (sessionStorage.getItem('vigilador_legajo')) {
+          cerrarSesionVigilador();
+          alert("Sesión cerrada automáticamente por 3 minutos de inactividad.");
+        }
+      }, 180000); 
+    }
+
+    window.onload = function() {
+      const legajoGuardado = sessionStorage.getItem('vigilador_legajo');
+      const nombreGuardado = sessionStorage.getItem('vigilador_nombre');
+      if (legajoGuardado) {
+        document.getElementById('legajoInput').value = legajoGuardado;
+        document.getElementById('formLoginVigilador').classList.add('hidden');
+        document.getElementById('infoSesionActiva').classList.remove('hidden');
+        document.getElementById('lblLegajoActivo').innerText = legajoGuardado;
+        document.getElementById('lblNombreActivo').innerText = nombreGuardado || `Legajo ${legajoGuardado}`;
+        document.getElementById('btnCerrarSesion').classList.remove('hidden');
+        document.getElementById('seccionNovedades').classList.remove('hidden'); 
+        
+        ejecutarConsulta(legajoGuardado);
+        activarEscuchasInactividad();
+        reiniciarTemporizador();
+      }
+    };
+
+    function activarEscuchasInactividad() {
+      window.addEventListener('mousemove', reiniciarTemporizador);
+      window.addEventListener('mousedown', reiniciarTemporizador);
+      window.addEventListener('keypress', reiniciarTemporizador);
+      window.addEventListener('touchstart', reiniciarTemporizador);
+    }
+
+    function calcularHoras(f1, f2) {
+      let inicio = new Date(f1);
+      let fin = new Date(f2);
+      if (isNaN(inicio) || isNaN(fin) || fin <= inicio) return { d: 0, n: 0, t: 0 };
+
+      let diurnas = 0, nocturnas = 0;
+      let cur = new Date(inicio);
+
+      while (cur < fin) {
+        let h = cur.getHours();
+        if (h >= 6 && h < 21) diurnas += 1/60;
+        else nocturnas += 1/60;
+        cur.setMinutes(cur.getMinutes() + 1);
+      }
+      return { d: diurnas, n: nocturnas, t: diurnas + nocturnas };
+    }
+
+    function formatearAHorasReloj(horasDecimales) {
+      if (isNaN(horasDecimales) || horasDecimales <= 0) return "00:00 hs";
+      const horas = Math.floor(horasDecimales);
+      const minutos = Math.round((horasDecimales - horas) * 60);
+      return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')} hs`;
+    }
+
+    function buscarMisHoras() {
+      const legajoIngresado = document.getElementById('legajoInput').value.trim();
+      const pinIngresado = document.getElementById('pinInput').value.trim();
+
+      if (!legajoIngresado || !pinIngresado) {
+        return alert("Por favor ingresa tu número de legajo y tu PIN de seguridad.");
+      }
+
+      Promise.all([
+        fetch(`${URL_FIREBASE}/personal.json`).then(res => res.json()),
+        fetch(`${URL_FIREBASE}/fichadas.json`).then(res => res.json())
+      ])
+      .then(([personalData, fichadasData]) => {
+        let empleadoEncontrado = null;
+        let nombreEmpleado = `Legajo ${legajoIngresado}`;
+
+        // Validar personal y PIN
+        if (personalData) {
+          Object.values(personalData).forEach(p => {
+            const pLegajo = String(p.legajo || "").trim();
+            if (pLegajo === legajoIngresado || parseInt(pLegajo, 10) === parseInt(legajoIngresado, 10)) {
+              const pPin = String(p.pin || p.clave || "").trim();
+              if (!pPin || pPin === pinIngresado) {
+                empleadoEncontrado = p;
+                if (p.nombre) nombreEmpleado = p.nombre;
+              }
+            }
+          });
+        }
+
+        // Extraer fichadas del empleado
+        let misFichadas = [];
+        if (fichadasData) {
+          Object.values(fichadasData).forEach(f => {
+            const fLegajo = String(f.legajo || "").trim();
+            const coincideLegajo = (fLegajo === legajoIngresado || parseInt(fLegajo, 10) === parseInt(legajoIngresado, 10));
+            if (coincideLegajo) {
+              misFichadas.push({
+                fecha: f.fechaHoraDispositivo || f.fecha,
+                legajo: f.legajo,
+                objetivo: f.objetivo || 'Objetivo General',
+                tipo: String(f.tipo || "").toUpperCase()
+              });
+            }
+          });
+        }
+
+        if (misFichadas.length === 0) {
+          alert("No se encontraron registros de fichadas para el legajo ingresado.");
+          return;
+        }
+
+        sessionStorage.setItem('vigilador_legajo', legajoIngresado);
+        sessionStorage.setItem('vigilador_nombre', nombreEmpleado);
+        datosVigiladorGlobal = misFichadas;
+
+        document.getElementById('formLoginVigilador').classList.add('hidden');
+        document.getElementById('infoSesionActiva').classList.remove('hidden');
+        document.getElementById('lblLegajoActivo').innerText = legajoIngresado;
+        document.getElementById('lblNombreActivo').innerText = nombreEmpleado;
+        document.getElementById('btnCerrarSesion').classList.remove('hidden');
+        document.getElementById('seccionNovedades').classList.remove('hidden'); 
+
+        poblarSelectMeses(datosVigiladorGlobal);
+        procesarYRenderizar(datosVigiladorGlobal);
+        activarEscuchasInactividad();
+        reiniciarTemporizador();
+      })
+      .catch(err => {
+        console.error(err);
+        alert("Ocurrió un error al consultar Firebase.");
+      });
+    }
+
+    function ejecutarConsulta(legajo) {
+      fetch(`${URL_FIREBASE}/fichadas.json`)
+        .then(res => res.json())
+        .then(fichadasData => {
+          let misFichadas = [];
+          if (fichadasData) {
+            Object.values(fichadasData).forEach(f => {
+              const fLegajo = String(f.legajo || "").trim();
+              if (fLegajo === legajo || parseInt(fLegajo, 10) === parseInt(legajo, 10)) {
+                misFichadas.push({
+                  fecha: f.fechaHoraDispositivo || f.fecha,
+                  legajo: f.legajo,
+                  objetivo: f.objetivo || 'Objetivo General',
+                  tipo: String(f.tipo || "").toUpperCase()
+                });
+              }
+            });
+          }
+          if (misFichadas.length > 0) {
+            datosVigiladorGlobal = misFichadas;
+            poblarSelectMeses(datosVigiladorGlobal);
+            aplicarFiltros(); 
+          }
+        })
+        .catch(err => console.error(err));
+    }
+
+    function poblarSelectMeses(datos) {
+      const selectMes = document.getElementById('filtroMes');
+      const mesActualSeleccionado = selectMes.value;
+      
+      const mesesSet = new Set();
+      datos.forEach(f => {
+        if(f.fecha) {
+          const d = new Date(f.fecha);
+          if(!isNaN(d)) {
+            const anio = d.getFullYear();
+            const mes = String(d.getMonth() + 1).padStart(2, '0');
+            mesesSet.add(`${anio}-${mes}`);
+          }
+        }
+      });
+
+      const mesesOrdenados = Array.from(mesesSet).sort().reverse();
+
+      selectMes.innerHTML = `<option value="todos">Todos los meses</option>`;
+      const nombresMeses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+      mesesOrdenados.forEach(m => {
+        const [anio, mesNum] = m.split('-');
+        const nombreMesTexto = `${nombresMeses[parseInt(mesNum) - 1]} ${anio}`;
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.innerText = nombreMesTexto;
+        selectMes.appendChild(opt);
+      });
+
+      if (mesesOrdenados.includes(mesActualSeleccionado)) {
+        selectMes.value = mesActualSeleccionado;
+      }
+    }
+
+    function aplicarFiltros() {
+      const mesFiltro = document.getElementById('filtroMes').value;
+      const diaFiltro = document.getElementById('filtroDia').value;
+
+      let filtrados = datosVigiladorGlobal;
+
+      if (mesFiltro !== 'todos') {
+        filtrados = filtrados.filter(f => {
+          const d = new Date(f.fecha);
+          const anio = d.getFullYear();
+          const mes = String(d.getMonth() + 1).padStart(2, '0');
+          return `${anio}-${mes}` === mesFiltro;
+        });
+      }
+
+      if (diaFiltro) {
+        filtrados = filtrados.filter(f => {
+          const d = new Date(f.fecha);
+          const anio = d.getFullYear();
+          const mes = String(d.getMonth() + 1).padStart(2, '0');
+          const dia = String(d.getDate()).padStart(2, '0');
+          return `${anio}-${mes}-${dia}` === diaFiltro;
+        });
+      }
+
+      procesarYRenderizar(filtrados);
+    }
+
+    function limpiarFiltros() {
+      document.getElementById('filtroMes').value = 'todos';
+      document.getElementById('filtroDia').value = '';
+      procesarYRenderizar(datosVigiladorGlobal);
+    }
+
+    function procesarYRenderizar(marcacionesVigilador) {
+      marcacionesVigilador.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+
+      let totalD = 0, totalN = 0, totalT = 0;
+      const tabla = document.getElementById('cuerpoDetalle');
+      tabla.innerHTML = "";
+
+      for (let i = 0; i < marcacionesVigilador.length; i++) {
+        if (marcacionesVigilador[i].tipo === 'ENTRADA') {
+          let entrada = marcacionesVigilador[i];
+          let salida = marcacionesVigilador[i + 1] && marcacionesVigilador[i + 1].tipo === 'SALIDA' ? marcacionesVigilador[i + 1] : null;
+
+          let horas = salida ? calcularHoras(entrada.fecha, salida.fecha) : { d: 0, n: 0, t: 0 };
+          let objetivoNombre = entrada.objetivo || (salida && salida.objetivo) || '-';
+
+          totalD += horas.d;
+          totalN += horas.n;
+          totalT += horas.t;
+
+          const tr = document.createElement('tr');
+          tr.className = "hover:bg-slate-700/30 transition";
+          tr.innerHTML = `
+            <td class="p-4 text-xs font-mono">${new Date(entrada.fecha).toLocaleString('es-AR', { hour12: false })}</td>
+            <td class="p-4 text-xs font-mono">${salida ? new Date(salida.fecha).toLocaleString('es-AR', { hour12: false }) : '<span class="text-amber-400">En Turno</span>'}</td>
+            <td class="p-4 text-xs text-slate-300 font-medium">${objetivoNombre}</td>
+            <td class="p-4 text-center text-xs font-semibold text-amber-400">${formatearAHorasReloj(horas.d)}</td>
+            <td class="p-4 text-center text-xs font-semibold text-indigo-400">${formatearAHorasReloj(horas.n)}</td>
+            <td class="p-4 text-center text-xs font-bold text-emerald-400">${formatearAHorasReloj(horas.t)}</td>
+          `;
+          tabla.appendChild(tr);
+        }
+      }
+
+      document.getElementById('horasDiurnas').innerText = formatearAHorasReloj(totalD);
+      document.getElementById('horasNocturnas').innerText = formatearAHorasReloj(totalN);
+      document.getElementById('horasTotales').innerText = formatearAHorasReloj(totalT);
+
+      document.getElementById('seccionFiltros').classList.remove('hidden');
+      document.getElementById('resumenHoras').classList.remove('hidden');
+      document.getElementById('contenedorTabla').classList.remove('hidden');
+    }
+
+    // 📝 ENVÍO DE NOVEDAD A FIREBASE
+    function enviarNovedadPortal() {
+      const legajo = sessionStorage.getItem('vigilador_legajo');
+      const nombreVigilador = sessionStorage.getItem('vigilador_nombre') || `Legajo ${legajo}`;
+      const tipoIncidencia = document.getElementById('tipoIncidencia').value;
+      const descripcion = document.getElementById('descNovedad').value.trim();
+      const inputArchivo = document.getElementById('fotoNovedadInput');
+
+      if (!legajo) {
+        alert("Debe iniciar sesión para enviar una novedad.");
+        return;
+      }
+
+      let enServicio = false;
+      let objetivoActual = "Objetivo Asignado";
+
+      if (datosVigiladorGlobal.length > 0) {
+        let ordenadas = [...datosVigiladorGlobal].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+        let ultimaMar = ordenadas[ordenadas.length - 1];
+        
+        if (ultimaMar && ultimaMar.tipo === 'ENTRADA') {
+          enServicio = true;
+          if (ultimaMar.objetivo) objetivoActual = ultimaMar.objetivo;
+        }
+      }
+
+      if (!enServicio) {
+        alert("❌ No se puede enviar el informe: Actualmente se encuentra fuera de servicio (debe tener una Entrada activa / En Turno).");
+        return;
+      }
+
+      if (!descripcion) {
+        alert("Por favor, escriba la descripción de la novedad o incidencia.");
+        return;
+      }
+
+      if (!navigator.geolocation) {
+        alert("Tu dispositivo no soporta geolocalización.");
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        function(position) {
+          const lat = position.coords.latitude;
+          const lon = position.coords.longitude;
+
+          if (inputArchivo.files && inputArchivo.files[0]) {
+            const lector = new FileReader();
+            lector.onload = function(e) {
+              enviarDatosFirebase(legajo, nombreVigilador, objetivoActual, tipoIncidencia, descripcion, lat, lon, e.target.result);
+            };
+            lector.readAsDataURL(inputArchivo.files[0]);
+          } else {
+            enviarDatosFirebase(legajo, nombreVigilador, objetivoActual, tipoIncidencia, descripcion, lat, lon, "");
+          }
+        },
+        function(error) {
+          alert("Error: Es necesario activar el GPS para enviar novedades.");
+        },
+        { enableHighAccuracy: true }
+      );
+    }
+
+    function enviarDatosFirebase(legajo, nombre, objetivo, tipoIncidencia, descripcion, lat, lon, fotoBase64) {
+      const payload = {
+        fechaHora: new Date().toISOString(),
+        legajo: legajo,
+        nombre: nombre,
+        objetivo: objetivo,
+        tipoIncidencia: tipoIncidencia,
+        descripcion: descripcion,
+        latitud: lat,
+        longitud: lon,
+        foto: fotoBase64
+      };
+
+      fetch(`${URL_FIREBASE}/novedades.json`, {
+        method: "POST",
+        body: JSON.stringify(payload)
+      })
+      .then(res => res.json())
+      .then(() => {
+        alert("✅ Novedad enviada correctamente a la central.");
+        document.getElementById('descNovedad').value = "";
+        document.getElementById('fotoNovedadInput').value = "";
+      })
+      .catch(error => {
+        alert("Error de conexión al enviar novedad: " + error.toString());
+      });
+    }
+
+    function cerrarSesionVigilador() {
+      clearTimeout(temporizadorInactividad);
+      sessionStorage.removeItem('vigilador_legajo');
+      sessionStorage.removeItem('vigilador_nombre');
+      datosVigiladorGlobal = [];
+      
+      document.getElementById('formLoginVigilador').classList.remove('hidden');
+      document.getElementById('infoSesionActiva').classList.add('hidden');
+      document.getElementById('btnCerrarSesion').classList.add('hidden');
+      document.getElementById('seccionFiltros').classList.add('hidden');
+      document.getElementById('resumenHoras').classList.add('hidden');
+      document.getElementById('seccionNovedades').classList.add('hidden'); 
+      document.getElementById('contenedorTabla').classList.add('hidden');
+      
+      document.getElementById('legajoInput').value = '';
+      document.getElementById('pinInput').value = '';
+      document.getElementById('filtroMes').innerHTML = `<option value="todos">Todos los meses</option>`;
+      document.getElementById('filtroDia').value = '';
+    }
+  </script>
+</body>
+</html>
