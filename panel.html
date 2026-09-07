@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Demo Asistencia - Panel de Control & Métricas</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  
+  <!-- LIBRERÍAS DE EXPORTACIÓN (EXCEL Y PDF) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
+  <!-- LIBRERÍA DE GRÁFICOS (CHART.JS) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head> 
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
+
+  <!-- ========================================== -->
+  <!-- ENCABEZADO Y MENÚ CORPORATIVO - DEMO       -->
+  <!-- ========================================== -->
+  <header class="bg-slate-900 border-b border-slate-800 shadow-md">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-4">
+      
+      <!-- LOGO Y NOMBRE DE LA APLICACIÓN -->
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 bg-slate-800 border border-emerald-500/30 rounded-xl flex items-center justify-center overflow-hidden shadow-inner p-1">
+          <i class="fa-solid fa-shield-halved text-emerald-400 text-xl"></i>
+        </div>
+        <div>
+          <span class="text-[10px] font-extrabold tracking-widest text-emerald-400 uppercase block">Sistema de Control</span>
+          <h1 class="text-lg font-bold text-white tracking-wide">Demo Asistencia</h1>
+        </div>
+      </div>
+
+      <!-- MENÚ DE NAVEGACIÓN RÁPIDA (ENTRELAZADO) -->
+      <nav class="flex flex-wrap justify-center items-center gap-1 bg-slate-800/80 p-1.5 rounded-xl border border-slate-700/60">
+        <a href="index.html" class="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition flex items-center space-x-1.5">
+          <i class="fa-solid fa-camera-retro text-emerald-400"></i>
+          <span>Fichadas</span>
+        </a>
+        <a href="admin.html" class="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition flex items-center space-x-1.5">
+          <i class="fa-solid fa-building-shield text-emerald-400"></i>
+          <span>Centro de Operaciones</span>
+        </a>
+        <a href="panel.html" class="px-3 py-1.5 text-xs font-medium text-white bg-slate-700 rounded-lg transition flex items-center space-x-1.5 shadow-sm">
+          <i class="fa-solid fa-chart-line text-emerald-400"></i>
+          <span>Control en Tiempo Real</span>
+        </a>
+        <a href="mis-horas.html" class="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition flex items-center space-x-1.5">
+          <i class="fa-solid fa-clock text-emerald-400"></i>
+          <span>Control de Mis Horas</span>
+        </a>
+      </nav>
+
+    </div>
+  </header>
+
+  <!-- ========================================== -->
+  <!-- MODAL / PANTALLA DE ACCESO CON CONTRASEÑA  -->
+  <!-- ========================================== -->
+  <div id="pantallaLogin" class="fixed inset-0 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-800 border border-slate-700 p-6 md:p-8 rounded-2xl max-w-md w-full shadow-2xl text-center space-y-6">
+      
+      <div class="w-16 h-16 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center mx-auto text-2xl">
+        <i class="fa-solid fa-user-shield"></i>
+      </div>
+
+      <div>
+        <h2 class="text-xl font-bold text-white">Acceso Supervisor</h2>
+        <p class="text-xs text-slate-400 mt-1">Ingresa la contraseña para acceder al panel de control</p>
+      </div>
+
+      <form onsubmit="validarPassword(event)" class="space-y-4">
+        <div class="relative">
+          <i class="fa-solid fa-lock absolute left-3 top-3.5 text-slate-400 text-sm"></i>
+          <input type="password" id="inputPass" placeholder="Contraseña de acceso" required class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 text-center tracking-widest text-lg">
+        </div>
+
+        <p id="msgErrorPass" class="text-xs text-rose-400 hidden flex items-center justify-center gap-1">
+          <i class="fa-solid fa-circle-exclamation"></i> Contraseña incorrecta. Intenta nuevamente.
+        </p>
+
+        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-sm transition shadow-lg flex items-center justify-center gap-2">
+          <i class="fa-solid fa-key"></i> Ingresar al Panel
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- CONTENIDO PRINCIPAL DEL DASHBOARD (OCULTO) -->
+  <!-- ========================================== -->
+  <div id="contenidoPanel" class="max-w-7xl mx-auto space-y-6 p-4 md:p-8 flex-grow hidden w-full">
+    
+    <!-- ENCABEZADO INTERNO -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
+      <div>
+        <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-chart-line text-emerald-500"></i> Panel de Control & Métricas (Firebase)
+        </h2>
+        <p class="text-xs text-slate-400 mt-1">Supervisión, KPIs e historial de asistencia en tiempo real</p>
+      </div>
+      
+      <div class="flex items-center gap-3">
+        <button onclick="cargarDatos()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
+          <i class="fa-solid fa-rotate-right" id="icono-reload"></i> Actualizar
+        </button>
+        <button onclick="cerrarSesion()" class="bg-slate-700 hover:bg-rose-600 text-slate-300 hover:text-white font-semibold px-3 py-2 rounded-xl text-sm transition border border-slate-600" title="Cerrar Sesión">
+          <i class="fa-solid fa-right-from-bracket"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- SECCIÓN DE KPIS (TARJETAS INDICADORAS) -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      
+      <!-- KPI 1: PRESENTES HOY -->
+      <div class="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg flex items-center justify-between">
+        <div>
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Entradas Hoy</p>
+          <h2 id="kpiEntradasHoy" class="text-2xl font-black text-emerald-400 mt-1">0</h2>
+        </div>
+        <div class="w-12 h-12 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center text-emerald-400 text-xl">
+          <i class="fa-solid fa-right-to-bracket"></i>
+        </div>
+      </div>
+
+      <!-- KPI 2: SALIDAS HOY -->
+      <div class="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg flex items-center justify-between">
+        <div>
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Salidas Hoy</p>
+          <h2 id="kpiSalidasHoy" class="text-2xl font-black text-rose-400 mt-1">0</h2>
+        </div>
+        <div class="w-12 h-12 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-center justify-center text-rose-400 text-xl">
+          <i class="fa-solid fa-right-from-bracket"></i>
+        </div>
+      </div>
+
+      <!-- KPI 3: EN PLANTA AHORA -->
+      <div class="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg flex items-center justify-between">
+        <div>
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">En Planta Hoy</p>
+          <h2 id="kpiEnPlanta" class="text-2xl font-black text-sky-400 mt-1">0</h2>
+        </div>
+        <div class="w-12 h-12 bg-sky-500/10 border border-sky-500/20 rounded-xl flex items-center justify-center text-sky-400 text-xl">
+          <i class="fa-solid fa-user-check"></i>
+        </div>
+      </div>
+
+      <!-- KPI 4: TOTAL DE REGISTROS -->
+      <div class="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg flex items-center justify-between">
+        <div>
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Filtrados</p>
+          <h2 id="kpiTotalRegistros" class="text-2xl font-black text-amber-400 mt-1">0</h2>
+        </div>
+        <div class="w-12 h-12 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center justify-center text-amber-400 text-xl">
+          <i class="fa-solid fa-database"></i>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- SECCIÓN DE GRÁFICOS -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      
+      <!-- GRÁFICO 1: ESTADO DEL DÍA (DONA) -->
+      <div class="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-xl flex flex-col items-center justify-center">
+        <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2 self-start">
+          <i class="fa-solid fa-chart-pie text-sky-400"></i> Estado del Personal (Hoy)
+        </h3>
+        <div class="w-full max-w-[240px] h-[220px] flex items-center justify-center">
+          <canvas id="chartDonaHoy"></canvas>
+        </div>
+      </div>
+
+      <!-- GRÁFICO 2: ACTIVIDAD DE LA ÚLTIMA SEMANA (BARRAS) -->
+      <div class="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-xl lg:col-span-2">
+        <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">
+          <i class="fa-solid fa-chart-column text-emerald-400"></i> Marcaciones de los Últimos 7 Días
+        </h3>
+        <div class="w-full h-[220px]">
+          <canvas id="chartBarrasSemana"></canvas>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- MÓDULO OPTIMIZADO: CONSULTA Y GESTIÓN DE HORAS POR VIGILADOR -->
+    <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-user-clock text-emerald-400"></i> Auditoría de Horas por Empleado
+        </h3>
+        
+        <!-- CONTROLES EXTRA (Filtros y Exportación) - Se muestran tras consultar -->
+        <div id="controlesSupervisor" class="hidden flex flex-wrap items-center gap-2">
+          <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5">
+            <span class="text-xs text-slate-400 font-semibold"><i class="fa-solid fa-calendar-days text-emerald-400"></i> Mes:</span>
+            <select id="supFiltroMes" onchange="aplicarFiltrosSupervisor()" class="bg-slate-900 text-xs text-white focus:outline-none">
+              <option value="todos">Todos</option>
+            </select>
+          </div>
+          <button onclick="exportarExcelSupervisor()" class="bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5 shadow">
+            <i class="fa-solid fa-file-excel"></i> Excel
+          </button>
+          <button onclick="exportarPdfSupervisor()" class="bg-rose-700 hover:bg-rose-600 text-white text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5 shadow">
+            <i class="fa-solid fa-file-pdf"></i> PDF
+          </button>
+        </div>
+      </div>
+      
+      <!-- BUSCADOR Y FILTROS DE FECHA ESPECÍFICA -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div class="relative md:col-span-1">
+          <i class="fa-solid fa-id-badge absolute left-3 top-3 text-slate-400 text-sm"></i>
+          <input type="text" id="legajoSupervisorInput" placeholder="N° de Legajo..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+        </div>
+        <div class="flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5">
+          <span class="text-xs text-slate-400">Desde:</span>
+          <input type="date" id="supFechaDesde" onchange="aplicarFiltrosSupervisor()" class="bg-slate-900 text-xs text-white focus:outline-none w-full">
+        </div>
+        <div class="flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5">
+          <span class="text-xs text-slate-400">Hasta:</span>
+          <input type="date" id="supFechaHasta" onchange="aplicarFiltrosSupervisor()" class="bg-slate-900 text-xs text-white focus:outline-none w-full">
+        </div>
+        <button onclick="consultarHorasSupervisor()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-2 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
+          <i class="fa-solid fa-magnifying-glass"></i> Consultar Horas
+        </button>
+      </div>
+
+      <!-- Resultado de la consulta -->
+      <div id="resultadoSupervisor" class="hidden space-y-4 pt-4 border-t border-slate-700">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 text-center border-l-4 border-l-amber-500">
+            <p class="text-xs text-slate-400 font-semibold">HORAS DIURNAS (06-21hs)</p>
+            <p id="supHorasDiurnas" class="text-xl font-bold text-amber-400 mt-1">00:00 hs</p>
+          </div>
+          <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 text-center border-l-4 border-l-indigo-500">
+            <p class="text-xs text-slate-400 font-semibold">HORAS NOCTURNAS (21-06hs)</p>
+            <p id="supHorasNocturnas" class="text-xl font-bold text-indigo-400 mt-1">00:00 hs</p>
+          </div>
+          <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 text-center border-l-4 border-l-emerald-500">
+            <p class="text-xs text-slate-400 font-semibold">TOTAL TRABAJADO</p>
+            <p id="supHorasTotales" class="text-xl font-bold text-emerald-400 mt-1">00:00 hs</p>
+          </div>
+        </div>
+
+        <!-- Tabla Detallada para el Supervisor -->
+        <div class="overflow-x-auto bg-slate-900 rounded-xl border border-slate-700">
+          <table class="w-full text-left text-sm text-slate-300">
+            <thead class="bg-slate-950 text-slate-400 uppercase text-xs border-b border-slate-700">
+              <tr>
+                <th class="p-3">Entrada</th>
+                <th class="p-3">Salida</th>
+                <th class="p-3">Objetivo</th>
+                <th class="p-3 text-center">Diurnas</th>
+                <th class="p-3 text-center">Nocturnas</th>
+                <th class="p-3 text-center">Total</th>
+              </tr>
+            </thead>
+            <tbody id="supCuerpoDetalle" class="divide-y divide-slate-800"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- FILTROS, BÚSQUEDA Y EXPORTACIÓN GENERAL -->
+    <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 flex flex-col lg:flex-row gap-4 justify-between items-center">
+      
+      <!-- Búsqueda por texto -->
+      <div class="flex-1 relative w-full">
+        <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
+        <input type="text" id="inputBusqueda" onkeyup="filtrarTabla()" placeholder="Buscar por Nombre, Legajo u Objetivo..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+      </div>
+      
+      <!-- Controles de Fecha, Tipo y Exportación -->
+      <div class="flex flex-wrap md:flex-nowrap items-center gap-3 w-full lg:w-auto">
+        
+        <!-- Fecha Desde -->
+        <div class="flex items-center gap-1.5 w-full md:w-auto">
+          <span class="text-xs text-slate-400 font-semibold">Desde:</span>
+          <input type="date" id="fechaDesde" onchange="filtrarTabla()" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 w-full md:w-auto">
+        </div>
+
+        <!-- Fecha Hasta -->
+        <div class="flex items-center gap-1.5 w-full md:w-auto">
+          <span class="text-xs text-slate-400 font-semibold">Hasta:</span>
+          <input type="date" id="fechaHasta" onchange="filtrarTabla()" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 w-full md:w-auto">
+        </div>
+
+        <!-- Tipo de Marcación -->
+        <select id="filtroTipo" onchange="filtrarTabla()" class="w-full md:w-auto bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+          <option value="TODOS">Todos los tipos</option>
+          <option value="ENTRADA">Solo Entradas</option>
+          <option value="SALIDA">Solo Salidas</option>
+        </select>
+
+        <!-- Botones de Exportación -->
+        <div class="flex items-center gap-2 w-full md:w-auto">
+          <button onclick="exportarExcel()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md flex-1 md:flex-none">
+            <i class="fa-solid fa-file-excel"></i> Excel
+          </button>
+          <button onclick="exportarPDF()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md flex-1 md:flex-none">
+            <i class="fa-solid fa-file-pdf"></i> PDF
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- TABLA DE REGISTROS -->
+    <div class="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm text-slate-300">
+          <thead class="bg-slate-950 text-slate-400 uppercase text-xs border-b border-slate-700">
+            <tr>
+              <th class="p-4">Fecha y Hora</th>
+              <th class="p-4">Legajo</th>
+              <th class="p-4">Nombre</th>
+              <th class="p-4">Objetivo</th>
+              <th class="p-4 text-center">Tipo</th>
+              <th class="p-4 text-center">Ubicación</th>
+              <th class="p-4 text-center">Foto</th>
+              <th class="p-4 text-center">Acción</th>
+            </tr>
+          </thead>
+          <tbody id="cuerpoTabla" class="divide-y divide-slate-700/50">
+            <tr>
+              <td colspan="8" class="p-8 text-center text-slate-400">
+                <i class="fa-solid fa-spinner fa-spin text-2xl text-emerald-500 mb-2"></i>
+                <p>Cargando información desde Firebase...</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MODAL FOTO -->
+  <div id="modalFoto" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4 max-w-lg w-full relative space-y-4">
+      <button onclick="cerrarModal()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <h3 class="font-bold text-white text-base">Foto de Marcación</h3>
+      <div class="w-full h-80 bg-slate-950 rounded-xl overflow-hidden flex items-center justify-center relative">
+        <img id="imgModal" src="" alt="Foto Fichada" class="w-full h-full object-contain">
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ==========================================
+    // CONFIGURACIÓN DE SEGURIDAD (CONTRASEÑA)
+    // ==========================================
+    const PASSWORD_SUPERVISOR = "admin123"; 
+
+    window.onload = function() {
+      if (sessionStorage.getItem('auth_supervisor') === 'true') {
+        mostrarPanel();
+      }
+    };
+
+    function validarPassword(e) {
+      e.preventDefault();
+      const input = document.getElementById('inputPass').value;
+      const errorMsg = document.getElementById('msgErrorPass');
+
+      if (input === PASSWORD_SUPERVISOR) {
+        sessionStorage.setItem('auth_supervisor', 'true');
+        mostrarPanel();
+      } else {
+        errorMsg.classList.remove('hidden');
+        document.getElementById('inputPass').value = '';
+        document.getElementById('inputPass').focus();
+      }
+    }
+
+    function mostrarPanel() {
+      document.getElementById('pantallaLogin').classList.add('hidden');
+      document.getElementById('contenidoPanel').classList.remove('hidden');
+      cargarDatos();
+    }
+
+    function cerrarSesion() {
+      sessionStorage.removeItem('auth_supervisor');
+      location.reload();
+    }
+
+    // ==========================================
+    // LÓGICA DE DATOS Y DASHBOARD (FIREBASE: DEMO ASISTENCIA)
+    // ==========================================
+    const URL_FIREBASE = "https://demo-asistencia-default-rtdb.firebaseio.com/fichadas.json";
+    
+    let datosLocales = [];
+    let datosFiltradosActuales = [];
+    let datosSupervisorGlobal = [];
+    let firebaseKeysMap = {}; // Guarda la relación de los elementos con sus IDs de Firebase
+
+    let instChartDona = null;
+    let instChartBarras = null;
+
+    async function cargarDatos() {
+      const icono = document.getElementById('icono-reload');
+      if (icono) icono.classList.add('fa-spin');
+
+      try {
+        const res = await fetch(URL_FIREBASE);
+        const resFirebase = res.ok ? await res.json() : null;
+
+        let fichadasArray = [];
+        firebaseKeysMap = {}; 
+
+        if (resFirebase) {
+          Object.keys(resFirebase).forEach(key => {
+            const item = resFirebase[key];
+            const arrayItem = [
+              item.fechaHoraDispositivo || item.fecha || item.timestamp,
+              item.legajo,
+              item.nombre,
+              item.objetivo,
+              item.tipo,
+              item.mapa || item.urlMapa || `https://www.google.com/maps?q=${item.latitud},${item.longitud}`,
+              item.foto || item.urlFoto || item.fotoBase64 || ''
+            ];
+            fichadasArray.push(arrayItem);
+            firebaseKeysMap[JSON.stringify(arrayItem)] = key;
+          });
+        }
+
+        datosLocales = fichadasArray;
+        filtrarTabla();
+
+      } catch (err) {
+        console.error(err);
+        document.getElementById('cuerpoTabla').innerHTML = `
+          <tr>
+            <td colspan="8" class="p-8 text-center text-rose-400">
+              <i class="fa-solid fa-circle-exclamation text-xl mb-1"></i>
+              <p>Error al obtener registros desde Firebase. Revisa tu conexión.</p>
+            </td>
+          </tr>`;
+      } finally {
+        if (icono) icono.classList.remove('fa-spin');
+      }
+    }
+
+    function renderizarTabla(registros) {
+      const cuerpo = document.getElementById('cuerpoTabla');
+      cuerpo.innerHTML = "";
+
+      if (!registros || registros.length === 0) {
+        cuerpo.innerHTML = `
+          <tr>
+            <td colspan="8" class="p-8 text-center text-slate-400">No hay registros cargados en Firebase aún.</td>
+          </tr>`;
+        return;
+      }
+
+      const ordenados = [...registros].reverse();
+
+      ordenados.forEach(fila => {
+        const fecha = fila[0] ? new Date(fila[0]).toLocaleString('es-AR', { hour12: false }) : '-';
+        const legajo = fila[1] !== undefined ? String(fila[1]) : '-';
+        const nombre = fila[2] || '-';
+        const objetivo = fila[3] || '-';
+        const tipo = fila[4] || '-';
+        const urlMapa = fila[5] || '';
+        const urlFoto = fila[6] || '';
+
+        const badgeColor = tipo === 'ENTRADA' 
+          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+          : 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+
+        const btnMapa = (urlMapa && urlMapa.includes('http'))
+          ? `<a href="${urlMapa}" target="_blank" class="inline-flex items-center gap-1 bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
+              <i class="fa-solid fa-map-location-dot"></i> Mapa
+             </a>`
+          : `<span class="text-xs text-slate-500">Sin GPS</span>`;
+
+        const btnFoto = (urlFoto && (urlFoto.includes('http') || urlFoto.includes('data:image')))
+          ? `<button onclick="abrirFoto('${urlFoto}')" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
+              <i class="fa-solid fa-image"></i> Ver Foto
+             </button>`
+          : `<span class="text-xs text-slate-500">Sin Foto</span>`;
+
+        const firebaseKey = firebaseKeysMap[JSON.stringify(fila)];
+        const btnBorrar = firebaseKey 
+          ? `<button onclick="eliminarFichadaFirebase('${firebaseKey}')" class="bg-rose-600/20 hover:bg-rose-600/40 text-rose-400 border border-rose-500/30 px-2.5 py-1 rounded-lg text-xs font-semibold transition" title="Eliminar registro">
+              <i class="fa-solid fa-trash-can"></i>
+             </button>`
+          : `<span class="text-[10px] text-slate-500">-</span>`;
+
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-700/30 transition";
+        tr.innerHTML = `
+          <td class="p-4 font-mono text-xs text-slate-300">${fecha}</td>
+          <td class="p-4 font-semibold text-white">${legajo}</td>
+          <td class="p-4 font-medium text-slate-200">${nombre}</td>
+          <td class="p-4 text-slate-400">${objetivo}</td>
+          <td class="p-4 text-center">
+            <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${badgeColor}">${tipo}</span>
+          </td>
+          <td class="p-4 text-center">${btnMapa}</td>
+          <td class="p-4 text-center">${btnFoto}</td>
+          <td class="p-4 text-center">${btnBorrar}</td>
+        `;
+        cuerpo.appendChild(tr);
+      });
+    }
+
+    async function eliminarFichadaFirebase(firebaseKey) {
+      if (!confirm("¿Estás seguro de que deseas eliminar este registro de fichada?")) return;
+
+      try {
+        const urlDelete = `https://demo-asistencia-default-rtdb.firebaseio.com/fichadas/${firebaseKey}.json`;
+        const respuesta = await fetch(urlDelete, { method: 'DELETE' });
+
+        if (respuesta.ok) {
+          alert("Registro eliminado con éxito.");
+          cargarDatos(); 
+        } else {
+          alert("No se pudo eliminar el registro en Firebase.");
+        }
+      } catch (err) {
+        console.error(err);
+        alert("Ocurrió un error al intentar eliminar.");
+      }
+    }
+
+    function filtrarTabla() {
+      const busqueda = document.getElementById('inputBusqueda').value.toLowerCase();
+      const filtroTipo = document.getElementById('filtroTipo').value;
+      const valDesde = document.getElementById('fechaDesde').value;
+      const valHasta = document.getElementById('fechaHasta').value;
+
+      datosFiltradosActuales = datosLocales.filter(fila => {
+        const textoFila = `${fila[1]} ${fila[2]} ${fila[3]}`.toLowerCase();
+        const coincideBusqueda = textoFila.includes(busqueda);
+        const coincideTipo = (filtroTipo === 'TODOS') || (fila[4] === filtroTipo);
+
+        let coincideFecha = true;
+        if (fila[0]) {
+          const fechaObj = new Date(fila[0]);
+          const fechaIsoFila = fechaObj.toISOString().slice(0, 10);
+          
+          if (valDesde && fechaIsoFila < valDesde) coincideFecha = false;
+          if (valHasta && fechaIsoFila > valHasta) coincideFecha = false;
+        }
+
+        return coincideBusqueda && coincideTipo && coincideFecha;
+      });
+
+      renderizarTabla(datosFiltradosActuales);
+      actualizarMetricasYGraficos(datosFiltradosActuales);
+    }
+
+    // ==========================================
+    // CÁLCULO Y GESTIÓN DE HORAS DEL SUPERVISOR
+    // ==========================================
+    function calcularHoras(fechaInicioStr, fechaFinStr) {
+      const inicio = new Date(fechaInicioStr);
+      const fin = new Date(fechaFinStr);
+      if (isNaN(inicio) || isNaN(fin) || fin <= inicio) return { d: 0, n: 0, t: 0 };
+
+      let horasDiurnas = 0;
+      let horasNocturnas = 0;
+      let actual = new Date(inicio.getTime());
+
+      while (actual < fin) {
+        let siguiente = new Date(actual.getTime() + 60000); 
+        if (siguiente > fin) siguiente = new Date(fin.getTime());
+
+        let hora = actual.getHours();
+        if (hora >= 21 || hora < 6) {
+          horasNocturnas += (siguiente - actual) / 3600000;
+        } else {
+          horasDiurnas += (siguiente - actual) / 3600000;
+        }
+        actual = siguiente;
+      }
+
+      return {
+        d: horasDiurnas,
+        n: horasNocturnas,
+        t: horasDiurnas + horasNocturnas
+      };
+    }
+
+    function formatearAHorasReloj(horasDecimales) {
+      if (isNaN(horasDecimales) || horasDecimales <= 0) return "00:00 hs";
+      const horas = Math.floor(horasDecimales);
+      const minutos = Math.round((horasDecimales - horas) * 60);
+      return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')} hs`;
+    }
+
+    function consultarHorasSupervisor() {
+      const legajo = document.getElementById('legajoSupervisorInput').value.trim();
+      if (!legajo) {
+        return alert("Por favor ingresa un número de legajo para consultar.");
+      }
+
+      if (!datosLocales || datosLocales.length === 0) {
+        return alert("Los datos aún se están cargando o no hay registros disponibles.");
+      }
+
+      const marcacionesVigilador = datosLocales.filter(f => String(f[1]).trim() === legajo);
+      
+      if (marcacionesVigilador.length === 0) {
+        alert("No se encontraron registros para el legajo especificado.");
+        document.getElementById('resultadoSupervisor').classList.add('hidden');
+        document.getElementById('controlesSupervisor').classList.add('hidden');
+        return;
+      }
+
+      datosSupervisorGlobal = marcacionesVigilador;
+      poblarSelectMesesSupervisor(datosSupervisorGlobal);
+      aplicarFiltrosSupervisor();
+
+      document.getElementById('resultadoSupervisor').classList.remove('hidden');
+      document.getElementById('controlesSupervisor').classList.remove('hidden');
+    }
+
+    function poblarSelectMesesSupervisor(datos) {
+      const selectMes = document.getElementById('supFiltroMes');
+      const mesActualSeleccionado = selectMes.value;
+      
+      const mesesSet = new Set();
+      datos.forEach(f => {
+        if(f[0]) {
+          const d = new Date(f[0]);
+          if(!isNaN(d)) {
+            const anio = d.getFullYear();
+            const mes = String(d.getMonth() + 1).padStart(2, '0');
+            mesesSet.add(`${anio}-${mes}`);
+          }
+        }
+      });
+
+      const mesesOrdenados = Array.from(mesesSet).sort().reverse();
+      selectMes.innerHTML = `<option value="todos">Todos los meses</option>`;
+      const nombresMeses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+      mesesOrdenados.forEach(m => {
+        const [anio, mesNum] = m.split('-');
+        const nombreMesTexto = `${nombresMeses[parseInt(mesNum) - 1]} ${anio}`;
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.innerText = nombreMesTexto;
+        selectMes.appendChild(opt);
+      });
+
+      if (mesesOrdenados.includes(mesActualSeleccionado)) {
+        selectMes.value = mesActualSeleccionado;
+      }
+    }
+
+    function aplicarFiltrosSupervisor() {
+      const mesFiltro = document.getElementById('supFiltroMes').value;
+      const valDesde = document.getElementById('supFechaDesde').value;
+      const valHasta = document.getElementById('supFechaHasta').value;
+
+      let filtrados = datosSupervisorGlobal;
+
+      if (mesFiltro !== 'todos') {
+        filtrados = filtrados.filter(f => {
+          const d = new Date(f[0]);
+          const anio = d.getFullYear();
+          const mes = String(d.getMonth() + 1).padStart(2, '0');
+          return `${anio}-${mes}` === mesFiltro;
+        });
+      }
+
+      if (valDesde || valHasta) {
+        filtrados = filtrados.filter(f => {
+          if (!f[0]) return false;
+          const fechaIsoFila = new Date(f[0]).toISOString().slice(0, 10);
+          if (valDesde && fechaIsoFila < valDesde) return false;
+          if (valHasta && fechaIsoFila > valHasta) return false;
+          return true;
+        });
+      }
+
+      procesarYRenderizarSupervisor(filtrados);
+    }
+
+    function procesarYRenderizarSupervisor(marcacionesVigilador) {
+      marcacionesVigilador.sort((a, b) => new Date(a[0]) - new Date(b[0]));
+
+      let totalD = 0, totalN = 0, totalT = 0;
+      const tabla = document.getElementById('supCuerpoDetalle');
+      tabla.innerHTML = "";
+
+      for (let i = 0; i < marcacionesVigilador.length; i++) {
+        if (marcacionesVigilador[i][4] === 'ENTRADA') {
+          let entrada = marcacionesVigilador[i];
+          let salida = marcacionesVigilador[i + 1] && marcacionesVigilador[i + 1][4] === 'SALIDA' ? marcacionesVigilador[i + 1] : null;
+
+          let horas = salida ? calcularHoras(entrada[0], salida[0]) : { d: 0, n: 0, t: 0 };
+          let objetivoNombre = entrada[3] || (salida && salida[3]) || '-';
+
+          totalD += horas.d;
+          totalN += horas.n;
+          totalT += horas.t;
+
+          const tr = document.createElement('tr');
+          tr.className = "hover:bg-slate-800/50 transition";
+          tr.innerHTML = `
+            <td class="p-3 text-xs font-mono">${new Date(entrada[0]).toLocaleString('es-AR', { hour12: false })}</td>
+            <td class="p-3 text-xs font-mono">${salida ? new Date(salida[0]).toLocaleString('es-AR', { hour12: false }) : '<span class="text-amber-400">En Turno</span>'}</td>
+            <td class="p-3 text-xs text-slate-300 font-medium">${objetivoNombre}</td>
+            <td class="p-3 text-center text-xs font-semibold text-amber-400">${formatearAHorasReloj(horas.d)}</td>
+            <td class="p-3 text-center text-xs font-semibold text-indigo-400">${formatearAHorasReloj(horas.n)}</td>
+            <td class="p-3 text-center text-xs font-bold text-emerald-400">${formatearAHorasReloj(horas.t)}</td>
+          `;
+          tabla.appendChild(tr);
+        }
+      }
+
+      document.getElementById('supHorasDiurnas').innerText = formatearAHorasReloj(totalD);
+      document.getElementById('supHorasNocturnas').innerText = formatearAHorasReloj(totalN);
+      document.getElementById('supHorasTotales').innerText = formatearAHorasReloj(totalT);
+    }
+
+    function exportarExcelSupervisor() {
+      const legajo = document.getElementById('legajoSupervisorInput').value.trim();
+      const filas = document.querySelectorAll('#supCuerpoDetalle tr');
+      if (filas.length === 0) return alert("No hay datos para exportar.");
+
+      let csv = "Entrada;Salida;Objetivo;Diurnas;Nocturnas;Total\n";
+      filas.forEach(tr => {
+        const cols = tr.querySelectorAll('td');
+        const filaData = Array.from(cols).map(c => `"${c.innerText.replace(/[\n\r]+/g, "").trim()}"`).join(";");
+        csv += filaData + "\n";
+      });
+
+      const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Reporte_Horas_Legajo_${legajo}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    function exportarPdfSupervisor() {
+      const legajo = document.getElementById('legajoSupervisorInput').value.trim();
+      const filas = document.querySelectorAll('#supCuerpoDetalle tr');
+      if (filas.length === 0) return alert("No hay datos para exportar.");
+
+      let nombreApellido = "No especificado";
+      if (datosSupervisorGlobal && datosSupervisorGlobal.length > 0) {
+        nombreApellido = datosSupervisorGlobal[0][2] || "No especificado";
+      }
+
+      const horasDiurnasTotal = document.getElementById('supHorasDiurnas').innerText;
+      const horasNocturnasTotal = document.getElementById('supHorasNocturnas').innerText;
+      const horasTotalesGeneral = document.getElementById('supHorasTotales').innerText;
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      doc.setFontSize(14);
+      doc.setTextColor(15, 23, 42);
+      doc.text("Demo Asistencia - Reporte de Horas por Empleado", 14, 15);
+
+      doc.setFontSize(10);
+      doc.setTextColor(71, 85, 105);
+      doc.text(`Fecha de emisión: ${new Date().toLocaleString('es-AR', { hour12: false })}`, 14, 22);
+
+      doc.setFontSize(10);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`Legajo: ${legajo}`, 14, 31);
+      doc.text(`Nombre y Apellido: ${nombreApellido}`, 14, 37);
+
+      doc.text(`Total Horas Diurnas: ${horasDiurnasTotal}`, 120, 31);
+      doc.text(`Total Horas Nocturnas: ${horasNocturnasTotal}`, 120, 37);
+      doc.text(`Total General del Periodo: ${horasTotalesGeneral}`, 120, 43);
+
+      const columnas = ["Entrada", "Salida", "Objetivo", "Diurnas", "Nocturnas", "Total"];
+      const datosTabla = [];
+      
+      filas.forEach(tr => {
+        const cols = tr.querySelectorAll('td');
+        datosTabla.push([
+          cols[0].innerText,
+          cols[1].innerText,
+          cols[2].innerText,
+          cols[3].innerText,
+          cols[4].innerText,
+          cols[5].innerText
+        ]);
+      });
+
+      doc.autoTable({
+        head: [columnas],
+        body: datosTabla,
+        startY: 48,
+        theme: 'grid',
+        headStyles: { fillColor: [15, 23, 42] },
+        styles: { fontSize: 8 }
+      });
+
+      doc.save(`Reporte_Horas_Legajo_${legajo}.pdf`);
+    }
+
+    function actualizarMetricasYGraficos(registros) {
+      const hoyStr = new Date().toISOString().slice(0, 10);
+
+      let entradasHoy = 0;
+      let salidasHoy = 0;
+      const estadoUltimoHoy = {};
+
+      const diasUltimaSemana = [];
+      const conteoPorDia = {};
+
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const fechaKey = d.toISOString().slice(0, 10);
+        diasUltimaSemana.push(fechaKey);
+        conteoPorDia[fechaKey] = { entradas: 0, salidas: 0 };
+      }
+
+      registros.forEach(fila => {
+        if (!fila[0]) return;
+        
+        const fechaObj = new Date(fila[0]);
+        const fechaIso = fechaObj.toISOString().slice(0, 10);
+        const legajo = fila[1];
+        const tipo = fila[4];
+
+        if (fechaIso === hoyStr) {
+          if (tipo === 'ENTRADA') entradasHoy++;
+          if (tipo === 'SALIDA') salidasHoy++;
+          estadoUltimoHoy[legajo] = tipo;
+        }
+
+        if (conteoPorDia[fechaIso]) {
+          if (tipo === 'ENTRADA') conteoPorDia[fechaIso].entradas++;
+          if (tipo === 'SALIDA') conteoPorDia[fechaIso].salidas++;
+        }
+      });
+
+      let enPlantaHoy = 0;
+      Object.values(estadoUltimoHoy).forEach(ultimoTipo => {
+        if (ultimoTipo === 'ENTRADA') enPlantaHoy++;
+      });
+
+      document.getElementById('kpiEntradasHoy').innerText = entradasHoy;
+      document.getElementById('kpiSalidasHoy').innerText = salidasHoy;
+      document.getElementById('kpiEnPlanta').innerText = enPlantaHoy;
+      document.getElementById('kpiTotalRegistros').innerText = registros.length;
+
+      renderizarGraficoDona(enPlantaHoy, salidasHoy);
+      renderizarGraficoBarras(diasUltimaSemana, conteoPorDia);
+    }
+
+    function renderizarGraficoDona(enPlanta, salidas) {
+      const ctx = document.getElementById('chartDonaHoy').getContext('2d');
+
+      if (instChartDona) instChartDona.destroy();
+
+      instChartDona = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['En Planta', 'Salidas Registradas'],
+          datasets: [{
+            data: [enPlanta, salidas],
+            backgroundColor: ['#38bdf8', '#f43f5e'],
+            borderWidth: 2,
+            borderColor: '#1e293b'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { color: '#94a3b8', font: { size: 11 } }
+            }
+          }
+        }
+      });
+    }
+
+    function renderizarGraficoBarras(diasKey, conteoPorDia) {
+      const ctx = document.getElementById('chartBarrasSemana').getContext('2d');
+
+      const labels = diasKey.map(f => {
+        const partes = f.split('-');
+        return `${partes[2]}/${partes[1]}`;
+      });
+
+      const dataEntradas = diasKey.map(f => conteoPorDia[f].entradas);
+      const dataSalidas = diasKey.map(f => conteoPorDia[f].salidas);
+
+      if (instChartBarras) instChartBarras.destroy();
+
+      instChartBarras = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Entradas',
+              data: dataEntradas,
+              backgroundColor: '#10b981',
+              borderRadius: 6
+            },
+            {
+              label: 'Salidas',
+              data: dataSalidas,
+              backgroundColor: '#f43f5e',
+              borderRadius: 6
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              ticks: { color: '#94a3b8' },
+              grid: { display: false }
+            },
+            y: {
+              ticks: { color: '#94a3b8', precision: 0 },
+              grid: { color: '#334155' }
+            }
+          },
+          plugins: {
+            legend: {
+              position: 'top',
+              labels: { color: '#94a3b8', font: { size: 11 } }
+            }
+          }
+        }
+      });
+    }
+
+    function abrirFoto(url) {
+      document.getElementById('imgModal').src = url;
+      document.getElementById('modalFoto').classList.remove('hidden');
+    }
+
+    function cerrarModal() {
+      document.getElementById('modalFoto').classList.add('hidden');
+      document.getElementById('imgModal').src = "";
+    }
+
+    function exportarExcel() {
+      if (!datosFiltradosActuales || datosFiltradosActuales.length === 0) {
+        return alert("No hay datos visibles para exportar.");
+      }
+
+      const cabeceras = [["Fecha y Hora", "Legajo", "Nombre", "Objetivo", "Tipo", "Ubicación (Mapa)", "Foto URL"]];
+      const filas = datosFiltradosActuales.map(f => [
+        f[0] ? new Date(f[0]).toLocaleString('es-AR', { hour12: false }) : '',
+        f[1] !== undefined ? String(f[1]) : '',
+        f[2] || '',
+        f[3] || '',
+        f[4] || '',
+        f[5] || '',
+        f[6] || ''
+      ]);
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet([...cabeceras, ...filas]);
+      XLSX.utils.book_append_sheet(wb, ws, "Marcaciones");
+      XLSX.writeFile(wb, `Reporte_Marcaciones_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+
+    function exportarPDF() {
+      if (!datosFiltradosActuales || datosFiltradosActuales.length === 0) {
+        return alert("No hay datos visibles para exportar.");
+      }
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      doc.setFontSize(16);
+      doc.text("Reporte de Marcaciones de Asistencia", 14, 15);
+      doc.setFontSize(10);
+      doc.text(`Generado el: ${new Date().toLocaleString('es-AR', { hour12: false })}`, 14, 22);
+
+      const columnas = ["Fecha y Hora", "Legajo", "Nombre", "Objetivo", "Tipo"];
+      const filas = datosFiltradosActuales.map(f => [
+        f[0] ? new Date(f[0]).toLocaleString('es-AR', { hour12: false }) : '',
+        f[1] !== undefined ? String(f[1]) : '',
+        f[2] || '',
+        f[3] || '',
+        f[4] || ''
+      ]);
+
+      doc.autoTable({
+        head: [columnas],
+        body: filas,
+        startY: 28,
+        theme: 'grid',
+        headStyles: { fillColor: [15, 23, 42] },
+        styles: { fontSize: 8 }
+      });
+
+      doc.save(`Reporte_Marcaciones_${new Date().toISOString().slice(0,10)}.pdf`);
+    }
+  </script>
+</body>
+</html>
