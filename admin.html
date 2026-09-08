@@ -1,858 +1,766 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Demo Asistencia - Panel de Control</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-  
-  <!-- LIBRERÍAS DE EXPORTACIÓN -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Administración - Control de Asistencia</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- SheetJS (XLSX) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- jsPDF & AutoTable -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
+<body class="bg-gray-100 min-h-screen font-sans">
 
-  <!-- ENCABEZADO Y MENÚ CORPORATIVO - DEMO ASISTENCIA -->
-  <header class="bg-slate-900 border-b border-slate-800 shadow-md">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-4">
-      
-     <!-- LOGO Y NOMBRE DE LA EMPRESA -->
-     <div class="flex items-center space-x-3">
-       <div class="w-10 h-10 bg-slate-800 border border-emerald-500/30 rounded-xl flex items-center justify-center overflow-hidden shadow-inner p-1">
-         <img src="https://i.ibb.co/qYcVxcTH/Chat-GPT-Image-3-sept-2026-13-19-18.png" alt="Logo Demo Asistencia" class="w-full h-full object-contain">
-       </div>
-       <div>
-         <span class="text-[10px] font-extrabold tracking-widest text-emerald-400 uppercase block">Demo Asistencia S.A.</span>
-         <h1 class="text-lg font-bold text-white tracking-wide">Portal de Operaciones</h1>
-       </div>
-     </div>
-
-      <!-- MENÚ DE NAVEGACIÓN RÁPIDA -->
-      <nav class="flex flex-wrap justify-center items-center gap-1 bg-slate-800/80 p-1.5 rounded-xl border border-slate-700/60">
-        <a href="index.html" class="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition flex items-center space-x-1.5">
-          <i class="fa-solid fa-camera-retro text-emerald-400"></i>
-          <span>Fichadas</span>
-        </a>
-        <a href="admin.html" class="px-3 py-1.5 text-xs font-medium text-white bg-slate-700 rounded-lg transition flex items-center space-x-1.5 shadow-sm">
-          <i class="fa-solid fa-building-shield text-emerald-400"></i>
-          <span>Centro de Operaciones</span>
-        </a>
-        <a href="panel.html" class="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition flex items-center space-x-1.5">
-          <i class="fa-solid fa-chart-line text-emerald-400"></i>
-          <span>Control en Tiempo Real</span>
-        </a>
-        <a href="mis-horas.html" class="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition flex items-center space-x-1.5">
-          <i class="fa-solid fa-clock text-emerald-400"></i>
-          <span>Control de Mis Horas</span>
-        </a>
-      </nav>
-
-    </div>
-  </header>
-
-  <!-- MODAL DE ACCESO ADMIN -->
-  <div id="pantallaLoginAdmin" class="fixed inset-0 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4 z-50">
-    <div class="bg-slate-800 border border-slate-700 p-6 md:p-8 rounded-2xl max-w-md w-full shadow-2xl text-center space-y-6">
-      
-      <div class="w-16 h-16 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-2xl flex items-center justify-center mx-auto text-2xl">
-        <i class="fa-solid fa-user-gear"></i>
-      </div>
-
-      <div>
-        <h2 class="text-xl font-bold text-white">Acceso Administrador</h2>
-        <p class="text-xs text-slate-400 mt-1">Ingresa la contraseña para acceder al panel admin</p>
-      </div>
-
-      <form onsubmit="validarPasswordAdmin(event)" class="space-y-4">
-        <div class="relative">
-          <i class="fa-solid fa-lock absolute left-3 top-3.5 text-slate-400 text-sm"></i>
-          <input type="password" id="inputPassAdmin" placeholder="Contraseña de acceso" required class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500 text-center tracking-widest text-lg">
-        </div>
-
-        <p id="msgErrorPassAdmin" class="text-xs text-rose-400 hidden flex items-center justify-center gap-1">
-          <i class="fa-solid fa-circle-exclamation"></i> Contraseña incorrecta. Intenta nuevamente.
-        </p>
-
-        <button type="submit" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-2.5 rounded-xl text-sm transition shadow-lg flex items-center justify-center gap-2">
-          <i class="fa-solid fa-key"></i> Ingresar como Admin
-        </button>
-      </form>
-    </div>
-  </div>
-
-  <!-- CONTENIDO PRINCIPAL -->
-  <div id="contenidoAdmin" class="max-w-7xl mx-auto space-y-6 p-4 md:p-8 flex-grow hidden w-full">
-    
-    <!-- ENCABEZADO INTERNO -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
-      <div>
-        <h2 class="text-2xl font-bold text-white flex items-center gap-2">
-          <i class="fa-solid fa-shield-halved text-emerald-500"></i> Panel de Control Operativo
-        </h2>
-        <p class="text-xs text-slate-400 mt-1">Gestión de asistencia, novedades, personal autorizado y objetivos</p>
-      </div>
-      
-      <div class="flex items-center gap-3">
-        <button onclick="recargarDatosEfectivo()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
-          <i class="fa-solid fa-rotate-right" id="icono-reload"></i> Actualizar Datos
-        </button>
-        <button onclick="cerrarSesionAdmin()" class="bg-slate-700 hover:bg-rose-600 text-slate-300 hover:text-white font-semibold px-3 py-2 rounded-xl text-sm transition border border-slate-600" title="Cerrar Sesión">
-          <i class="fa-solid fa-right-from-bracket"></i>
-        </button>
-      </div>
-    </div>
-
-    <!-- PESTAÑAS -->
-    <div class="flex flex-wrap border-b border-slate-700 gap-2">
-      <button id="tabBtnMarcaciones" onclick="cambiarTab('marcaciones')" class="px-5 py-3 font-semibold text-sm border-b-2 border-emerald-500 text-emerald-400 flex items-center gap-2 transition">
-        <i class="fa-solid fa-clipboard-user"></i> Marcaciones
-      </button>
-      <button id="tabBtnNovedades" onclick="cambiarTab('novedades')" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
-        <i class="fa-solid fa-triangle-exclamation"></i> Novedades / Incidencias
-      </button>
-      <button id="tabBtnPersonal" onclick="cambiarTab('personal')" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
-        <i class="fa-solid fa-id-card"></i> Personal / PINs
-      </button>
-      <button id="tabBtnObjetivos" onclick="cambiarTab('objetivos')" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
-        <i class="fa-solid fa-building"></i> Objetivos / Puestos
-      </button>
-    </div>
-
-    <!-- TAB 1: MARCACIONES -->
-    <div id="tabMarcaciones" class="space-y-4">
-      <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 flex flex-col md:flex-row gap-4 justify-between items-center">
-        <div class="flex-1 relative w-full">
-          <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
-          <input type="text" id="inputBusqueda" onkeyup="filtrarTablaMarcaciones()" placeholder="Buscar por Nombre, Legajo u Objetivo..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
-        </div>
-        
-        <div class="flex flex-wrap md:flex-nowrap items-center gap-3 w-full md:w-auto">
-          <select id="filtroTipo" onchange="filtrarTablaMarcaciones()" class="w-full md:w-auto bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
-            <option value="TODOS">Todos los tipos</option>
-            <option value="ENTRADA">Solo Entradas</option>
-            <option value="SALIDA">Solo Salidas</option>
-          </select>
-
-          <button onclick="exportarExcel()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md w-full md:w-auto">
-            <i class="fa-solid fa-file-excel"></i> Excel
-          </button>
-          <button onclick="exportarPDF()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md w-full md:w-auto">
-            <i class="fa-solid fa-file-pdf"></i> PDF
-          </button>
-        </div>
-      </div>
-
-      <div class="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-sm text-slate-300">
-            <thead class="bg-slate-950 text-slate-400 uppercase text-xs border-b border-slate-700">
-              <tr>
-                <th class="p-4">Fecha y Hora</th>
-                <th class="p-4">Legajo</th>
-                <th class="p-4">Nombre</th>
-                <th class="p-4">Objetivo</th>
-                <th class="p-4 text-center">Tipo</th>
-                <th class="p-4 text-center">Ubicación</th>
-                <th class="p-4 text-center">Foto</th>
-              </tr>
-            </thead>
-            <tbody id="cuerpoTablaMarcaciones" class="divide-y divide-slate-700/50">
-              <tr>
-                <td colspan="7" class="p-8 text-center text-slate-400">
-                  <i class="fa-solid fa-spinner fa-spin text-2xl text-emerald-500 mb-2"></i>
-                  <p>Cargando información...</p>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- TAB 2: NOVEDADES / INCIDENCIAS -->
-    <div id="tabNovedades" class="hidden space-y-4">
-      <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 flex flex-col md:flex-row gap-4 justify-between items-center">
-        <div class="flex-1 relative w-full">
-          <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
-          <input type="text" id="inputBusquedaNovedades" onkeyup="filtrarTablaNovedades()" placeholder="Buscar por Novedad, Objetivo o Personal..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
-        </div>
-
-        <div class="flex flex-wrap md:flex-nowrap items-center gap-3 w-full md:w-auto">
-          <button onclick="exportarExcelNovedades()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md w-full md:w-auto">
-            <i class="fa-solid fa-file-excel"></i> Excel
-          </button>
-          <button onclick="exportarPDFNovedades()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md w-full md:w-auto">
-            <i class="fa-solid fa-file-pdf"></i> PDF
-          </button>
-        </div>
-      </div>
-
-      <div class="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-sm text-slate-300">
-            <thead class="bg-slate-950 text-slate-400 uppercase text-xs border-b border-slate-700">
-              <tr>
-                <th class="p-4">Fecha y Hora</th>
-                <th class="p-4">Legajo / Nombre</th>
-                <th class="p-4">Objetivo</th>
-                <th class="p-4">Tipo Incidencia</th>
-                <th class="p-4">Descripción</th>
-                <th class="p-4 text-center">Ubicación</th>
-                <th class="p-4 text-center">Foto</th>
-              </tr>
-            </thead>
-            <tbody id="cuerpoTablaNovedades" class="divide-y divide-slate-700/50">
-              <tr><td colspan="7" class="p-8 text-center text-slate-400">Cargando novedades...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- TAB 3: PERSONAL / PINs -->
-    <div id="tabPersonal" class="hidden space-y-6">
-      <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
-        <h3 class="text-lg font-bold text-white flex items-center gap-2">
-          <i class="fa-solid fa-user-plus text-amber-500"></i> Registrar Nuevo Personal
-        </h3>
-        <form onsubmit="guardarVigilador(event)" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-          <div>
-            <label class="block text-xs uppercase text-slate-400 mb-1">N° Legajo</label>
-            <input type="text" id="newLegajo" required placeholder="Ej: 0286" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
-          </div>
-          <div>
-            <label class="block text-xs uppercase text-slate-400 mb-1">Nombre Completo</label>
-            <input type="text" id="newNombre" required placeholder="Ej: Juan Pérez" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
-          </div>
-          <div>
-            <label class="block text-xs uppercase text-slate-400 mb-1">PIN Generado (Automático)</label>
-            <div class="flex gap-2">
-              <input type="text" id="newPin" readonly required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm text-amber-400 font-mono font-bold tracking-widest text-center focus:outline-none cursor-not-allowed">
-              <button type="button" onclick="generarPinAleatorio()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 p-2 rounded-xl text-sm transition" title="Generar otro PIN">
-                <i class="fa-solid fa-arrows-rotate"></i>
-              </button>
+    <!-- MODAL LOGIN ADMIN -->
+    <div id="pantallaLoginAdmin" class="fixed inset-0 bg-gray-900 bg-opacity-95 flex items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-xl shadow-2xl w-11/12 max-w-md text-center">
+            <div class="mb-4 text-blue-600">
+                <i class="fa-solid fa-user-shield fa-3x"></i>
             </div>
-          </div>
-          <button type="submit" id="btnGuardarGuardia" class="bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2">
-            <i class="fa-solid fa-floppy-disk"></i> Guardar Personal
-          </button>
-        </form>
-      </div>
-
-      <div class="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-sm text-slate-300">
-            <thead class="bg-slate-950 text-slate-400 uppercase text-xs border-b border-slate-700">
-              <tr>
-                <th class="p-4">Legajo</th>
-                <th class="p-4">Nombre Oficial</th>
-                <th class="p-4 text-center">PIN</th>
-                <th class="p-4 text-center">Estado</th>
-                <th class="p-4 text-center">Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="cuerpoTablaPersonal" class="divide-y divide-slate-700/50">
-              <tr><td colspan="5" class="p-8 text-center text-slate-400">Cargando personal...</td></tr>
-            </tbody>
-          </table>
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">Acceso Administrador</h2>
+            <p class="text-gray-500 text-sm mb-6">Ingrese la clave de seguridad para continuar</p>
+            <form onsubmit="validarLoginAdmin(event)">
+                <input type="password" id="inputPassAdmin" placeholder="Contraseña" class="w-full border-2 border-gray-300 p-3 rounded-lg text-center font-bold tracking-widest text-lg focus:outline-none focus:border-blue-500 mb-4" required>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow transition duration-200">
+                    Ingresar al Panel
+                </button>
+            </form>
         </div>
-      </div>
     </div>
 
-    <!-- TAB 4: OBJETIVOS -->
-    <div id="tabObjetivos" class="hidden space-y-6">
-      <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
-        <h3 class="text-lg font-bold text-white flex items-center gap-2">
-          <i class="fa-solid fa-building-circle-check text-sky-500"></i> Registrar Nuevo Objetivo / Puesto
-        </h3>
-        <form onsubmit="guardarObjetivo(event)" class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-          <div class="md:col-span-2">
-            <label class="block text-xs uppercase text-slate-400 mb-1">Nombre del Objetivo / Servicio</label>
-            <input type="text" id="newObjetivo" required placeholder="Ej: Edificio Central - Turno Noche" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
-          </div>
-          <button type="submit" id="btnGuardarObj" class="bg-sky-600 hover:bg-sky-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2">
-            <i class="fa-solid fa-plus"></i> Añadir Objetivo
-          </button>
-        </form>
-      </div>
-
-      <div class="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-sm text-slate-300">
-            <thead class="bg-slate-950 text-slate-400 uppercase text-xs border-b border-slate-700">
-              <tr>
-                <th class="p-4">ID / Clave</th>
-                <th class="p-4">Nombre del Objetivo</th>
-                <th class="p-4 text-center">Estado</th>
-                <th class="p-4 text-center">Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="cuerpoTablaObjetivos" class="divide-y divide-slate-700/50">
-              <tr><td colspan="4" class="p-8 text-center text-slate-400">Cargando objetivos...</td></tr>
-            </tbody>
-          </table>
+    <!-- NAVEGACIÓN Y CABECERA -->
+    <header class="bg-blue-900 text-white shadow-md">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center flex-wrap gap-2">
+            <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-clipboard-user text-2xl"></i>
+                <h1 class="text-xl font-bold">Panel de Administración</h1>
+            </div>
+            <div class="flex items-center gap-3">
+                <button onclick="recargarDatosEfectivo()" class="bg-blue-700 hover:bg-blue-800 text-white px-3 py-1.5 rounded text-sm transition flex items-center gap-1">
+                    <i class="fa-solid fa-rotate"></i> Actualizar
+                </button>
+                <button onclick="cerrarSesionAdmin()" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-sm transition flex items-center gap-1">
+                    <i class="fa-solid fa-right-from-bracket"></i> Salir
+                </button>
+            </div>
         </div>
-      </div>
+        <!-- Pestañas de Navegación -->
+        <div class="bg-blue-950 px-4">
+            <div class="container mx-auto flex space-x-2 overflow-x-auto">
+                <button onclick="cambiarTab('marcaciones')" id="btnTabMarcaciones" class="py-3 px-4 font-semibold text-sm border-b-4 border-blue-400 text-white flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-clock"></i> Marcaciones
+                </button>
+                <button onclick="cambiarTab('novedades')" id="btnTabNovedades" class="py-3 px-4 font-semibold text-sm text-blue-300 hover:text-white border-b-4 border-transparent flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-triangle-exclamation"></i> Novedades
+                </button>
+                <button onclick="cambiarTab('personal')" id="btnTabPersonal" class="py-3 px-4 font-semibold text-sm text-blue-300 hover:text-white border-b-4 border-transparent flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-users"></i> Personal / PINs
+                </button>
+                <button onclick="cambiarTab('objetivos')" id="btnTabObjetivos" class="py-3 px-4 font-semibold text-sm text-blue-300 hover:text-white border-b-4 border-transparent flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-building"></i> Objetivos / Puestos
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="container mx-auto px-4 py-6">
+
+        <!-- TAB 1: MARCACIONES -->
+        <section id="tabMarcaciones" class="block">
+            <div class="bg-white rounded-lg shadow p-4 mb-6">
+                <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
+                    <div class="w-full md:w-1/2">
+                        <input type="text" id="buscarMarcacion" oninput="filtrarMarcaciones()" placeholder="Buscar por Legajo, Nombre u Objetivo..." class="w-full border p-2 rounded text-sm focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div class="flex items-center gap-2 w-full md:w-auto">
+                        <select id="filtroTipoMarcacion" onchange="filtrarMarcaciones()" class="border p-2 rounded text-sm bg-white">
+                            <option value="">Todos los Tipos</option>
+                            <option value="Entrada">Entrada</option>
+                            <option value="Salida">Salida</option>
+                        </select>
+                        <button onclick="exportarMarcacionesExcel()" class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded text-sm flex items-center gap-1">
+                            <i class="fa-solid fa-file-excel"></i> Excel
+                        </button>
+                        <button onclick="exportarMarcacionesPDF()" class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded text-sm flex items-center gap-1">
+                            <i class="fa-solid fa-file-pdf"></i> PDF
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr class="bg-gray-100 text-gray-700 uppercase text-xs">
+                                <th class="p-3 border-b">Fecha y Hora</th>
+                                <th class="p-3 border-b">Legajo</th>
+                                <th class="p-3 border-b">Nombre</th>
+                                <th class="p-3 border-b">Objetivo</th>
+                                <th class="p-3 border-b">Tipo</th>
+                                <th class="p-3 border-b text-center">Ubicación</th>
+                                <th class="p-3 border-b text-center">Foto Marcación</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaMarcacionesBody">
+                            <tr><td colspan="7" class="p-4 text-center text-gray-500">Cargando datos...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: NOVEDADES -->
+        <section id="tabNovedades" class="hidden">
+            <div class="bg-white rounded-lg shadow p-4 mb-6">
+                <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
+                    <div class="w-full md:w-1/2">
+                        <input type="text" id="buscarNovedad" oninput="filtrarNovedades()" placeholder="Buscar por Legajo, Nombre, Incidencia..." class="w-full border p-2 rounded text-sm focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div class="flex items-center gap-2 w-full md:w-auto">
+                        <button onclick="exportarNovedadesExcel()" class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded text-sm flex items-center gap-1">
+                            <i class="fa-solid fa-file-excel"></i> Excel
+                        </button>
+                        <button onclick="exportarNovedadesPDF()" class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded text-sm flex items-center gap-1">
+                            <i class="fa-solid fa-file-pdf"></i> PDF
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr class="bg-gray-100 text-gray-700 uppercase text-xs">
+                                <th class="p-3 border-b">Fecha y Hora</th>
+                                <th class="p-3 border-b">Legajo / Nombre</th>
+                                <th class="p-3 border-b">Objetivo</th>
+                                <th class="p-3 border-b">Tipo Incidencia</th>
+                                <th class="p-3 border-b">Descripción</th>
+                                <th class="p-3 border-b text-center">Ubicación</th>
+                                <th class="p-3 border-b text-center">Foto Adjunta</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaNovedadesBody">
+                            <tr><td colspan="7" class="p-4 text-center text-gray-500">Cargando novedades...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: PERSONAL / PINS -->
+        <section id="tabPersonal" class="hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Formulario Crear Personal -->
+                <div class="bg-white rounded-lg shadow p-5">
+                    <h2 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-user-plus text-blue-600"></i> Registrar Personal
+                    </h2>
+                    <form onsubmit="guardarNuevoPersonal(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Legajo:</label>
+                            <input type="text" id="inputLegajo" required class="w-full border p-2 rounded text-sm focus:border-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Nombre Completo:</label>
+                            <input type="text" id="inputNombre" required class="w-full border p-2 rounded text-sm focus:border-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 uppercase mb-1">PIN de Acceso (4 Dígitos):</label>
+                            <div class="flex gap-2">
+                                <input type="text" id="inputPin" maxlength="4" required class="w-full border p-2 rounded text-sm font-mono tracking-widest text-center focus:border-blue-500 outline-none">
+                                <button type="button" onclick="generarPinAleatorio()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-2 rounded text-xs font-semibold">
+                                    Generar
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Foto Máster:</label>
+                            <input type="file" id="inputFotoMasterAlta" accept="image/*" class="w-full text-xs text-gray-500 file:mr-2 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                        </div>
+                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded text-sm shadow transition">
+                            Guardar Empleado
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Tabla Personal Registrado -->
+                <div class="bg-white rounded-lg shadow p-5 lg:col-span-2">
+                    <h2 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-users-gear text-blue-600"></i> Personal Registrado
+                    </h2>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-sm">
+                            <thead>
+                                <tr class="bg-gray-100 text-gray-700 uppercase text-xs">
+                                    <th class="p-3 border-b">Legajo</th>
+                                    <th class="p-3 border-b">Nombre</th>
+                                    <th class="p-3 border-b">PIN</th>
+                                    <th class="p-3 border-b text-center">Foto Máster</th>
+                                    <th class="p-3 border-b text-center">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tablaPersonalBody">
+                                <tr><td colspan="5" class="p-4 text-center text-gray-500">Cargando personal...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 4: OBJETIVOS / PUESTOS -->
+        <section id="tabObjetivos" class="hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Formulario Crear Objetivo -->
+                <div class="bg-white rounded-lg shadow p-5">
+                    <h2 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-map-location-dot text-blue-600"></i> Registrar Objetivo
+                    </h2>
+                    <form onsubmit="guardarNuevoObjetivo(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Nombre / Identificador del Puesto:</label>
+                            <input type="text" id="inputNombreObjetivo" required placeholder="Ej: Planta Industrial, Edificio Central" class="w-full border p-2 rounded text-sm focus:border-blue-500 outline-none">
+                        </div>
+                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded text-sm shadow transition">
+                            Guardar Objetivo
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Tabla Objetivos Registrados -->
+                <div class="bg-white rounded-lg shadow p-5 lg:col-span-2">
+                    <h2 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-list-check text-blue-600"></i> Objetivos Configurados
+                    </h2>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-sm">
+                            <thead>
+                                <tr class="bg-gray-100 text-gray-700 uppercase text-xs">
+                                    <th class="p-3 border-b">Nombre de Objetivo</th>
+                                    <th class="p-3 border-b text-center">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tablaObjetivosBody">
+                                <tr><td colspan="2" class="p-4 text-center text-gray-500">Cargando objetivos...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- MODAL DE VISUALIZACIÓN DE FOTOS -->
+    <div id="modalFoto" class="fixed inset-0 bg-black bg-opacity-80 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg max-w-lg w-full overflow-hidden shadow-2xl relative">
+            <div class="p-4 bg-gray-900 text-white flex justify-between items-center">
+                <h3 class="font-bold text-sm" id="modalFotoTitulo">Vista Previa de Imagen</h3>
+                <button onclick="cerrarModalFoto()" class="text-gray-400 hover:text-white text-xl font-bold">&times;</button>
+            </div>
+            <div class="p-4 flex items-center justify-center bg-gray-100 min-h-[250px]">
+                <img id="imgModalPreview" src="" alt="Previsualización" class="max-h-96 rounded shadow object-contain">
+            </div>
+            <div class="p-3 bg-gray-50 text-right">
+                <button onclick="cerrarModalFoto()" class="bg-gray-700 hover:bg-gray-800 text-white px-4 py-1.5 rounded text-sm">Cerrar</button>
+            </div>
+        </div>
     </div>
 
-  </div>
+    <!-- MODAL EDITAR PERSONAL -->
+    <div id="modalEditarPersonal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
+            <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-user-pen text-yellow-600"></i> Editar Empleado
+            </h3>
+            <input type="hidden" id="editFirebaseId">
+            
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Legajo:</label>
+                    <input type="text" id="editLegajo" required class="w-full border p-2 rounded text-sm focus:border-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Nombre Completo:</label>
+                    <input type="text" id="editNombre" required class="w-full border p-2 rounded text-sm focus:border-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 uppercase mb-1">PIN de Acceso:</label>
+                    <input type="text" id="editPin" maxlength="4" required class="w-full border p-2 rounded text-sm font-mono tracking-widest text-center focus:border-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Actualizar / Subir Foto Máster:</label>
+                    <input type="file" id="editFotoMaster" accept="image/*" class="w-full text-xs text-gray-500 file:mr-2 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                    <div id="previewFotoActual" class="mt-2 text-xs font-semibold"></div>
+                </div>
+            </div>
 
-  <!-- MODAL FOTO -->
-  <div id="modalFoto" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
-    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4 max-w-lg w-full relative space-y-4">
-      <button onclick="cerrarModal()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-      <h3 class="font-bold text-white text-base">Archivo Adjunto / Foto</h3>
-      <div class="w-full h-80 bg-slate-950 rounded-xl overflow-hidden flex items-center justify-center relative">
-        <img id="imgModal" src="" alt="Foto Adjunta" class="w-full h-full object-contain">
-      </div>
+            <div class="mt-6 flex justify-end gap-2">
+                <button type="button" onclick="cerrarModalEditar()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded text-sm font-semibold transition">Cancelar</button>
+                <button type="button" onclick="guardarEdicionPersonal()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm font-semibold transition">Guardar Cambios</button>
+            </div>
+        </div>
     </div>
-  </div>
 
-  <script>
-    const PASSWORD_ADMIN = "admin123"; 
-    // URL actualizada a la base de datos de demo-asistencia en Firebase Realtime Database
-    const URL_FIREBASE = "https://fir-asistencia-fad12-default-rtdb.firebaseio.com";
+    <!-- LÓGICA JAVASCRIPT -->
+    <script>
+        const FIREBASE_URL = "https://fir-asistencia-fad12-default-rtdb.firebaseio.com";
+        const PASSWORD_ADMIN = "admin123";
 
-    let datosMarcaciones = [];
-    let datosNovedades = [];
-    let datosFiltradosNovedades = [];
-    let datosFiltradosMarcaciones = [];
-    let datosPersonal = [];
-    let datosObjetivos = [];
+        // Estructuras de datos locales
+        let rawMarcaciones = [];
+        let rawNovedades = [];
+        let rawPersonal = [];
+        let rawObjetivos = [];
 
-    window.onload = function() {
-      generarPinAleatorio();
-      if (sessionStorage.getItem('auth_admin') === 'true') {
-        mostrarAdmin();
-      }
-    };
-
-    function generarPinAleatorio() {
-      const pin = Math.floor(1000 + Math.random() * 9000).toString();
-      const inputPin = document.getElementById('newPin');
-      if (inputPin) inputPin.value = pin;
-    }
-
-    function validarPasswordAdmin(e) {
-      e.preventDefault();
-      const input = document.getElementById('inputPassAdmin').value;
-      const errorMsg = document.getElementById('msgErrorPassAdmin');
-
-      if (input === PASSWORD_ADMIN) {
-        sessionStorage.setItem('auth_admin', 'true');
-        mostrarAdmin();
-      } else {
-        errorMsg.classList.remove('hidden');
-        document.getElementById('inputPassAdmin').value = '';
-        document.getElementById('inputPassAdmin').focus();
-      }
-    }
-
-    function mostrarAdmin() {
-      document.getElementById('pantallaLoginAdmin').classList.add('hidden');
-      document.getElementById('contenidoAdmin').classList.remove('hidden');
-      recargarDatosEfectivo();
-    }
-
-    function cerrarSesionAdmin() {
-      sessionStorage.removeItem('auth_admin');
-      location.reload();
-    }
-
-    function cambiarTab(tab) {
-      document.getElementById('tabMarcaciones').classList.add('hidden');
-      document.getElementById('tabNovedades').classList.add('hidden');
-      document.getElementById('tabPersonal').classList.add('hidden');
-      document.getElementById('tabObjetivos').classList.add('hidden');
-
-      document.getElementById('tabBtnMarcaciones').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
-      document.getElementById('tabBtnNovedades').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
-      document.getElementById('tabBtnPersonal').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
-      document.getElementById('tabBtnObjetivos').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
-
-      if (tab === 'marcaciones') {
-        document.getElementById('tabMarcaciones').classList.remove('hidden');
-        document.getElementById('tabBtnMarcaciones').className = "px-5 py-3 font-semibold text-sm border-b-2 border-emerald-500 text-emerald-400 flex items-center gap-2 transition";
-      } else if (tab === 'novedades') {
-        document.getElementById('tabNovedades').classList.remove('hidden');
-        document.getElementById('tabBtnNovedades').className = "px-5 py-3 font-semibold text-sm border-b-2 border-amber-500 text-amber-400 flex items-center gap-2 transition";
-      } else if (tab === 'personal') {
-        document.getElementById('tabPersonal').classList.remove('hidden');
-        document.getElementById('tabBtnPersonal').className = "px-5 py-3 font-semibold text-sm border-b-2 border-amber-500 text-amber-400 flex items-center gap-2 transition";
-      } else if (tab === 'objetivos') {
-        document.getElementById('tabObjetivos').classList.remove('hidden');
-        document.getElementById('tabBtnObjetivos').className = "px-5 py-3 font-semibold text-sm border-b-2 border-sky-500 text-sky-400 flex items-center gap-2 transition";
-      }
-    }
-
-    // CARGA DE DATOS DESDE FIREBASE REALTIME DATABASE
-    async function recargarDatosEfectivo() {
-      const icono = document.getElementById('icono-reload');
-      if (icono) icono.classList.add('fa-spin');
-
-      try {
-        // 1. Cargar Marcaciones
-        const resMarcaciones = await fetch(`${URL_FIREBASE}/fichadas.json`);
-        const dataMarcaciones = await resMarcaciones.json();
-        datosMarcaciones = [];
-        if (dataMarcaciones) {
-          Object.keys(dataMarcaciones).forEach(id => {
-            const d = dataMarcaciones[id];
-            const fecha = d.fechaHoraDispositivo || d.timestamp || '';
-            const mapaUrl = (d.latitud && d.longitud) ? `https://maps.google.com/?q=${d.latitud},${d.longitud}` : '';
-            datosMarcaciones.push([fecha, d.legajo, d.nombre, d.objetivo, d.tipo, mapaUrl, d.fotoBase64 || '']);
-          });
-        }
-        filtrarTablaMarcaciones();
-
-        // 2. Cargar Novedades
-        const resNovedades = await fetch(`${URL_FIREBASE}/novedades.json`);
-        const dataNovedades = await resNovedades.json();
-        datosNovedades = [];
-        if (dataNovedades) {
-          Object.keys(dataNovedades).forEach(id => {
-            const d = dataNovedades[id];
-            const fecha = d.fechaHoraDispositivo || d.timestamp || '';
-            const mapaUrl = (d.latitud && d.longitud) ? `https://maps.google.com/?q=${d.latitud},${d.longitud}` : '';
-            datosNovedades.push([fecha, d.legajo, d.nombre, d.objetivo, d.tipoIncidencia || 'General', d.descripcion || '', mapaUrl, d.fotoBase64 || '']);
-          });
-        }
-        filtrarTablaNovedades();
-
-        // 3. Cargar Personal
-        const resPersonal = await fetch(`${URL_FIREBASE}/personal.json`);
-        const dataPersonal = await resPersonal.json();
-        datosPersonal = [];
-        if (dataPersonal) {
-          Object.keys(dataPersonal).forEach(id => {
-            const d = dataPersonal[id];
-            datosPersonal.push([d.legajo, d.nombre, 'Personal', d.pin, d.estado || 'ACTIVO', id]);
-          });
-        }
-        renderizarTablaPersonal(datosPersonal);
-
-        // 4. Cargar Objetivos
-        const resObjetivos = await fetch(`${URL_FIREBASE}/objetivos.json`);
-        const dataObjetivos = await resObjetivos.json();
-        datosObjetivos = [];
-        if (dataObjetivos) {
-          Object.keys(dataObjetivos).forEach(id => {
-            const d = dataObjetivos[id];
-            const nombreObj = typeof d === 'string' ? d : (d.nombre || id);
-            datosObjetivos.push([id, nombreObj, '', 'ACTIVO']);
-          });
-        }
-        renderizarTablaObjetivos(datosObjetivos);
-
-      } catch (err) {
-        console.error("Error al sincronizar con Firebase:", err);
-      } finally {
-        if (icono) icono.classList.remove('fa-spin');
-      }
-    }
-
-    function renderizarTablaMarcaciones(registros) {
-      const cuerpo = document.getElementById('cuerpoTablaMarcaciones');
-      cuerpo.innerHTML = "";
-
-      if (!registros || registros.length === 0) {
-        cuerpo.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-400">No hay registros cargados aún en Firebase.</td></tr>`;
-        return;
-      }
-
-      const ordenados = [...registros].reverse();
-
-      ordenados.forEach(fila => {
-        const fecha = fila[0] ? new Date(fila[0]).toLocaleString('es-AR', { hour12: false }) : '-';
-        const legajo = fila[1] !== undefined ? String(fila[1]) : '-';
-        const nombre = fila[2] || '-';
-        const objetivo = fila[3] || '-';
-        const tipo = fila[4] || '-';
-        const urlMapa = fila[5] || '';
-        const urlFoto = fila[6] || '';
-
-        const badgeColor = tipo === 'ENTRADA' 
-          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-          : 'bg-rose-500/10 text-rose-400 border-rose-500/20';
-
-        const btnMapa = (urlMapa && urlMapa.includes('http'))
-          ? `<a href="${urlMapa}" target="_blank" class="inline-flex items-center gap-1 bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
-              <i class="fa-solid fa-map-location-dot"></i> Mapa
-             </a>`
-          : `<span class="text-xs text-slate-500">Sin GPS</span>`;
-
-        const btnFoto = (urlFoto && urlFoto.length > 50)
-          ? `<button onclick="abrirFoto('${urlFoto}')" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
-              <i class="fa-solid fa-image"></i> Ver Foto
-             </button>`
-          : `<span class="text-xs text-slate-500">Sin Foto</span>`;
-
-        const tr = document.createElement('tr');
-        tr.className = "hover:bg-slate-700/30 transition";
-        tr.innerHTML = `
-          <td class="p-4 font-mono text-xs text-slate-300">${fecha}</td>
-          <td class="p-4 font-semibold text-white">${legajo}</td>
-          <td class="p-4 font-medium text-slate-200">${nombre}</td>
-          <td class="p-4 text-slate-400">${objetivo}</td>
-          <td class="p-4 text-center">
-            <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${badgeColor}">${tipo}</span>
-          </td>
-          <td class="p-4 text-center">${btnMapa}</td>
-          <td class="p-4 text-center">${btnFoto}</td>
-        `;
-        cuerpo.appendChild(tr);
-      });
-    }
-
-    function filtrarTablaMarcaciones() {
-      const busqueda = document.getElementById('inputBusqueda').value.toLowerCase();
-      const filtroTipo = document.getElementById('filtroTipo').value;
-
-      datosFiltradosMarcaciones = datosMarcaciones.filter(fila => {
-        const textoFila = `${fila[1]} ${fila[2]} ${fila[3]}`.toLowerCase();
-        const coincideBusqueda = textoFila.includes(busqueda);
-        const coincideTipo = (filtroTipo === 'TODOS') || (fila[4] === filtroTipo);
-
-        return coincideBusqueda && coincideTipo;
-      });
-
-      renderizarTablaMarcaciones(datosFiltradosMarcaciones);
-    }
-
-    function renderizarTablaNovedades(registros) {
-      const cuerpo = document.getElementById('cuerpoTablaNovedades');
-      cuerpo.innerHTML = "";
-
-      if (!registros || registros.length === 0) {
-        cuerpo.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-400">No hay novedades registradas.</td></tr>`;
-        return;
-      }
-
-      const ordenados = [...registros].reverse();
-
-      ordenados.forEach(fila => {
-        const fecha = fila[0] ? new Date(fila[0]).toLocaleString('es-AR', { hour12: false }) : '-';
-        const legajo = fila[1] !== undefined ? String(fila[1]) : '-';
-        const nombre = fila[2] || '-';
-        const objetivo = fila[3] || '-';
-        const tipoIncidencia = fila[4] || '-';
-        const descripcion = fila[5] || '-';
-        const urlMapa = fila[6] || '';
-        const urlFoto = fila[7] || '';
-
-        const btnMapa = (urlMapa && urlMapa.includes('http'))
-          ? `<a href="${urlMapa}" target="_blank" class="inline-flex items-center gap-1 bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
-              <i class="fa-solid fa-map-location-dot"></i> Mapa
-             </a>`
-          : `<span class="text-xs text-slate-500">Sin GPS</span>`;
-
-        const btnFoto = (urlFoto && urlFoto.length > 50)
-          ? `<button onclick="abrirFoto('${urlFoto}')" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
-              <i class="fa-solid fa-image"></i> Ver Foto
-             </button>`
-          : `<span class="text-xs text-slate-500">Sin Foto</span>`;
-
-        const tr = document.createElement('tr');
-        tr.className = "hover:bg-slate-700/30 transition";
-        tr.innerHTML = `
-          <td class="p-4 font-mono text-xs text-slate-300">${fecha}</td>
-          <td class="p-4"><span class="font-bold text-white">${nombre}</span><br><span class="text-xs text-slate-400">Leg: ${legajo}</span></td>
-          <td class="p-4 text-slate-300">${objetivo}</td>
-          <td class="p-4"><span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded text-xs font-bold">${tipoIncidencia}</span></td>
-          <td class="p-4 text-slate-200" style="max-width: 300px; white-space: normal; word-break: break-word;" title="${descripcion}">${descripcion}</td>
-          <td class="p-4 text-center">${btnMapa}</td>
-          <td class="p-4 text-center">${btnFoto}</td>
-        `;
-        cuerpo.appendChild(tr);
-      });
-    }
-
-    function filtrarTablaNovedades() {
-      const busqueda = document.getElementById('inputBusquedaNovedades').value.toLowerCase();
-
-      datosFiltradosNovedades = datosNovedades.filter(fila => {
-        const textoFila = `${fila[1]} ${fila[2]} ${fila[3]} ${fila[4]} ${fila[5]}`.toLowerCase();
-        return textoFila.includes(busqueda);
-      });
-
-      renderizarTablaNovedades(datosFiltradosNovedades);
-    }
-
-    function renderizarTablaPersonal(registros) {
-      const cuerpo = document.getElementById('cuerpoTablaPersonal');
-      cuerpo.innerHTML = "";
-
-      if (!registros || registros.length === 0) {
-        cuerpo.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-slate-400">No hay personal registrado.</td></tr>`;
-        return;
-      }
-
-      registros.forEach(fila => {
-        const legajoStr = String(fila[0]);
-        const firebaseId = fila[5];
-        const tr = document.createElement('tr');
-        tr.className = "hover:bg-slate-700/30 transition";
-        tr.innerHTML = `
-          <td class="p-4 font-bold text-amber-400">${legajoStr}</td>
-          <td class="p-4 font-medium text-white">${fila[1]}</td>
-          <td class="p-4 text-center font-mono text-slate-400">${fila[3] || '****'}</td>
-          <td class="p-4 text-center"><span class="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded text-xs">${fila[4] || 'ACTIVO'}</span></td>
-          <td class="p-4 text-center">
-            <button onclick="eliminarPersonal('${firebaseId}')" class="bg-rose-600/20 text-rose-400 hover:bg-rose-600/40 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1" title="Eliminar Registro">
-              <i class="fa-solid fa-trash"></i> Eliminar
-            </button>
-          </td>
-        `;
-        cuerpo.appendChild(tr);
-      });
-    }
-
-    async function guardarVigilador(e) {
-      e.preventDefault();
-      const btn = document.getElementById('btnGuardarGuardia');
-      btn.disabled = true;
-      btn.innerText = "Guardando...";
-
-      const pinGenerado = document.getElementById('newPin').value;
-      const legajoIngresado = document.getElementById('newLegajo').value.trim();
-      const nombreIngresado = document.getElementById('newNombre').value.trim();
-
-      const nuevoPersonal = {
-        legajo: legajoIngresado,
-        nombre: nombreIngresado,
-        pin: pinGenerado,
-        estado: 'ACTIVO',
-        timestamp: new Date().toISOString()
-      };
-
-      try {
-        const res = await fetch(`${URL_FIREBASE}/personal.json`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(nuevoPersonal)
+        // Inicialización
+        window.addEventListener('DOMContentLoaded', () => {
+            if (sessionStorage.getItem('auth_admin') === 'true') {
+                document.getElementById('pantallaLoginAdmin').classList.add('hidden');
+                recargarDatosEfectivo();
+            }
         });
 
-        if (!res.ok) throw new Error("No se pudo guardar en Firebase");
+        // AUTH
+        function validarLoginAdmin(e) {
+            e.preventDefault();
+            const pass = document.getElementById('inputPassAdmin').value;
+            if (pass === PASSWORD_ADMIN) {
+                sessionStorage.setItem('auth_admin', 'true');
+                document.getElementById('pantallaLoginAdmin').classList.add('hidden');
+                recargarDatosEfectivo();
+            } else {
+                alert('Contraseña incorrecta');
+            }
+        }
 
-        alert(`Personal registrado con éxito.\nPIN asignado: ${pinGenerado}`);
-        document.getElementById('newLegajo').value = "";
-        document.getElementById('newNombre').value = "";
-        generarPinAleatorio();
-        recargarDatosEfectivo();
-      } catch (err) {
-        alert("Ocurrió un error al guardar: " + err.toString());
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Guardar Personal`;
-      }
-    }
+        function cerrarSesionAdmin() {
+            sessionStorage.removeItem('auth_admin');
+            location.reload();
+        }
 
-    async function eliminarPersonal(firebaseId) {
-      if (!confirm(`¿Estás seguro de que deseas eliminar este registro?`)) return;
+        // TABS
+        function cambiarTab(tab) {
+            const tabs = ['marcaciones', 'novedades', 'personal', 'objetivos'];
+            tabs.forEach(t => {
+                const element = document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1));
+                const btn = document.getElementById('btnTab' + t.charAt(0).toUpperCase() + t.slice(1));
+                if (t === tab) {
+                    element.classList.remove('hidden');
+                    element.classList.add('block');
+                    btn.classList.add('border-blue-400', 'text-white');
+                    btn.classList.remove('border-transparent', 'text-blue-300');
+                } else {
+                    element.classList.add('hidden');
+                    element.classList.remove('block');
+                    btn.classList.remove('border-blue-400', 'text-white');
+                    btn.classList.add('border-transparent', 'text-blue-300');
+                }
+            });
+        }
 
-      try {
-        await fetch(`${URL_FIREBASE}/personal/${firebaseId}.json`, { method: "DELETE" });
-        alert("Registro eliminado con éxito.");
-        recargarDatosEfectivo();
-      } catch (err) {
-        alert("Ocurrió un error al eliminar: " + err.toString());
-      }
-    }
+        // UTILIDAD: CONVERTIR FILE A BASE64
+        const convertirImagenBase64 = (file) => {
+            return new Promise((resolve, reject) => {
+                if (!file) resolve(null);
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            });
+        };
 
-    function renderizarTablaObjetivos(registros) {
-      const cuerpo = document.getElementById('cuerpoTablaObjetivos');
-      cuerpo.innerHTML = "";
+        // CARGA GENERAL DE DATOS DESDE FIREBASE
+        async function recargarDatosEfectivo() {
+            try {
+                await Promise.all([
+                    obtenerMarcaciones(),
+                    obtenerNovedades(),
+                    obtenerPersonal(),
+                    obtenerObjetivos()
+                ]);
+            } catch (err) {
+                console.error("Error al sincronizar datos:", err);
+            }
+        }
 
-      if (!registros || registros.length === 0) {
-        cuerpo.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-slate-400">No hay objetivos registrados.</td></tr>`;
-        return;
-      }
+        // --- MÓDULO MARCACIONES ---
+        async function obtenerMarcaciones() {
+            const res = await fetch(`${FIREBASE_URL}/fichadas.json`);
+            const data = await res.json() || {};
+            rawMarcaciones = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+            renderizarMarcaciones(rawMarcaciones);
+        }
 
-      registros.forEach(fila => {
-        const firebaseId = fila[0];
-        const nombreObj = fila[1];
-        const tr = document.createElement('tr');
-        tr.className = "hover:bg-slate-700/30 transition";
-        tr.innerHTML = `
-          <td class="p-4 font-mono text-xs text-slate-400">${firebaseId}</td>
-          <td class="p-4 font-medium text-white">${nombreObj}</td>
-          <td class="p-4 text-center"><span class="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded text-xs">ACTIVO</span></td>
-          <td class="p-4 text-center">
-            <button onclick="eliminarObjetivo('${firebaseId}')" class="bg-rose-600/20 text-rose-400 hover:bg-rose-600/40 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1" title="Eliminar Objetivo">
-              <i class="fa-solid fa-trash"></i> Eliminar
-            </button>
-          </td>
-        `;
-        cuerpo.appendChild(tr);
-      });
-    }
+        function renderizarMarcaciones(lista) {
+            const tbody = document.getElementById('tablaMarcacionesBody');
+            if (lista.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-500">No hay registros de marcaciones.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = lista.map(m => {
+                const mapLink = (m.lat && m.lng) 
+                    ? `<a href="https://maps.google.com/?q=${m.lat},${m.lng}" target="_blank" class="text-blue-600 hover:underline"><i class="fa-solid fa-location-dot"></i> Ver Mapa</a>` 
+                    : '<span class="text-gray-400">Sin GPS</span>';
+                
+                const fotoBtn = m.foto 
+                    ? `<button onclick="abrirModalFoto('${m.foto}', 'Foto Marcación - ${m.nombre || ''}')" class="text-xs bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded"><i class="fa-solid fa-image"></i> Ver Foto</button>`
+                    : '<span class="text-gray-400">Sin Foto</span>';
 
-    async function guardarObjetivo(e) {
-      e.preventDefault();
-      const btn = document.getElementById('btnGuardarObj');
-      btn.disabled = true;
-      btn.innerText = "Guardando...";
+                const tipoBadge = m.tipo === 'Entrada' 
+                    ? `<span class="bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded font-semibold">Entrada</span>`
+                    : `<span class="bg-orange-100 text-orange-800 text-xs px-2 py-0.5 rounded font-semibold">Salida</span>`;
 
-      const nombreObj = document.getElementById('newObjetivo').value.trim();
+                return `
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="p-3">${m.fechaHora || m.fecha || '-'}</td>
+                        <td class="p-3 font-semibold">${m.legajo || '-'}</td>
+                        <td class="p-3">${m.nombre || '-'}</td>
+                        <td class="p-3">${m.objetivo || '-'}</td>
+                        <td class="p-3">${tipoBadge}</td>
+                        <td class="p-3 text-center">${mapLink}</td>
+                        <td class="p-3 text-center">${fotoBtn}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
 
-      try {
-        const res = await fetch(`${URL_FIREBASE}/objetivos.json`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ nombre: nombreObj, estado: 'ACTIVO', timestamp: new Date().toISOString() })
-        });
+        function filtrarMarcaciones() {
+            const texto = document.getElementById('buscarMarcacion').value.toLowerCase();
+            const tipo = document.getElementById('filtroTipoMarcacion').value;
 
-        if (!res.ok) throw new Error("Error al guardar en Firebase");
+            const filtrados = rawMarcaciones.filter(m => {
+                const cumpleTexto = (m.legajo && m.legajo.toLowerCase().includes(texto)) ||
+                                    (m.nombre && m.nombre.toLowerCase().includes(texto)) ||
+                                    (m.objetivo && m.objetivo.toLowerCase().includes(texto));
+                const cumpleTipo = tipo === '' || m.tipo === tipo;
+                return cumpleTexto && cumpleTipo;
+            });
+            renderizarMarcaciones(filtrados);
+        }
 
-        alert("Objetivo registrado con éxito.");
-        document.getElementById('newObjetivo').value = "";
-        recargarDatosEfectivo();
-      } catch (err) {
-        alert("Ocurrió un error al guardar el objetivo: " + err.toString());
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = `<i class="fa-solid fa-plus"></i> Añadir Objetivo`;
-      }
-    }
+        // --- MÓDULO NOVEDADES ---
+        async function obtenerNovedades() {
+            const res = await fetch(`${FIREBASE_URL}/novedades.json`);
+            const data = await res.json() || {};
+            rawNovedades = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+            renderizarNovedades(rawNovedades);
+        }
 
-    async function eliminarObjetivo(firebaseId) {
-      if (!confirm(`¿Estás seguro de que deseas eliminar este objetivo?`)) return;
+        function renderizarNovedades(lista) {
+            const tbody = document.getElementById('tablaNovedadesBody');
+            if (lista.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-500">No hay incidencias registradas.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = lista.map(n => {
+                const mapLink = (n.lat && n.lng) 
+                    ? `<a href="https://maps.google.com/?q=${n.lat},${n.lng}" target="_blank" class="text-blue-600 hover:underline"><i class="fa-solid fa-location-dot"></i> Ver Mapa</a>` 
+                    : '<span class="text-gray-400">Sin GPS</span>';
+                
+                const fotoBtn = n.foto 
+                    ? `<button onclick="abrirModalFoto('${n.foto}', 'Novedad - ${n.tipoIncidencia || ''}')" class="text-xs bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded"><i class="fa-solid fa-image"></i> Ver Foto</button>`
+                    : '<span class="text-gray-400">Sin Foto</span>';
 
-      try {
-        await fetch(`${URL_FIREBASE}/objetivos/${firebaseId}.json`, { method: "DELETE" });
-        alert("Objetivo eliminado con éxito.");
-        recargarDatosEfectivo();
-      } catch (err) {
-        alert("Ocurrió un error al eliminar: " + err.toString());
-      }
-    }
+                return `
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="p-3">${n.fechaHora || n.fecha || '-'}</td>
+                        <td class="p-3 font-semibold">${n.nombre || n.legajo || '-'}</td>
+                        <td class="p-3">${n.objetivo || '-'}</td>
+                        <td class="p-3"><span class="bg-red-100 text-red-800 text-xs px-2 py-0.5 rounded font-semibold">${n.tipoIncidencia || 'Novedad'}</span></td>
+                        <td class="p-3">${n.descripcion || '-'}</td>
+                        <td class="p-3 text-center">${mapLink}</td>
+                        <td class="p-3 text-center">${fotoBtn}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
 
-    function abrirFoto(base64) {
-      document.getElementById('imgModal').src = base64;
-      document.getElementById('modalFoto').classList.remove('hidden');
-    }
+        function filtrarNovedades() {
+            const texto = document.getElementById('buscarNovedad').value.toLowerCase();
+            const filtrados = rawNovedades.filter(n => {
+                return (n.legajo && n.legajo.toLowerCase().includes(texto)) ||
+                       (n.nombre && n.nombre.toLowerCase().includes(texto)) ||
+                       (n.tipoIncidencia && n.tipoIncidencia.toLowerCase().includes(texto)) ||
+                       (n.descripcion && n.descripcion.toLowerCase().includes(texto));
+            });
+            renderizarNovedades(filtrados);
+        }
 
-    function cerrarModal() {
-      document.getElementById('modalFoto').classList.add('hidden');
-      document.getElementById('imgModal').src = "";
-    }
+        // --- MÓDULO PERSONAL / PINS ---
+        async function obtenerPersonal() {
+            const res = await fetch(`${FIREBASE_URL}/personal.json`);
+            const data = await res.json() || {};
+            rawPersonal = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+            renderizarPersonal(rawPersonal);
+        }
 
-    function exportarExcel() {
-      if (!datosFiltradosMarcaciones || datosFiltradosMarcaciones.length === 0) {
-        return alert("No hay datos visibles para exportar.");
-      }
+        function renderizarPersonal(lista) {
+            const tbody = document.getElementById('tablaPersonalBody');
+            if (lista.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-500">No hay personal registrado.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = lista.map(p => {
+                const fotoMasterBtn = p.fotoMaster 
+                    ? `<button onclick="abrirModalFoto('${p.fotoMaster}', 'Foto Máster - ${p.nombre}')" class="text-xs bg-blue-100 text-blue-800 hover:bg-blue-200 px-2 py-1 rounded font-semibold"><i class="fa-solid fa-id-card"></i> Ver Foto</button>`
+                    : '<span class="text-gray-400 text-xs">Sin Foto</span>';
 
-      const cabeceras = [["Fecha y Hora", "Legajo", "Nombre", "Objetivo", "Tipo", "Ubicación (Mapa)"]];
-      const filas = datosFiltradosMarcaciones.map(f => [
-        f[0] ? new Date(f[0]).toLocaleString('es-AR', { hour12: false }) : '',
-        f[1] !== undefined ? String(f[1]) : '',
-        f[2] || '',
-        f[3] || '',
-        f[4] || '',
-        f[5] || ''
-      ]);
+                // Se escapa el string para evitar problemas con comillas
+                const fotoParam = p.fotoMaster ? p.fotoMaster.replace(/'/g, "\\'") : '';
+                const nombreParam = p.nombre ? p.nombre.replace(/'/g, "\\'") : '';
 
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet([...cabeceras, ...filas]);
-      XLSX.utils.book_append_sheet(wb, ws, "Marcaciones");
-      XLSX.writeFile(wb, `Reporte_Marcaciones_${new Date().toISOString().slice(0,10)}.xlsx`);
-    }
+                return `
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="p-3 font-semibold">${p.legajo || '-'}</td>
+                        <td class="p-3">${p.nombre || '-'}</td>
+                        <td class="p-3 font-mono tracking-widest">${p.pin || '-'}</td>
+                        <td class="p-3 text-center">${fotoMasterBtn}</td>
+                        <td class="p-3 text-center">
+                            <button onclick="abrirModalEditar('${p.id}', '${p.legajo || ''}', '${nombreParam}', '${p.pin || ''}', '${fotoParam}')" class="bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-1 rounded text-xs mr-1 transition">
+                                <i class="fa-solid fa-pen"></i> Editar
+                            </button>
+                            <button onclick="eliminarPersonal('${p.id}')" class="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs transition">
+                                <i class="fa-solid fa-trash"></i> Eliminar
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
 
-    function exportarPDF() {
-      if (!datosFiltradosMarcaciones || datosFiltradosMarcaciones.length === 0) {
-        return alert("No hay datos visibles para exportar.");
-      }
+        function generarPinAleatorio() {
+            const pin = Math.floor(1000 + Math.random() * 9000).toString();
+            document.getElementById('inputPin').value = pin;
+        }
 
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF();
+        async function guardarNuevoPersonal(e) {
+            e.preventDefault();
+            const legajo = document.getElementById('inputLegajo').value;
+            const nombre = document.getElementById('inputNombre').value;
+            const pin = document.getElementById('inputPin').value;
+            const fileInput = document.getElementById('inputFotoMasterAlta');
 
-      doc.setFontSize(16);
-      doc.text("Reporte de Marcaciones de Asistencia", 14, 15);
-      doc.setFontSize(10);
-      doc.text(`Generado el: ${new Date().toLocaleString('es-AR', { hour12: false })}`, 14, 22);
+            let fotoMasterBase64 = null;
+            if (fileInput.files.length > 0) {
+                fotoMasterBase64 = await convertirImagenBase64(fileInput.files[0]);
+            }
 
-      const columnas = ["Fecha y Hora", "Legajo", "Nombre", "Objetivo", "Tipo"];
-      const filas = datosFiltradosMarcaciones.map(f => [
-        f[0] ? new Date(f[0]).toLocaleString('es-AR', { hour12: false }) : '',
-        f[1] !== undefined ? String(f[1]) : '',
-        f[2] || '',
-        f[3] || '',
-        f[4] || ''
-      ]);
+            const nuevo = { legajo, nombre, pin, fotoMaster: fotoMasterBase64 };
 
-      doc.autoTable({
-        head: [columnas],
-        body: filas,
-        startY: 28,
-        theme: 'grid',
-        headStyles: { fillColor: [15, 23, 42] },
-        styles: { fontSize: 8 }
-      });
+            await fetch(`${FIREBASE_URL}/personal.json`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(nuevo)
+            });
 
-      doc.save(`Reporte_Marcaciones_${new Date().toISOString().slice(0,10)}.pdf`);
-    }
+            // Limpieza del formulario
+            document.getElementById('inputLegajo').value = '';
+            document.getElementById('inputNombre').value = '';
+            document.getElementById('inputPin').value = '';
+            document.getElementById('inputFotoMasterAlta').value = '';
 
-    function exportarExcelNovedades() {
-      const registrosAExportar = (datosFiltradosNovedades && datosFiltradosNovedades.length > 0) ? datosFiltradosNovedades : datosNovedades;
-      if (!registrosAExportar || registrosAExportar.length === 0) {
-        return alert("No hay datos visibles para exportar.");
-      }
+            recargarDatosEfectivo();
+        }
 
-      const cabeceras = [["Fecha y Hora", "Legajo", "Nombre", "Objetivo", "Tipo Incidencia", "Descripción", "Ubicación (Mapa)"]];
-      const filas = registrosAExportar.map(f => [
-        f[0] ? new Date(f[0]).toLocaleString('es-AR', { hour12: false }) : '',
-        f[1] !== undefined ? String(f[1]) : '',
-        f[2] || '',
-        f[3] || '',
-        f[4] || '',
-        f[5] || '',
-        f[6] || ''
-      ]);
+        function abrirModalEditar(id, legajo, nombre, pin, fotoMaster) {
+            document.getElementById('editFirebaseId').value = id;
+            document.getElementById('editLegajo').value = legajo;
+            document.getElementById('editNombre').value = nombre;
+            document.getElementById('editPin').value = pin;
+            document.getElementById('editFotoMaster').value = '';
 
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet([...cabeceras, ...filas]);
-      XLSX.utils.book_append_sheet(wb, ws, "Novedades");
-      XLSX.writeFile(wb, `Reporte_Novedades_${new Date().toISOString().slice(0,10)}.xlsx`);
-    }
+            const preview = document.getElementById('previewFotoActual');
+            if (fotoMaster && fotoMaster !== '') {
+                preview.innerHTML = `<span class="text-green-600"><i class="fa-solid fa-check"></i> Posee foto máster activa</span>`;
+            } else {
+                preview.innerHTML = `<span class="text-red-500"><i class="fa-solid fa-xmark"></i> Sin foto máster</span>`;
+            }
 
-    function exportarPDFNovedades() {
-      const registrosAExportar = (datosFiltradosNovedades && datosFiltradosNovedades.length > 0) ? datosFiltradosNovedades : datosNovedades;
-      if (!registrosAExportar || registrosAExportar.length === 0) {
-        return alert("No hay datos visibles para exportar.");
-      }
+            const modal = document.getElementById('modalEditarPersonal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
 
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF();
+        function cerrarModalEditar() {
+            const modal = document.getElementById('modalEditarPersonal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
 
-      doc.setFontSize(16);
-      doc.text("Reporte de Novedades e Incidencias", 14, 15);
-      doc.setFontSize(10);
-      doc.text(`Generado el: ${new Date().toLocaleString('es-AR', { hour12: false })}`, 14, 22);
+        async function guardarEdicionPersonal() {
+            const id = document.getElementById('editFirebaseId').value;
+            const legajo = document.getElementById('editLegajo').value;
+            const nombre = document.getElementById('editNombre').value;
+            const pin = document.getElementById('editPin').value;
+            const fileInput = document.getElementById('editFotoMaster');
 
-      const columnas = ["Fecha y Hora", "Legajo / Nombre", "Objetivo", "Tipo", "Descripción"];
-      const filas = registrosAExportar.map(f => [
-        f[0] ? new Date(f[0]).toLocaleString('es-AR', { hour12: false }) : '',
-        `${f[2] || ''} (Leg: ${f[1] || ''})`,
-        f[3] || '',
-        f[4] || '',
-        f[5] || ''
-      ]);
+            const datosActualizados = { legajo, nombre, pin };
 
-      doc.autoTable({
-        head: [columnas],
-        body: filas,
-        startY: 28,
-        theme: 'grid',
-        headStyles: { fillColor: [15, 23, 42] },
-        styles: { fontSize: 8 }
-      });
+            // Solo actualiza la foto máster si se seleccionó un archivo nuevo
+            if (fileInput.files.length > 0) {
+                datosActualizados.fotoMaster = await convertirImagenBase64(fileInput.files[0]);
+            }
 
-      doc.save(`Reporte_Novedades_${new Date().toISOString().slice(0,10)}.pdf`);
-    }
-  </script>
+            await fetch(`${FIREBASE_URL}/personal/${id}.json`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(datosActualizados)
+            });
+
+            cerrarModalEditar();
+            recargarDatosEfectivo();
+        }
+
+        async function eliminarPersonal(id) {
+            if (confirm('¿Está seguro de eliminar este registro de personal?')) {
+                await fetch(`${FIREBASE_URL}/personal/${id}.json`, { method: 'DELETE' });
+                recargarDatosEfectivo();
+            }
+        }
+
+        // --- MÓDULO OBJETIVOS / PUESTOS ---
+        async function obtenerObjetivos() {
+            const res = await fetch(`${FIREBASE_URL}/objetivos.json`);
+            const data = await res.json() || {};
+            rawObjetivos = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+            renderizarObjetivos(rawObjetivos);
+        }
+
+        function renderizarObjetivos(lista) {
+            const tbody = document.getElementById('tablaObjetivosBody');
+            if (lista.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="2" class="p-4 text-center text-gray-500">No hay objetivos configurados.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = lista.map(o => `
+                <tr class="border-b hover:bg-gray-50">
+                    <td class="p-3 font-semibold">${o.nombre || '-'}</td>
+                    <td class="p-3 text-center">
+                        <button onclick="eliminarObjetivo('${o.id}')" class="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs transition">
+                            <i class="fa-solid fa-trash"></i> Eliminar
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function guardarNuevoObjetivo(e) {
+            e.preventDefault();
+            const nombre = document.getElementById('inputNombreObjetivo').value;
+
+            await fetch(`${FIREBASE_URL}/objetivos.json`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nombre })
+            });
+
+            document.getElementById('inputNombreObjetivo').value = '';
+            recargarDatosEfectivo();
+        }
+
+        async function eliminarObjetivo(id) {
+            if (confirm('¿Está seguro de eliminar este objetivo?')) {
+                await fetch(`${FIREBASE_URL}/objetivos/${id}.json`, { method: 'DELETE' });
+                recargarDatosEfectivo();
+            }
+        }
+
+        // --- EXPORTACIONES ---
+        function exportarMarcacionesExcel() {
+            const dataToExport = rawMarcaciones.map(m => ({
+                'Fecha/Hora': m.fechaHora || m.fecha || '',
+                'Legajo': m.legajo || '',
+                'Nombre': m.nombre || '',
+                'Objetivo': m.objetivo || '',
+                'Tipo': m.tipo || '',
+                'Latitud': m.lat || '',
+                'Longitud': m.lng || ''
+            }));
+            const ws = XLSX.utils.json_to_sheet(dataToExport);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Marcaciones");
+            XLSX.writeFile(wb, `Marcaciones_${new Date().toISOString().slice(0,10)}.xlsx`);
+        }
+
+        function exportarMarcacionesPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            doc.text("Reporte de Marcaciones", 14, 15);
+            
+            const tableData = rawMarcaciones.map(m => [
+                m.fechaHora || m.fecha || '',
+                m.legajo || '',
+                m.nombre || '',
+                m.objetivo || '',
+                m.tipo || ''
+            ]);
+
+            doc.autoTable({
+                head: [['Fecha/Hora', 'Legajo', 'Nombre', 'Objetivo', 'Tipo']],
+                body: tableData,
+                startY: 20
+            });
+            doc.save(`Marcaciones_${new Date().toISOString().slice(0,10)}.pdf`);
+        }
+
+        function exportarNovedadesExcel() {
+            const dataToExport = rawNovedades.map(n => ({
+                'Fecha/Hora': n.fechaHora || n.fecha || '',
+                'Nombre/Legajo': n.nombre || n.legajo || '',
+                'Objetivo': n.objetivo || '',
+                'Incidencia': n.tipoIncidencia || '',
+                'Descripción': n.descripcion || '',
+                'Latitud': n.lat || '',
+                'Longitud': n.lng || ''
+            }));
+            const ws = XLSX.utils.json_to_sheet(dataToExport);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Novedades");
+            XLSX.writeFile(wb, `Novedades_${new Date().toISOString().slice(0,10)}.xlsx`);
+        }
+
+        function exportarNovedadesPDF() {
+            const { jsPDF } = window.jspdf;
+            doc = new jsPDF();
+            doc.text("Reporte de Novedades / Incidencias", 14, 15);
+
+            const tableData = rawNovedades.map(n => [
+                n.fechaHora || n.fecha || '',
+                n.nombre || n.legajo || '',
+                n.objetivo || '',
+                n.tipoIncidencia || '',
+                n.descripcion || ''
+            ]);
+
+            doc.autoTable({
+                head: [['Fecha/Hora', 'Personal', 'Objetivo', 'Incidencia', 'Descripción']],
+                body: tableData,
+                startY: 20
+            });
+            doc.save(`Novedades_${new Date().toISOString().slice(0,10)}.pdf`);
+        }
+
+        // --- MODAL DE IMÁGENES ---
+        function abrirModalFoto(src, titulo) {
+            document.getElementById('modalFotoTitulo').innerText = titulo || 'Vista Previa';
+            document.getElementById('imgModalPreview').src = src;
+            const modal = document.getElementById('modalFoto');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function cerrarModalFoto() {
+            const modal = document.getElementById('modalFoto');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.getElementById('imgModalPreview').src = '';
+        }
+    </script>
 </body>
 </html>
