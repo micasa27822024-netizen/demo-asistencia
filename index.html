@@ -134,25 +134,25 @@
       }
     };
 
-    // CARGAR MODELOS CON CDN FIABLE Y SOPORTE CORS
+    // CARGAR MODELOS DESDE LA CARPETA LOCAL /models
     async function cargarModelosIA() {
       const status = document.getElementById('foto-status');
       status.innerText = "⏳ Cargando modelos de Inteligencia Artificial...";
       status.className = "text-xs text-amber-400 text-center font-semibold";
       
       try {
-        const MODEL_URL = 'https://cdn.jsdelivr.net/gh/cbrandolino/face-api.js@master/weights';
+        const MODEL_URL = './models';
 
         await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-        await faceapi.nets.faceLandmark64Net.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
         await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
 
         modelosCargados = true;
         status.innerText = "⚠️ Foto no capturada (IA Lista)";
         status.className = "text-xs text-rose-400 text-center font-semibold";
-        console.log("✅ Modelos de Face-API cargados con éxito.");
+        console.log("✅ Modelos de IA cargados con éxito desde la carpeta local.");
       } catch (err) {
-        console.error("Error al cargar modelos IA:", err);
+        console.error("Error al cargar modelos de la IA:", err);
         modelosCargados = false;
         status.innerText = "⚠️ Modo IA no disponible (Error al cargar modelos)";
         status.className = "text-xs text-amber-400 text-center font-semibold";
