@@ -6,14 +6,15 @@
   <title>Demo Asistencia - Control de Asistencia</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <!-- LIBRERÍA FACE-API.JS -->
+  <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.single.min.js"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
 
-  <!-- ENCABEZADO Y MENÚ CORPORATIVO - DEMO ASISTENCIA -->
+  <!-- ENCABEZADO Y MENÚ CORPORATIVO -->
   <header class="bg-slate-900 border-b border-slate-800 shadow-md mb-4">
     <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-4">
       
-      <!-- LOGO Y NOMBRE DE LA EMPRESA -->
       <div class="flex items-center space-x-3">
         <div class="w-10 h-10 bg-slate-800 border border-emerald-500/30 rounded-xl flex items-center justify-center overflow-hidden shadow-inner p-1">
           <i class="fa-solid fa-shield-halved text-white text-lg"></i>
@@ -24,7 +25,6 @@
         </div>
       </div>
 
-      <!-- MENÚ DE NAVEGACIÓN RÁPIDA -->
       <nav class="flex flex-wrap justify-center items-center gap-1 bg-slate-800/80 p-1.5 rounded-xl border border-slate-700/60">
         <a href="index.html" class="px-3 py-1.5 text-xs font-medium text-white bg-slate-700 rounded-lg transition flex items-center space-x-1.5 shadow-sm">
           <i class="fa-solid fa-camera-retro text-emerald-400"></i>
@@ -52,7 +52,6 @@
     <div class="w-full max-w-md bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 p-6 space-y-4">
       <div class="flex justify-between items-center">
         <h2 class="text-xl font-bold text-white tracking-wide uppercase">Registro de Asistencia</h2>
-        <!-- INDICADOR DE RED OFFLINE/ONLINE -->
         <span id="estadoRed" class="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-500/30">🟢 Online</span>
       </div>
 
@@ -69,7 +68,7 @@
         <p id="ultimo-estado-badge" class="text-xs mt-1.5 font-semibold hidden"></p>
       </div>
 
-      <!-- NOMBRE (SE AUTOCOMPLETA) -->
+      <!-- NOMBRE -->
       <div>
         <label class="block text-xs uppercase text-slate-400 mb-1">Nombre Completo</label>
         <input type="text" id="nombre" readonly placeholder="Se autocompletará con su legajo" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-slate-400 cursor-not-allowed">
@@ -81,7 +80,7 @@
         <input type="password" id="pin" maxlength="6" placeholder="****" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500">
       </div>
 
-      <!-- OBJETIVO / PUESTO (DESPLEGABLE DINÁMICO) -->
+      <!-- OBJETIVO / PUESTO -->
       <div>
         <label class="block text-xs uppercase text-slate-400 mb-1">Objetivo / Puesto</label>
         <select id="objetivo" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500">
@@ -89,16 +88,16 @@
         </select>
       </div>
 
-      <!-- CÁMARA -->
+      <!-- CÁMARA Y RECONOCIMIENTO FACIAL -->
       <div class="space-y-2">
-        <label class="block text-xs uppercase text-slate-400">Validación Facial</label>
+        <label class="block text-xs uppercase text-slate-400">Validación Facial IA</label>
         <div class="relative w-full h-48 bg-slate-950 rounded-lg overflow-hidden border border-slate-700 flex items-center justify-center">
           <video id="webcam" autoplay playsinline class="w-full h-full object-cover"></video>
           <canvas id="canvas" class="hidden"></canvas>
           <img id="preview" class="w-full h-full object-cover hidden absolute inset-0 border-2 border-emerald-500">
         </div>
-        <button type="button" onclick="capturarFoto()" class="w-full bg-amber-600 hover:bg-amber-500 text-xs py-2 rounded-lg font-bold transition">
-          <i class="fa-solid fa-camera mr-2"></i>CAPTURAR FOTO
+        <button type="button" id="btnCapturar" onclick="capturarFoto()" class="w-full bg-amber-600 hover:bg-amber-500 text-xs py-2 rounded-lg font-bold transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-camera"></i> CAPTURAR Y VALIDAR ROSTRO
         </button>
         <p id="foto-status" class="text-xs text-rose-400 text-center font-semibold">⚠️ Foto no capturada</p>
       </div>
@@ -119,16 +118,39 @@
     let fotoBase64Global = "";
     let estaSincronizando = false;
     let ultimoTipoFichadaGlobal = "";
+    let fotoMasterGuardada = null; // Guardará la imagen de referencia del legajo
+    let modelosCargados = false;
+    let resultadoSimilitudGlobal = "NO_EVALUADO";
 
-    window.onload = function() {
+    window.onload = async function() {
       iniciarCamaraSegura();
       cargarObjetivos();
       actualizarEstadoRed();
-      
+      cargarModelosIA();
+
       if (navigator.onLine) {
         sincronizarFichadasPendientes();
       }
     };
+
+    // CARGAR MODELOS LIGEROS DE RECONOCIMIENTO FACIAL
+    async function cargarModelosIA() {
+      const status = document.getElementById('foto-status');
+      status.innerText = "⏳ Cargando modelos de Inteligencia Artificial...";
+      status.className = "text-xs text-amber-400 text-center font-semibold";
+      try {
+        const MODEL_URL = 'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights';
+        await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceLandmark64Net.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+        modelosCargados = true;
+        status.innerText = "⚠️ Foto no capturada (IA Lista)";
+        status.className = "text-xs text-rose-400 text-center font-semibold";
+      } catch (err) {
+        console.error("Error al cargar modelos IA: ", err);
+        status.innerText = "⚠️ Modo IA no disponible (revisa conexión)";
+      }
+    }
 
     window.addEventListener('online', () => {
       actualizarEstadoRed();
@@ -214,10 +236,12 @@
       });
     }
 
+    // BUSCA SI EL EMPLEADO EXISTE Y TRAE SU FOTO MASTER
     function validarLegajo() {
       const legajoInput = document.getElementById('legajo').value.trim();
       const statusLbl = document.getElementById('legajo-status');
       const badgeEstado = document.getElementById('ultimo-estado-badge');
+      fotoMasterGuardada = null;
       
       if (!legajoInput) {
         badgeEstado.classList.add('hidden');
@@ -233,7 +257,7 @@
       }
 
       statusLbl.className = "text-xs mt-1 text-amber-400 block";
-      statusLbl.innerText = "Buscando legajo y estado actual...";
+      statusLbl.innerText = "Buscando legajo y foto oficial...";
 
       Promise.all([
         fetch(`${URL_FIREBASE}/personal.json`).then(res => res.json()).catch(() => null),
@@ -242,17 +266,24 @@
       .then(([dataPersonal, dataFichadas]) => {
         let encontrado = null;
         if (dataPersonal) {
-          Object.values(dataPersonal).forEach(personal => {
-            if (String(personal.legajo).trim() === String(legajoInput)) {
-              encontrado = personal;
-            }
-          });
+          // Si guardaste el legajo indexado por ID directa (/personal/1024)
+          if (dataPersonal[legajoInput]) {
+            encontrado = dataPersonal[legajoInput];
+          } else {
+            // O iterando la lista
+            Object.values(dataPersonal).forEach(personal => {
+              if (String(personal.legajo).trim() === String(legajoInput)) {
+                encontrado = personal;
+              }
+            });
+          }
         }
 
         if (encontrado) {
           document.getElementById('nombre').value = encontrado.nombre || "";
+          fotoMasterGuardada = encontrado.fotoMaster || null;
           statusLbl.className = "text-xs mt-1 text-emerald-400 block";
-          statusLbl.innerText = `✓ Personal: ${encontrado.nombre || 'Legajo Encontrado'}`;
+          statusLbl.innerText = `✓ ${encontrado.nombre || 'Legajo Encontrado'} ${fotoMasterGuardada ? '📸 (Foto Master OK)' : '⚠️ (Sin Foto Master)'}`;
         } else {
           document.getElementById('nombre').value = "";
           statusLbl.className = "text-xs mt-1 text-rose-400 block";
@@ -339,28 +370,35 @@
       }
     }
 
-    function capturarFoto() {
+    async function capturarFoto() {
       const video = document.getElementById('webcam');
       const canvas = document.getElementById('canvas');
       const preview = document.getElementById('preview');
       const status = document.getElementById('foto-status');
+      const btn = document.getElementById('btnCapturar');
 
       if (!video.srcObject && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
-          .then(stream => {
-            video.srcObject = stream;
-            setTimeout(() => realizarCapturaCanvas(video, canvas, preview, status), 300);
-          })
-          .catch(err => {
-            alert("No se pudo acceder a la cámara. Verifique los permisos del navegador.");
-          });
-        return;
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+          video.srcObject = stream;
+        } catch(err) {
+          alert("No se pudo acceder a la cámara. Verifique los permisos del navegador.");
+          return;
+        }
       }
 
-      realizarCapturaCanvas(video, canvas, preview, status);
+      btn.disabled = true;
+      status.innerText = "🔍 Analizando rostro e identidad con IA...";
+      status.className = "text-xs text-amber-400 text-center font-semibold";
+
+      setTimeout(async () => {
+        await realizarCapturaIA(video, canvas, preview, status);
+        btn.disabled = false;
+      }, 200);
     }
 
-    function realizarCapturaCanvas(video, canvas, preview, status) {
+    // NÚCLEO DE VALIDACIÓN FACIAL INTELIGENTE
+    async function realizarCapturaIA(video, canvas, preview, status) {
       const MAX_WIDTH = 320;
       const originalWidth = video.videoWidth || 640;
       const originalHeight = video.videoHeight || 480;
@@ -374,56 +412,76 @@
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
 
-      const analisis = validarSelfieReal(canvas);
-      if (!analisis.valido) {
-        status.innerText = analisis.mensaje;
+      // Si los modelos no cargaron, usa la captura directa
+      if (!modelosCargados) {
+        fotoBase64Global = canvas.toDataURL('image/jpeg', 0.35);
+        preview.src = fotoBase64Global;
+        preview.classList.remove('hidden');
+        resultadoSimilitudGlobal = "IA_NO_DISPONIBLE";
+        status.innerText = "⚠️ Foto capturada sin análisis facial de IA.";
+        status.className = "text-xs text-amber-400 text-center font-semibold";
+        return;
+      }
+
+      // 1. DETECTAR ROSTRO Y EXTRAER VECTOR MATEMÁTICO DE LA SELFIE
+      const deteccionSelfie = await faceapi.detectSingleFace(canvas, new faceapi.TinyFaceDetectorOptions())
+                                          .withFaceLandmarks()
+                                          .withFaceDescriptor();
+
+      if (!deteccionSelfie) {
+        status.innerText = "❌ Rechazado: No se detecta un rostro humano claro (evite tapar la cámara o fotos al techo).";
         status.className = "text-xs text-rose-400 text-center font-semibold";
         preview.classList.add('hidden');
         fotoBase64Global = "";
         return;
       }
-      
-      fotoBase64Global = canvas.toDataURL('image/jpeg', 0.3);
-      
+
+      // 2. COMPARAR CON FOTO MASTER (SI EL EMPLEADO TIENE FOTO REGISTRADA)
+      if (fotoMasterGuardada) {
+        try {
+          const imgMaster = new Image();
+          imgMaster.src = fotoMasterGuardada;
+          await imgMaster.decode();
+
+          const deteccionMaster = await faceapi.detectSingleFace(imgMaster, new faceapi.TinyFaceDetectorOptions())
+                                               .withFaceLandmarks()
+                                               .withFaceDescriptor();
+
+          if (deteccionMaster) {
+            // Calcular distancia euclidiana entre los dos vectores faciales
+            const distancia = faceapi.euclideanDistance(deteccionSelfie.descriptor, deteccionMaster.descriptor);
+            const porcentajeSimilitud = Math.round((1 - distancia) * 100);
+
+            // Umbral habitual: Distancia < 0.60 es la misma persona
+            if (distancia > 0.58) {
+              status.innerText = `❌ Rechazado: Suplantación de identidad. El rostro no coincide con el legajo (${porcentajeSimilitud}% sim).`;
+              status.className = "text-xs text-rose-400 text-center font-semibold";
+              preview.classList.add('hidden');
+              fotoBase64Global = "";
+              return;
+            }
+
+            resultadoSimilitudGlobal = `${porcentajeSimilitud}% COINCIDENCIA`;
+            status.innerText = `✓ Rostro Validado (${porcentajeSimilitud}% Coincidencia)`;
+            status.className = "text-xs text-emerald-400 text-center font-semibold";
+          } else {
+            resultadoSimilitudGlobal = "MASTER_SIN_ROSTRO";
+            status.innerText = "✓ Rostro Humano OK (Master ilegible)";
+            status.className = "text-xs text-emerald-400 text-center font-semibold";
+          }
+        } catch (e) {
+          console.warn("Error evaluando Foto Master:", e);
+          resultadoSimilitudGlobal = "ERROR_EVALUACION";
+        }
+      } else {
+        resultadoSimilitudGlobal = "SIN_MASTER";
+        status.innerText = "✓ Rostro Humano Detectado (Sin foto master de cotejo)";
+        status.className = "text-xs text-emerald-400 text-center font-semibold";
+      }
+
+      fotoBase64Global = canvas.toDataURL('image/jpeg', 0.35);
       preview.src = fotoBase64Global;
       preview.classList.remove('hidden');
-      status.innerText = "✓ Selfie válida capturada con éxito";
-      status.className = "text-xs text-emerald-400 text-center font-semibold";
-    }
-
-    function validarSelfieReal(canvasFuente) {
-      const canvasCheck = document.createElement('canvas');
-      const ctxCheck = canvasCheck.getContext('2d');
-      canvasCheck.width = 100;
-      canvasCheck.height = 100;
-      ctxCheck.drawImage(canvasFuente, 0, 0, 100, 100);
-      
-      const imgData = ctxCheck.getImageData(0, 0, 100, 100);
-      const data = imgData.data;
-      
-      let sumaBrillo = 0;
-      let variacionColor = 0;
-      
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i];
-        const g = data[i+1];
-        const b = data[i+2];
-        sumaBrillo += (r + g + b) / 3;
-        variacionColor += Math.abs(r - g) + Math.abs(g - b);
-      }
-      
-      const brilloPromedio = sumaBrillo / (data.length / 4);
-      const promedioVariacion = variacionColor / (data.length / 4);
-      
-      if (brilloPromedio < 20 || brilloPromedio > 235) {
-        return { valido: false, mensaje: "⚠️ Foto rechazada: Demasiado oscura o clara. Apunte directo a su rostro." };
-      }
-      
-      if (promedioVariacion < 8) {
-        return { valido: false, mensaje: "⚠️ Foto rechazada: No se detecta un rostro natural. Evite fotografiar objetos o cielo." };
-      }
-      
-      return { valido: true, mensaje: "OK" };
     }
 
     function procesarEnvio(tipoRecibido) {
@@ -450,7 +508,7 @@
       localStorage.setItem('demo_ultimo_objetivo', objetivo);
 
       if (!fotoBase64Global) {
-        alert("Primero capture una selfie válida haciendo clic en 'CAPTURAR FOTO'.");
+        alert("Primero capture una selfie válida haciendo clic en 'CAPTURAR Y VALIDAR ROSTRO'.");
         return;
       }
 
@@ -497,6 +555,7 @@
         longitud: lng,
         mapa: `https://www.google.com/maps?q=${lat},${lng}`,
         fotoBase64: fotoBase64Global,
+        validacionFacial: resultadoSimilitudGlobal, // SE GUARDA EL RESULTADO DEL RECONOCIMIENTO
         fechaHoraDispositivo: new Date().toISOString()
       };
 
@@ -570,6 +629,9 @@
       document.getElementById('ultimo-estado-badge').classList.add('hidden');
       
       fotoBase64Global = "";
+      fotoMasterGuardada = null;
+      resultadoSimilitudGlobal = "NO_EVALUADO";
+      
       const preview = document.getElementById('preview');
       preview.src = "";
       preview.classList.add('hidden');
