@@ -394,7 +394,7 @@
     // ==========================================
     // LÓGICA DE DATOS Y DASHBOARD (FIREBASE: DEMO ASISTENCIA)
     // ==========================================
-    const URL_FIREBASE = "https://fir-asistencia-fad12-default-rtdb.firebaseio.com";
+    const URL_FIREBASE = "https://fir-asistencia-fad12-default-rtdb.firebaseio.com/fichadas.json";
     
     let datosLocales = [];
     let datosFiltradosActuales = [];
@@ -517,7 +517,7 @@
       if (!confirm("¿Estás seguro de que deseas eliminar este registro de fichada?")) return;
 
       try {
-        const urlDelete = `https://demo-asistencia-default-rtdb.firebaseio.com/fichadas/${firebaseKey}.json`;
+        const urlDelete = `https://fir-asistencia-fad12-default-rtdb.firebaseio.com/fichadas/${firebaseKey}.json`;
         const respuesta = await fetch(urlDelete, { method: 'DELETE' });
 
         if (respuesta.ok) {
