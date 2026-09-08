@@ -6,8 +6,9 @@
   <title>Demo Asistencia - Control de Asistencia</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-  <!-- LIBRERÍA FACE-API.JS -->
-  <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.single.min.js"></script>
+  
+  <!-- LIBRERÍA FACE-API.JS COMPLETA Y ESTABLE -->
+  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
 
@@ -118,7 +119,7 @@
     let fotoBase64Global = "";
     let estaSincronizando = false;
     let ultimoTipoFichadaGlobal = "";
-    let fotoMasterGuardada = null; // Guardará la imagen de referencia del legajo
+    let fotoMasterGuardada = null;
     let modelosCargados = false;
     let resultadoSimilitudGlobal = "NO_EVALUADO";
 
@@ -133,22 +134,28 @@
       }
     };
 
-    // CARGAR MODELOS LIGEROS DE RECONOCIMIENTO FACIAL
+    // CARGAR MODELOS CON CDN FIABLE Y SOPORTE CORS
     async function cargarModelosIA() {
       const status = document.getElementById('foto-status');
       status.innerText = "⏳ Cargando modelos de Inteligencia Artificial...";
       status.className = "text-xs text-amber-400 text-center font-semibold";
+      
       try {
-        const MODEL_URL = 'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights';
+        const MODEL_URL = 'https://cdn.jsdelivr.net/gh/cbrandolino/face-api.js@master/weights';
+
         await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
         await faceapi.nets.faceLandmark64Net.loadFromUri(MODEL_URL);
         await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+
         modelosCargados = true;
         status.innerText = "⚠️ Foto no capturada (IA Lista)";
         status.className = "text-xs text-rose-400 text-center font-semibold";
+        console.log("✅ Modelos de Face-API cargados con éxito.");
       } catch (err) {
-        console.error("Error al cargar modelos IA: ", err);
-        status.innerText = "⚠️ Modo IA no disponible (revisa conexión)";
+        console.error("Error al cargar modelos IA:", err);
+        modelosCargados = false;
+        status.innerText = "⚠️ Modo IA no disponible (Error al cargar modelos)";
+        status.className = "text-xs text-amber-400 text-center font-semibold";
       }
     }
 
@@ -236,7 +243,6 @@
       });
     }
 
-    // BUSCA SI EL EMPLEADO EXISTE Y TRAE SU FOTO MASTER
     function validarLegajo() {
       const legajoInput = document.getElementById('legajo').value.trim();
       const statusLbl = document.getElementById('legajo-status');
@@ -266,11 +272,9 @@
       .then(([dataPersonal, dataFichadas]) => {
         let encontrado = null;
         if (dataPersonal) {
-          // Si guardaste el legajo indexado por ID directa (/personal/1024)
           if (dataPersonal[legajoInput]) {
             encontrado = dataPersonal[legajoInput];
           } else {
-            // O iterando la lista
             Object.values(dataPersonal).forEach(personal => {
               if (String(personal.legajo).trim() === String(legajoInput)) {
                 encontrado = personal;
@@ -397,7 +401,6 @@
       }, 200);
     }
 
-    // NÚCLEO DE VALIDACIÓN FACIAL INTELIGENTE
     async function realizarCapturaIA(video, canvas, preview, status) {
       const MAX_WIDTH = 320;
       const originalWidth = video.videoWidth || 640;
@@ -412,7 +415,6 @@
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
 
-      // Si los modelos no cargaron, usa la captura directa
       if (!modelosCargados) {
         fotoBase64Global = canvas.toDataURL('image/jpeg', 0.35);
         preview.src = fotoBase64Global;
@@ -436,10 +438,11 @@
         return;
       }
 
-      // 2. COMPARAR CON FOTO MASTER (SI EL EMPLEADO TIENE FOTO REGISTRADA)
+      // 2. COMPARAR CON FOTO MASTER (SI EXISTE)
       if (fotoMasterGuardada) {
         try {
           const imgMaster = new Image();
+          imgMaster.crossOrigin = "anonymous";
           imgMaster.src = fotoMasterGuardada;
           await imgMaster.decode();
 
@@ -448,11 +451,9 @@
                                                .withFaceDescriptor();
 
           if (deteccionMaster) {
-            // Calcular distancia euclidiana entre los dos vectores faciales
             const distancia = faceapi.euclideanDistance(deteccionSelfie.descriptor, deteccionMaster.descriptor);
             const porcentajeSimilitud = Math.round((1 - distancia) * 100);
 
-            // Umbral habitual: Distancia < 0.60 es la misma persona
             if (distancia > 0.58) {
               status.innerText = `❌ Rechazado: Suplantación de identidad. El rostro no coincide con el legajo (${porcentajeSimilitud}% sim).`;
               status.className = "text-xs text-rose-400 text-center font-semibold";
@@ -555,7 +556,7 @@
         longitud: lng,
         mapa: `https://www.google.com/maps?q=${lat},${lng}`,
         fotoBase64: fotoBase64Global,
-        validacionFacial: resultadoSimilitudGlobal, // SE GUARDA EL RESULTADO DEL RECONOCIMIENTO
+        validacionFacial: resultadoSimilitudGlobal,
         fechaHoraDispositivo: new Date().toISOString()
       };
 
