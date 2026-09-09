@@ -122,6 +122,8 @@
     let fotoMasterGuardada = null;
     let modelosCargados = false;
     let resultadoSimilitudGlobal = "NO_EVALUADO";
+    let sospechaFraudeGlobal = false;
+    let motivoSospechaGlobal = "";
 
     window.onload = async function() {
       iniciarCamaraSegura();
@@ -401,7 +403,32 @@
       }, 200);
     }
 
+    // INSPECCIÓN DE TEXTURA PARA DETECTAR PANTALLAS HD EN SEGUNDO PLANO
+    function analizarTexturaSuperficial(ctx, box) {
+      const x = Math.max(0, Math.floor(box.x));
+      const y = Math.max(0, Math.floor(box.y));
+      const w = Math.min(ctx.canvas.width - x, Math.floor(box.width));
+      const h = Math.min(ctx.canvas.height - y, Math.floor(box.height));
+
+      if (w <= 0 || h <= 0) return 0;
+
+      const imageData = ctx.getImageData(x, y, w, h);
+      const data = imageData.data;
+      let variacionTotal = 0;
+
+      for (let i = 0; i < data.length - 4; i += 4) {
+        const brilloActual = (data[i] + data[i+1] + data[i+2]) / 3;
+        const brilloSiguiente = (data[i+4] + data[i+5] + data[i+6]) / 3;
+        variacionTotal += Math.abs(brilloActual - brilloSiguiente);
+      }
+
+      return variacionTotal / (data.length / 4);
+    }
+
     async function realizarCapturaIA(video, canvas, preview, status) {
+      sospechaFraudeGlobal = false;
+      motivoSospechaGlobal = "";
+
       const MAX_WIDTH = 320;
       const originalWidth = video.videoWidth || 640;
       const originalHeight = video.videoHeight || 480;
@@ -426,19 +453,52 @@
       }
 
       // 1. DETECTAR ROSTRO Y EXTRAER VECTOR MATEMÁTICO DE LA SELFIE
-      const deteccionSelfie = await faceapi.detectSingleFace(canvas, new faceapi.TinyFaceDetectorOptions())
+      const deteccionSelfie = await faceapi.detectSingleFace(canvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.25 }))
                                           .withFaceLandmarks()
                                           .withFaceDescriptor();
 
       if (!deteccionSelfie) {
-        status.innerText = "❌ Rechazado: No se detecta un rostro humano claro (evite tapar la cámara o fotos al techo).";
+        status.innerText = "❌ Rechazado: No se detecta un rostro humano claro.";
         status.className = "text-xs text-rose-400 text-center font-semibold";
         preview.classList.add('hidden');
         fotoBase64Global = "";
         return;
       }
 
-      // 2. COMPARAR CON FOTO MASTER (SI EXISTE)
+      const box = deteccionSelfie.detection.box;
+
+      // 2. FILTRO DE TAMAÑO RELATIVO (Evita fotos lejanas/papeles en miniatura)
+      const altoRelativo = box.height / canvas.height;
+      if (altoRelativo < 0.25) {
+        status.innerText = "❌ Rechazado: Acerque la cara a la cámara (rostro muy pequeño).";
+        status.className = "text-xs text-rose-400 text-center font-semibold";
+        preview.classList.add('hidden');
+        fotoBase64Global = "";
+        return;
+      }
+
+      // 3. FILTRO ANÁLISIS BORDES DE PAPEL/HOJA SATURADA
+      const startX = Math.max(0, box.x - 20);
+      const startY = Math.max(0, box.y - 20);
+      const width = Math.min(canvas.width - startX, box.width + 40);
+      const height = Math.min(canvas.height - startY, box.height + 40);
+      
+      const imgData = ctx.getImageData(startX, startY, width, height);
+      let pixelesSaturados = 0;
+      for (let i = 0; i < imgData.data.length; i += 4) {
+        if (imgData.data[i] > 240 && imgData.data[i+1] > 240 && imgData.data[i+2] > 240) {
+          pixelesSaturados++;
+        }
+      }
+      if ((pixelesSaturados / (imgData.data.length / 4)) > 0.20) {
+        status.innerText = "❌ Rechazado: Se identificaron bordes de marco o papel alrededor del rostro.";
+        status.className = "text-xs text-rose-400 text-center font-semibold";
+        preview.classList.add('hidden');
+        fotoBase64Global = "";
+        return;
+      }
+
+      // 4. COMPARAR CON FOTO MASTER CON UMBRAL MÍNIMO DEL 55%
       if (fotoMasterGuardada) {
         try {
           const imgMaster = new Image();
@@ -446,7 +506,7 @@
           imgMaster.src = fotoMasterGuardada;
           await imgMaster.decode();
 
-          const deteccionMaster = await faceapi.detectSingleFace(imgMaster, new faceapi.TinyFaceDetectorOptions())
+          const deteccionMaster = await faceapi.detectSingleFace(imgMaster, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.25 }))
                                                .withFaceLandmarks()
                                                .withFaceDescriptor();
 
@@ -454,12 +514,20 @@
             const distancia = faceapi.euclideanDistance(deteccionSelfie.descriptor, deteccionMaster.descriptor);
             const porcentajeSimilitud = Math.round((1 - distancia) * 100);
 
-            if (distancia > 0.58) {
-              status.innerText = `❌ Rechazado: Suplantación de identidad. El rostro no coincide con el legajo (${porcentajeSimilitud}% sim).`;
+            // UMBRAL DEL 55% COINCIDENCIA MÍNIMA (Distancia > 0.45 rechaza)
+            if (distancia > 0.45) {
+              status.innerText = `❌ Rechazado: Coincidencia insuficiente (${porcentajeSimilitud}%). Requerido: 55%.`;
               status.className = "text-xs text-rose-400 text-center font-semibold";
               preview.classList.add('hidden');
               fotoBase64Global = "";
               return;
+            }
+
+            // ANÁLISIS EN SEGUNDO PLANO DE TEXTURA PIEL VS PANTALLAS
+            const nivelTextura = analizarTexturaSuperficial(ctx, box);
+            if (nivelTextura < 10) {
+              sospechaFraudeGlobal = true;
+              motivoSospechaGlobal = "Patrón liso detectado en segundo plano (Posible imagen en pantalla HD)";
             }
 
             resultadoSimilitudGlobal = `${porcentajeSimilitud}% COINCIDENCIA`;
@@ -557,6 +625,8 @@
         mapa: `https://www.google.com/maps?q=${lat},${lng}`,
         fotoBase64: fotoBase64Global,
         validacionFacial: resultadoSimilitudGlobal,
+        alertaFraude: sospechaFraudeGlobal,
+        motivoFraude: motivoSospechaGlobal,
         fechaHoraDispositivo: new Date().toISOString()
       };
 
@@ -632,6 +702,8 @@
       fotoBase64Global = "";
       fotoMasterGuardada = null;
       resultadoSimilitudGlobal = "NO_EVALUADO";
+      sospechaFraudeGlobal = false;
+      motivoSospechaGlobal = "";
       
       const preview = document.getElementById('preview');
       preview.src = "";
