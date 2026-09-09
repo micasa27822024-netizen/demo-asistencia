@@ -93,9 +93,9 @@
       <div class="space-y-2">
         <label class="block text-xs uppercase text-slate-400">Validación Facial IA</label>
         <div class="relative w-full h-48 bg-slate-950 rounded-lg overflow-hidden border border-slate-700 flex items-center justify-center">
-          <video id="webcam" autoplay playsinline class="w-full h-full object-cover"></video>
+          <video id="webcam" autoplay playsinline class="w-full h-full object-cover -scale-x-100"></video>
           <canvas id="canvas" class="hidden"></canvas>
-          <img id="preview" class="w-full h-full object-cover hidden absolute inset-0 border-2 border-emerald-500">
+          <img id="preview" class="w-full h-full object-cover -scale-x-100 hidden absolute inset-0 border-2 border-emerald-500">
         </div>
         <button type="button" id="btnCapturar" onclick="capturarFoto()" class="w-full bg-amber-600 hover:bg-amber-500 text-xs py-2 rounded-lg font-bold transition flex items-center justify-center gap-2">
           <i class="fa-solid fa-camera"></i> CAPTURAR Y VALIDAR ROSTRO
