@@ -729,7 +729,6 @@
 
     function cerrarModalAccionFraude() {
       document.getElementById('modalAccionFraude').classList.add('hidden');
-      registroFraudeSeleccionado = null;
     }
 
     async function aprobarFraudeManual() {
@@ -766,10 +765,14 @@
       }
     }
 
+    // CORRECCIÓN: Pasar el registro activo de forma directa sin blanquear la variable global antes de tiempo
     function verAuditoriaDesdeAccion() {
       if (registroFraudeSeleccionado) {
+        const registroParaAuditoria = [...registroFraudeSeleccionado];
         cerrarModalAccionFraude();
-        abrirModalAuditoria(registroFraudeSeleccionado);
+        abrirModalAuditoria(registroParaAuditoria);
+      } else {
+        alert("No se pudo obtener la información de la evidencia para este registro.");
       }
     }
 
