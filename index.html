@@ -317,9 +317,32 @@
             status.className = "text-xs text-rose-400 text-center font-bold";
             sospechaFraudeGlobal = true;
             motivoSospechaGlobal = "Intento de suplantación con pantalla/imagen estática";
+            fotoBase64Global = "";
           }
         }
       }, 200);
+    }
+
+    // ANALIZADOR AUXILIAR DE TEXTURA SUPERFICIAL (PIEL VS. PANTALLA/IMPRESION)
+    function analizarTexturaSuperficial(ctx, box) {
+      const x = Math.max(0, Math.floor(box.x));
+      const y = Math.max(0, Math.floor(box.y));
+      const w = Math.min(ctx.canvas.width - x, Math.floor(box.width));
+      const h = Math.min(ctx.canvas.height - y, Math.floor(box.height));
+
+      if (w <= 0 || h <= 0) return 0;
+
+      const imageData = ctx.getImageData(x, y, w, h);
+      const data = imageData.data;
+      let variacionTotal = 0;
+
+      for (let i = 0; i < data.length - 4; i += 4) {
+        const brilloActual = (data[i] + data[i+1] + data[i+2]) / 3;
+        const brilloSiguiente = (data[i+4] + data[i+5] + data[i+6]) / 3;
+        variacionTotal += Math.abs(brilloActual - brilloSiguiente);
+      }
+
+      return variacionTotal / (data.length / 4);
     }
 
     async function procesarCapturaFinal(video) {
@@ -327,20 +350,57 @@
       const preview = document.getElementById('preview');
       const status = document.getElementById('foto-status');
 
-      canvas.width = 320;
-      canvas.height = 240;
+      canvas.width = 640;
+      canvas.height = 480;
       const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0, 320, 240);
+      ctx.drawImage(video, 0, 0, 640, 480);
 
       const deteccionSelfie = await faceapi.detectSingleFace(canvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.25 }))
-                                      .withFaceLandmarks()
-                                      .withFaceDescriptor();
+                                          .withFaceLandmarks()
+                                          .withFaceDescriptor();
 
       if (!deteccionSelfie) {
-        status.innerText = "❌ No se pudo enfocar el rostro.";
+        status.innerText = "❌ No se pudo enfocar el rostro correctamente.";
+        status.className = "text-xs text-rose-400 text-center font-semibold";
+        fotoBase64Global = "";
         return;
       }
 
+      // --- FILTRO 1: TAMAÑO RELATIVO (Para rechazar recortes pequeños sosteniendo papeles o teléfonos) ---
+      const box = deteccionSelfie.detection.box;
+      const altoRelativo = box.height / canvas.height;
+      if (altoRelativo < 0.28) {
+        status.innerText = "❌ FRAUDE: Acerque la cara. No se permiten fotos distanciadas ni impresas.";
+        status.className = "text-xs text-rose-400 text-center font-bold";
+        sospechaFraudeGlobal = true;
+        motivoSospechaGlobal = "Detección de tamaño reducido (posible papel/pantalla distanciada)";
+        fotoBase64Global = "";
+        return;
+      }
+
+      // --- FILTRO 2: DETECCIÓN DE BORDES BLANCOS/MARCOS RECTANGULARES ---
+      const startX = Math.max(0, box.x - 30);
+      const startY = Math.max(0, box.y - 30);
+      const width = Math.min(canvas.width - startX, box.width + 60);
+      const height = Math.min(canvas.height - startY, box.height + 60);
+      
+      const imgData = ctx.getImageData(startX, startY, width, height);
+      let pixelesSaturados = 0;
+      for (let i = 0; i < imgData.data.length; i += 4) {
+        if (imgData.data[i] > 235 && imgData.data[i+1] > 235 && imgData.data[i+2] > 235) {
+          pixelesSaturados++;
+        }
+      }
+      if ((pixelesSaturados / (imgData.data.length / 4)) > 0.18) {
+        status.innerText = "❌ FRAUDE: Se detectaron bordes de papel impreso o soporte blanco.";
+        status.className = "text-xs text-rose-400 text-center font-bold";
+        sospechaFraudeGlobal = true;
+        motivoSospechaGlobal = "Bordes saturados o marco de hoja impresos envolventes";
+        fotoBase64Global = "";
+        return;
+      }
+
+      // --- EVALUACIÓN DE COMPARACIÓN BIOMÉTRICA CON LA FOTO MÁSTER ---
       if (fotoMasterGuardada) {
         try {
           const imgMaster = new Image();
@@ -348,29 +408,53 @@
           imgMaster.src = fotoMasterGuardada;
           await imgMaster.decode();
 
-          const deteccionMaster = await faceapi.detectSingleFace(imgMaster, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.25 }))
-                                       .withFaceLandmarks()
-                                       .withFaceDescriptor();
+          const deteccionMaster = await faceapi.detectSingleFace(imgMaster, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.25 }))
+                                               .withFaceLandmarks()
+                                               .withFaceDescriptor();
 
           if (deteccionMaster) {
             const distancia = faceapi.euclideanDistance(deteccionSelfie.descriptor, deteccionMaster.descriptor);
             const porcentaje = Math.round((1 - distancia) * 100);
             distanciaEuclidianaGlobal = distancia.toFixed(4);
 
-            sospechaFraudeGlobal = false;
+            // UMBRAL MÍNIMO OBLIGATORIO DE 55% DE COINCIDENCIA (distancia <= 0.45)
+            if (distancia > 0.45) {
+              status.innerText = `❌ RECHAZADO: Coincidencia insuficiente (${porcentaje}%). Mínimo: 55%.`;
+              status.className = "text-xs text-rose-400 text-center font-bold";
+              resultadoSimilitudGlobal = `${porcentaje}% COINCIDENCIA (RECHAZADO)`;
+              sospechaFraudeGlobal = true;
+              motivoSospechaGlobal = `Identidad no coincide con Foto Máster (${porcentaje}%)`;
+              fotoBase64Global = "";
+              return;
+            }
+
+            // ESCANEO EN SEGUNDO PLANO (Análisis de textura)
+            const nivelTextura = analizarTexturaSuperficial(ctx, box);
+            const sospechaPantallaHD = nivelTextura < 10;
+
+            sospechaFraudeGlobal = sospechaPantallaHD;
+            motivoSospechaGlobal = sospechaPantallaHD ? "Patrón de textura plano (Posible pantalla HD)" : "";
             resultadoSimilitudGlobal = `${porcentaje}% COINCIDENCIA`;
-            status.innerText = `✓ Identidad Real Validada (${porcentaje}% Coincidencia)`;
+            
+            status.innerText = `✓ Identidad Validada (${porcentaje}% Coincidencia)`;
             status.className = "text-xs text-emerald-400 text-center font-semibold";
+          } else {
+            status.innerText = "⚠️ Foto Máster no computable.";
+            status.className = "text-xs text-amber-400 text-center font-semibold";
+            resultadoSimilitudGlobal = "MASTER_NO_COMPUTABLE";
           }
         } catch (e) {
           resultadoSimilitudGlobal = "ERROR_EVALUACION";
+          status.innerText = "⚠️ Error al evaluar coincidencia biométrica.";
+          status.className = "text-xs text-amber-400 text-center font-semibold";
         }
       } else {
         resultadoSimilitudGlobal = "SIN_MASTER";
-        status.innerText = "✓ Identidad Real Detectada (Sin foto master previa)";
+        status.innerText = "✓ Rostro Detectado (Sin foto máster previa)";
+        status.className = "text-xs text-emerald-400 text-center font-semibold";
       }
 
-      fotoBase64Global = canvas.toDataURL('image/jpeg', 0.35);
+      fotoBase64Global = canvas.toDataURL('image/jpeg', 0.45);
       preview.src = fotoBase64Global;
       preview.classList.remove('hidden');
     }
@@ -388,7 +472,7 @@
       }
 
       if (!fotoBase64Global) {
-        alert("Primero realice la validación por parpadeo.");
+        alert("Primero valide su rostro con parpadeo e identidad correcta.");
         return;
       }
 
@@ -408,6 +492,7 @@
         mapa: `https://www.google.com/maps?q=${lat},${lng}`,
         fotoBase64: fotoBase64Global,
         validacionFacial: resultadoSimilitudGlobal,
+        distanciaEuclidiana: distanciaEuclidianaGlobal,
         fechaHoraDispositivo: new Date().toISOString(),
         alertaFraude: sospechaFraudeGlobal,
         motivoFraude: motivoSospechaGlobal
@@ -422,6 +507,10 @@
         document.getElementById('resultado').innerText = `✓ Fichada de ${tipo} registrada con éxito.`;
         document.getElementById('resultado').className = "p-3 rounded-xl text-xs text-center bg-emerald-950 text-emerald-200 border border-emerald-500 block";
       });
+    }
+
+    function sincronizarFichadasPendientes() {
+      // Función reservada para soporte offline si es requerida
     }
   </script>
 </body>
