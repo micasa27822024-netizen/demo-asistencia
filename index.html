@@ -372,6 +372,46 @@
       }
     }
 
+    // FUNCIÓN AUXILIAR: DETECCIÓN DE MARCO Y PANTALLA SECUNDARIA EN CANVAS
+    function detectarPantallaOFoto(ctx, width, height, detection) {
+      // 1. Verificar si el rostro cubre un espacio anormal respecto al marco (pantalla sostenida cerca)
+      const box = detection.detection.box;
+      const ratioRostroPantalla = (box.width * box.height) / (width * height);
+      
+      // Si el rostro es muy pequeño respecto a la toma, suele indicar foto lejana a otra pantalla
+      if (ratioRostroPantalla < 0.08) {
+        return { detectado: true, motivo: "Rostro demasiado pequeño o lejano (Posible recuadro de celular)" };
+      }
+
+      // 2. Análisis de brillo e iluminación en los bordes para detectar marco rectangular de pantalla
+      const imgData = ctx.getImageData(0, 0, width, height);
+      const data = imgData.data;
+      
+      let sumaBordes = 0;
+      let muestras = 0;
+
+      // Inspeccionar píxeles del perímetro (Borde superior e inferior)
+      for (let x = 0; x < width; x += 5) {
+        // Fila Superior
+        let idxSup = (0 * width + x) * 4;
+        sumaBordes += (data[idxSup] + data[idxSup + 1] + data[idxSup + 2]) / 3;
+        
+        // Fila Inferior
+        let idxInf = ((height - 1) * width + x) * 4;
+        sumaBordes += (data[idxInf] + data[idxInf + 1] + data[idxInf + 2]) / 3;
+        muestras += 2;
+      }
+
+      let brilloPromedioBordes = sumaBordes / muestras;
+
+      // Si el entorno exterior tiene alto brillo uniforme o contraste abrupto de marco
+      if (brilloPromedioBordes > 210) {
+        return { detectado: true, motivo: "Reflejo / Marco luminoso detectado alrededor de la cara" };
+      }
+
+      return { detectado: false, motivo: "" };
+    }
+
     async function capturarFoto() {
       const video = document.getElementById('webcam');
       const canvas = document.getElementById('canvas');
@@ -453,7 +493,19 @@
         return;
       }
 
-      // 2. COMPARAR CON FOTO MASTER (SI EXISTE)
+      // 2. VALIDACIÓN ANTI-SPOOFING (DETECCIÓN DE PANTALLAS O MARCOS EN LA CAPTURA)
+      const analisisPantalla = detectarPantallaOFoto(ctx, targetWidth, targetHeight, deteccionSelfie);
+      if (analisisPantalla.detectado) {
+        status.innerText = `❌ Rechazado: Captura no válida. (${analisisPantalla.motivo})`;
+        status.className = "text-xs text-rose-400 text-center font-semibold";
+        preview.classList.add('hidden');
+        fotoBase64Global = "";
+        sospechaFraudeGlobal = true;
+        motivoSospechaGlobal = `Ataque de Presentación / Foto a Pantalla: ${analisisPantalla.motivo}`;
+        return;
+      }
+
+      // 3. COMPARAR CON FOTO MASTER (SI EXISTE)
       if (fotoMasterGuardada) {
         try {
           const imgMaster = new Image();
@@ -470,18 +522,19 @@
             const porcentajeSimilitud = Math.round((1 - distancia) * 100);
             distanciaEuclidianaGlobal = distancia.toFixed(4);
 
-            // UMBRAL DE CORTE GENERAL: Máximo 0.45 de distancia (Acepta desde ~55% de coincidencia en adelante)
-            if (distancia > 0.45) {
-              status.innerText = `❌ Rechazado: Suplantación de identidad. El rostro no coincide con el legajo (${porcentajeSimilitud}% sim).`;
+            // NUEVO UMBRAL ESTRICTO DE CORTE: Máximo 0.38 de distancia
+            // (La distancia de la foto del celular era 0.4451, por lo que será automáticamente rechazada)
+            if (distancia > 0.38) {
+              status.innerText = `❌ Rechazado: Suplantación o discrepancia. No coincide con el legajo (${porcentajeSimilitud}% sim / Dist: ${distanciaEuclidianaGlobal}).`;
               status.className = "text-xs text-rose-400 text-center font-semibold";
               preview.classList.add('hidden');
               fotoBase64Global = "";
               sospechaFraudeGlobal = true;
-              motivoSospechaGlobal = `Rechazado por baja coincidencia (${porcentajeSimilitud}%)`;
+              motivoSospechaGlobal = `Rechazado por distancia euclidiana alta (${distanciaEuclidianaGlobal})`;
               return;
             }
 
-            // Si la distancia es <= 0.45 (>= 55% de similitud), es totalmente VÁLIDA y NO genera alerta de fraude
+            // Si la distancia es <= 0.38, se valida
             sospechaFraudeGlobal = false;
             motivoSospechaGlobal = "";
 
