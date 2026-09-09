@@ -583,17 +583,42 @@
       preview.classList.remove('hidden');
     }
 
-    function procesarEnvio(tipoRecibido) {
+    async function procesarEnvio(tipoRecibido) {
       const tipo = String(tipoRecibido).trim().toUpperCase();
       const legajo = document.getElementById('legajo').value.trim();
       const pin = document.getElementById('pin').value.trim();
-      const nombre = document.getElementById('nombre').value.trim();
+      let nombre = document.getElementById('nombre').value.trim();
       const objetivo = document.getElementById('objetivo').value;
 
       if (!legajo || !pin || !objetivo) {
         alert("Por favor complete su N° de Legajo, PIN de Seguridad y seleccione un Objetivo.");
         return;
       }
+
+      // 🛡️ CORRECCIÓN: Si el nombre está vacío o trae formato erróneo, lo buscamos de inmediato en Firebase
+      if (!nombre || nombre.startsWith("Legajo")) {
+        try {
+          const res = await fetch(`${URL_FIREBASE}/personal.json`);
+          const dataPersonal = await res.json();
+          if (dataPersonal) {
+            Object.values(dataPersonal).forEach(p => {
+              if (String(p.legajo).trim() === String(legajo)) {
+                nombre = p.nombre;
+              }
+            });
+          }
+        } catch (e) {
+          console.warn("No se pudo revalidar el nombre online", e);
+        }
+      }
+
+      // Si aún sigue sin encontrarse un nombre real, bloqueamos el envío
+      if (!nombre || nombre.startsWith("Legajo")) {
+        alert("⚠️ Error: El N° de legajo ingresado no tiene un Nombre asociado válido en el sistema. Verifique el legajo.");
+        return;
+      }
+
+      document.getElementById('nombre').value = nombre; // Refleja el nombre real en pantalla
 
       if (ultimoTipoFichadaGlobal === "ENTRADA" && tipo === "ENTRADA") {
         alert("⚠️ Acción bloqueada: Ya registraste una ENTRADA previa. No puedes volver a fichar entrada hasta registrar tu SALIDA.");
@@ -647,7 +672,7 @@
       const datos = {
         legajo: legajo,
         pin: pin,
-        nombre: nombre || ("Legajo " + legajo),
+        nombre: nombre, // 👈 Garantiza que se envíe estrictamente el nombre completo real y no el legajo
         objetivo: objetivo,
         tipo: tipo,  
         latitud: lat,
@@ -710,7 +735,6 @@
         }
       }
 
-      // 🛡️ SEGURIDAD ANTI-TRAMPA: Fuerza la alerta si se fichó sin cotejo de Foto Master
       if (resultadoSimilitudGlobal === "SIN_MASTER" || resultadoSimilitudGlobal === "IA_NO_DISPONIBLE" || resultadoSimilitudGlobal === "NO_EVALUADO") {
         datos.alertaFraude = true;
         datos.motivoFraude = "⚠️ Fichada Offline: Requiere revisión manual (Rostro no cotejado en servidor)";
