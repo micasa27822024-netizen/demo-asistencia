@@ -7,12 +7,12 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
   
-  <!-- LIBRERÍA FACE-API.JS COMPLETA Y ESTABLE -->
   <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col relative">
 
-  <!-- ENCABEZADO Y MENÚ CORPORATIVO -->
+  <div id="flash-overlay" class="fixed inset-0 bg-white pointer-events-none z-50 transition-opacity duration-100 opacity-0 hidden"></div>
+
   <header class="bg-slate-900 border-b border-slate-800 shadow-md mb-4">
     <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-4">
       
@@ -48,7 +48,6 @@
     </div>
   </header>
 
-  <!-- CONTENEDOR PRINCIPAL DE FICHAJE -->
   <main class="flex-grow flex items-center justify-center p-4">
     <div class="w-full max-w-md bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 p-6 space-y-4">
       <div class="flex justify-between items-center">
@@ -56,7 +55,6 @@
         <span id="estadoRed" class="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-500/30">🟢 Online</span>
       </div>
 
-      <!-- LEGAJO Y VALIDACIÓN -->
       <div>
         <label class="block text-xs uppercase text-slate-400 mb-1">N° Legajo</label>
         <div class="relative">
@@ -69,19 +67,16 @@
         <p id="ultimo-estado-badge" class="text-xs mt-1.5 font-semibold hidden"></p>
       </div>
 
-      <!-- NOMBRE -->
       <div>
         <label class="block text-xs uppercase text-slate-400 mb-1">Nombre Completo</label>
         <input type="text" id="nombre" readonly placeholder="Se autocompletará con su legajo" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-slate-400 cursor-not-allowed">
       </div>
 
-      <!-- PIN DE SEGURIDAD -->
       <div>
         <label class="block text-xs uppercase text-slate-400 mb-1">PIN / Clave de Personal</label>
         <input type="password" id="pin" maxlength="6" placeholder="****" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500">
       </div>
 
-      <!-- OBJETIVO / PUESTO -->
       <div>
         <label class="block text-xs uppercase text-slate-400 mb-1">Objetivo / Puesto</label>
         <select id="objetivo" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500">
@@ -89,7 +84,6 @@
         </select>
       </div>
 
-      <!-- CÁMARA Y RECONOCIMIENTO FACIAL -->
       <div class="space-y-2">
         <label class="block text-xs uppercase text-slate-400">Validación Facial IA</label>
         <div class="relative w-full h-48 bg-slate-950 rounded-lg overflow-hidden border border-slate-700 flex items-center justify-center">
@@ -103,7 +97,6 @@
         <p id="foto-status" class="text-xs text-rose-400 text-center font-semibold">⚠️ Foto no capturada</p>
       </div>
 
-      <!-- BOTONES DE ENVÍO -->
       <div class="grid grid-cols-2 gap-4 pt-2">
         <button onclick="procesarEnvio('ENTRADA')" class="bg-emerald-600 hover:bg-emerald-500 font-bold py-3 rounded-xl transition">ENTRADA</button>
         <button onclick="procesarEnvio('SALIDA')" class="bg-rose-600 hover:bg-rose-500 font-bold py-3 rounded-xl transition">SALIDA</button>
@@ -122,6 +115,11 @@
     let fotoMasterGuardada = null;
     let modelosCargados = false;
     let resultadoSimilitudGlobal = "NO_EVALUADO";
+    
+    // VARIABLES PARA AUDITORÍA Y BANDERAS ANTI-SPOOFING DE FONDO
+    let distanciaEuclidianaGlobal = null;
+    let sospechaFraudeGlobal = false;
+    let motivoSospechaGlobal = "";
 
     window.onload = async function() {
       iniciarCamaraSegura();
@@ -380,6 +378,7 @@
       const preview = document.getElementById('preview');
       const status = document.getElementById('foto-status');
       const btn = document.getElementById('btnCapturar');
+      const flashOverlay = document.getElementById('flash-overlay');
 
       if (!video.srcObject && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         try {
@@ -395,10 +394,21 @@
       status.innerText = "🔍 Analizando rostro e identidad con IA...";
       status.className = "text-xs text-amber-400 text-center font-semibold";
 
+      // 1. DISPARAR FLASH INVISIBLE ANTI-SPOOFING (150 ms)
+      flashOverlay.classList.remove('hidden');
+      flashOverlay.classList.remove('opacity-0');
+      flashOverlay.classList.add('opacity-100');
+
       setTimeout(async () => {
         await realizarCapturaIA(video, canvas, preview, status);
+        
+        // Apagar el flash
+        flashOverlay.classList.remove('opacity-100');
+        flashOverlay.classList.add('opacity-0');
+        setTimeout(() => flashOverlay.classList.add('hidden'), 100);
+
         btn.disabled = false;
-      }, 200);
+      }, 150);
     }
 
     async function realizarCapturaIA(video, canvas, preview, status) {
@@ -414,6 +424,11 @@
       
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+
+      // Reiniciar variables de auditoría de fondo
+      distanciaEuclidianaGlobal = null;
+      sospechaFraudeGlobal = false;
+      motivoSospechaGlobal = "Ninguna";
 
       if (!modelosCargados) {
         fotoBase64Global = canvas.toDataURL('image/jpeg', 0.35);
@@ -453,13 +468,21 @@
           if (deteccionMaster) {
             const distancia = faceapi.euclideanDistance(deteccionSelfie.descriptor, deteccionMaster.descriptor);
             const porcentajeSimilitud = Math.round((1 - distancia) * 100);
+            distanciaEuclidianaGlobal = distancia.toFixed(4);
 
-            if (distancia > 0.58) {
+            // UMBRAL MÁS STRICTO PARA ENTRADA EN VIVO (Máximo 0.45 = Aprox 75-80% Similitud)
+            if (distancia > 0.45) {
               status.innerText = `❌ Rechazado: Suplantación de identidad. El rostro no coincide con el legajo (${porcentajeSimilitud}% sim).`;
               status.className = "text-xs text-rose-400 text-center font-semibold";
               preview.classList.add('hidden');
               fotoBase64Global = "";
               return;
+            }
+
+            // BANDERA PARA AUDITORÍA DE FONDO (Si la distancia está entre 0.38 y 0.45 la marca como sospechosa de pantalla)
+            if (distancia > 0.38) {
+              sospechaFraudeGlobal = true;
+              motivoSospechaGlobal = "Similitud borderline / Posible captura de pantalla de otro dispositivo";
             }
 
             resultadoSimilitudGlobal = `${porcentajeSimilitud}% COINCIDENCIA`;
@@ -557,7 +580,14 @@
         mapa: `https://www.google.com/maps?q=${lat},${lng}`,
         fotoBase64: fotoBase64Global,
         validacionFacial: resultadoSimilitudGlobal,
-        fechaHoraDispositivo: new Date().toISOString()
+        fechaHoraDispositivo: new Date().toISOString(),
+        
+        // CAMPOS Y BANDERAS DE AUDITORÍA Y ANTI-SPOOFING PARA EL PANEL ADMIN / SEGUNDO PLANO
+        flashAntiSpoof: true,
+        distanciaEuclidiana: distanciaEuclidianaGlobal,
+        alertaFraude: sospechaFraudeGlobal,
+        motivoFraude: motivoSospechaGlobal,
+        estadoAuditoria: sospechaFraudeGlobal ? "EN_REVISION" : "OK"
       };
 
       const divResultado = document.getElementById('resultado');
@@ -632,6 +662,9 @@
       fotoBase64Global = "";
       fotoMasterGuardada = null;
       resultadoSimilitudGlobal = "NO_EVALUADO";
+      distanciaEuclidianaGlobal = null;
+      sospechaFraudeGlobal = false;
+      motivoSospechaGlobal = "";
       
       const preview = document.getElementById('preview');
       preview.src = "";
