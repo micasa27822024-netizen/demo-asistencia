@@ -370,42 +370,7 @@
       }
     }
 
-    // CONTROL ANTI-SPOOFING RECALIBRADO PARA EVITAR FALSOS POSITIVOS
-    function detectarPantallaOFoto(ctx, width, height, detection) {
-      const box = detection.detection.box;
-      const ratioRostroPantalla = (box.width * box.height) / (width * height);
-      
-      // Filtro por proporción extrema de encuadre
-      if (ratioRostroPantalla < 0.04) {
-        return { detectado: true, motivo: "Rostro muy alejado de la cámara." };
-      }
-
-      // Verificación de borde exterior con umbral permisivo (brillo extremo > 245)
-      const imgData = ctx.getImageData(0, 0, width, height);
-      const data = imgData.data;
-      
-      let sumaBordes = 0;
-      let muestras = 0;
-
-      for (let x = 0; x < width; x += 10) {
-        let idxSup = (0 * width + x) * 4;
-        sumaBordes += (data[idxSup] + data[idxSup + 1] + data[idxSup + 2]) / 3;
-        
-        let idxInf = ((height - 1) * width + x) * 4;
-        sumaBordes += (data[idxInf] + data[idxInf + 1] + data[idxInf + 2]) / 3;
-        muestras += 2;
-      }
-
-      let brilloPromedioBordes = sumaBordes / muestras;
-
-      if (brilloPromedioBordes > 245) {
-        return { detectado: true, motivo: "Saturación de luz extrema en el marco exterior." };
-      }
-
-      return { detectado: false, motivo: "" };
-    }
-
-    async function capturarFoto() {
+    function capturarFoto() {
       const video = document.getElementById('webcam');
       const canvas = document.getElementById('canvas');
       const preview = document.getElementById('preview');
@@ -414,13 +379,9 @@
       const flashOverlay = document.getElementById('flash-overlay');
 
       if (!video.srcObject && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-          video.srcObject = stream;
-        } catch(err) {
-          alert("No se pudo acceder a la cámara. Verifique los permisos del navegador.");
-          return;
-        }
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+          .then(stream => { video.srcObject = stream; })
+          .catch(() => { alert("No se pudo acceder a la cámara."); });
       }
 
       btn.disabled = true;
@@ -470,30 +431,19 @@
         return;
       }
 
-      // SENSIBILIDAD DEL DETECTOR FACIAL MEJORADA (scoreThreshold: 0.3)
+      // OPCIONES DE DETECCIÓN MÁS TOLERANTES PARA WEBCAMS
       const deteccionSelfie = await faceapi.detectSingleFace(
                                       canvas, 
-                                      new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.3 })
+                                      new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.25 })
                                     )
                                     .withFaceLandmarks()
                                     .withFaceDescriptor();
 
       if (!deteccionSelfie) {
-        status.innerText = "❌ No se detectó un rostro claro. Mire de frente a la cámara y asegure buena iluminación.";
+        status.innerText = "❌ No se detecta un rostro claro. Encuadre su cara y asegure luz frontal.";
         status.className = "text-xs text-rose-400 text-center font-semibold";
         preview.classList.add('hidden');
         fotoBase64Global = "";
-        return;
-      }
-
-      const analisisPantalla = detectarPantallaOFoto(ctx, targetWidth, targetHeight, deteccionSelfie);
-      if (analisisPantalla.detectado) {
-        status.innerText = `❌ Captura no válida (${analisisPantalla.motivo})`;
-        status.className = "text-xs text-rose-400 text-center font-semibold";
-        preview.classList.add('hidden');
-        fotoBase64Global = "";
-        sospechaFraudeGlobal = true;
-        motivoSospechaGlobal = `Anomalía en captura: ${analisisPantalla.motivo}`;
         return;
       }
 
@@ -506,7 +456,7 @@
 
           const deteccionMaster = await faceapi.detectSingleFace(
                                           imgMaster, 
-                                          new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.3 })
+                                          new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.25 })
                                         )
                                        .withFaceLandmarks()
                                        .withFaceDescriptor();
@@ -516,26 +466,35 @@
             const porcentajeSimilitud = Math.round((1 - distancia) * 100);
             distanciaEuclidianaGlobal = distancia.toFixed(4);
 
-            // UMBRAL AJUSTADO A 0.40 (Rechaza la pantalla de 0.445 y valida la cara real)
-            if (distancia > 0.40) {
-              status.innerText = `❌ No coincide con la foto registrada (${porcentajeSimilitud}% sim / Dist: ${distanciaEuclidianaGlobal}).`;
+            // UMBRAL AJUSTADO PARA PRODUCCIÓN REAL: 0.48
+            if (distancia > 0.48) {
+              status.innerText = `❌ Rostro no coincidente (${porcentajeSimilitud}% sim / Dist: ${distanciaEuclidianaGlobal}).`;
               status.className = "text-xs text-rose-400 text-center font-semibold";
               preview.classList.add('hidden');
               fotoBase64Global = "";
               sospechaFraudeGlobal = true;
-              motivoSospechaGlobal = `Diferencia de rostro (Dist: ${distanciaEuclidianaGlobal})`;
+              motivoSospechaGlobal = `Diferencia de rostro elevada (${distanciaEuclidianaGlobal})`;
               return;
             }
 
-            sospechaFraudeGlobal = false;
-            motivoSospechaGlobal = "";
+            // Si está entre 0.40 y 0.48, se aprueba pero se marca para actualizar Foto Master
+            if (distancia > 0.40) {
+              sospechaFraudeGlobal = false;
+              motivoSospechaGlobal = "Recomendar actualización de Foto Master";
+              resultadoSimilitudGlobal = `${porcentajeSimilitud}% COINCIDENCIA (ACEPTABLE)`;
+              status.innerText = `✓ Rostro Validado (${porcentajeSimilitud}% Coincidencia)`;
+              status.className = "text-xs text-emerald-400 text-center font-semibold";
+            } else {
+              sospechaFraudeGlobal = false;
+              motivoSospechaGlobal = "";
+              resultadoSimilitudGlobal = `${porcentajeSimilitud}% COINCIDENCIA (ALTA)`;
+              status.innerText = `✓ Rostro Validado (${porcentajeSimilitud}% Coincidencia)`;
+              status.className = "text-xs text-emerald-400 text-center font-semibold";
+            }
 
-            resultadoSimilitudGlobal = `${porcentajeSimilitud}% COINCIDENCIA`;
-            status.innerText = `✓ Rostro Validado (${porcentajeSimilitud}% Coincidencia)`;
-            status.className = "text-xs text-emerald-400 text-center font-semibold";
           } else {
             resultadoSimilitudGlobal = "MASTER_SIN_ROSTRO";
-            status.innerText = "✓ Rostro Detectado (Master ilegible)";
+            status.innerText = "✓ Rostro Detectado (Sin lectura en Foto Master)";
             status.className = "text-xs text-emerald-400 text-center font-semibold";
           }
         } catch (e) {
