@@ -302,6 +302,31 @@
 
   </div>
 
+  <!-- MODAL DE ALERTA DE PÁNICO DE EMERGENCIA CRÍTICA -->
+  <div id="modalPanicoAdmin" class="fixed inset-0 bg-rose-950/90 backdrop-blur-md hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-900 border-2 border-rose-500 rounded-2xl p-6 max-w-md w-full text-center space-y-5 shadow-2xl animate-bounce">
+      <div class="w-20 h-20 bg-rose-600 text-white rounded-full flex items-center justify-center mx-auto text-3xl animate-pulse shadow-lg shadow-rose-600/50">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+      </div>
+      <div>
+        <span class="bg-rose-500/20 text-rose-400 border border-rose-500/30 font-black px-3 py-1 rounded-full text-xs uppercase tracking-widest inline-block mb-2">¡ALERTA DE PÁNICO ACTIVADA!</span>
+        <h2 id="panicoNombre" class="text-2xl font-black text-white">Vigilador En Riesgo</h2>
+        <p id="panicoDetalle" class="text-sm text-slate-300 mt-1"></p>
+        <p id="panicoHora" class="text-xs font-mono text-rose-400 mt-2 font-bold"></p>
+      </div>
+      
+      <div id="panicoUbicacionBox" class="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs">
+        <a id="panicoMapaUrl" href="#" target="_blank" class="text-sky-400 hover:underline font-bold flex items-center justify-center gap-1.5">
+          <i class="fa-solid fa-map-location-dot"></i> Ver Ubicación GPS en Google Maps
+        </a>
+      </div>
+
+      <button onclick="apagarAlertaPanico()" class="w-full bg-rose-600 hover:bg-rose-500 text-white font-black py-3.5 rounded-xl text-base transition shadow-xl flex items-center justify-center gap-2">
+        <i class="fa-solid fa-volume-xmark text-xl"></i> APAGAR ALARMA / ATENDER
+      </button>
+    </div>
+  </div>
+
   <!-- MODAL VER FOTO SIMPLE -->
   <div id="modalFoto" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
     <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4 max-w-lg w-full relative space-y-4">
@@ -445,6 +470,137 @@
     let datosObjetivos = [];
     let registroFraudeSeleccionado = null;
 
+    // --- MÓDULO DE SONIDO Y ESCUCHA DE PÁNICO EN TIEMPO REAL ---
+    let audioCtxPanico = null;
+    let osc1 = null;
+    let osc2 = null;
+    let panicoInterval = null;
+    let panicoActivoActualId = null;
+    let ssePanicoSource = null;
+
+    function iniciarSonidoSirena() {
+      if (audioCtxPanico) return; 
+      try {
+        audioCtxPanico = new (window.AudioContext || window.webkitAudioContext)();
+        
+        osc1 = audioCtxPanico.createOscillator();
+        osc2 = audioCtxPanico.createOscillator();
+        const gain = audioCtxPanico.createGain();
+
+        osc1.type = 'sawtooth';
+        osc2.type = 'sine';
+
+        osc1.frequency.setValueAtTime(800, audioCtxPanico.currentTime);
+        osc2.frequency.setValueAtTime(600, audioCtxPanico.currentTime);
+
+        gain.gain.setValueAtTime(0.3, audioCtxPanico.currentTime);
+
+        osc1.connect(gain);
+        osc2.connect(gain);
+        gain.connect(audioCtxPanico.destination);
+
+        osc1.start();
+        osc2.start();
+
+        let toggle = false;
+        panicoInterval = setInterval(() => {
+          if (!audioCtxPanico) return;
+          toggle = !toggle;
+          osc1.frequency.setValueAtTime(toggle ? 950 : 600, audioCtxPanico.currentTime);
+          osc2.frequency.setValueAtTime(toggle ? 750 : 450, audioCtxPanico.currentTime);
+        }, 400);
+      } catch (e) {
+        console.error("Error iniciando sonido de sirena:", e);
+      }
+    }
+
+    function detenerSonidoSirena() {
+      if (panicoInterval) clearInterval(panicoInterval);
+      if (osc1) { try { osc1.stop(); } catch(e){} }
+      if (osc2) { try { osc2.stop(); } catch(e){} }
+      if (audioCtxPanico) { try { audioCtxPanico.close(); } catch(e){} }
+      audioCtxPanico = null;
+      osc1 = null;
+      osc2 = null;
+      panicoInterval = null;
+    }
+
+    function escucharAlertasPanicoSSE() {
+      if (ssePanicoSource) ssePanicoSource.close();
+      
+      ssePanicoSource = new EventSource(`${URL_FIREBASE}/panicos.json`);
+      
+      ssePanicoSource.onmessage = function(event) {
+        if (!event.data) return;
+        try {
+          const res = JSON.parse(event.data);
+          if (!res || !res.data) return;
+
+          let panicosObj = res.data;
+          
+          if (res.path === '/') {
+            let keys = Object.keys(panicosObj);
+            for (let id of keys) {
+              let p = panicosObj[id];
+              if (p && (p.estado === 'PENDIENTE' || p.estado === 'ACTIVO' || !p.estado)) {
+                activarModalPanico(id, p);
+                break;
+              }
+            }
+          } else if (res.path && res.path.length > 1) {
+            let id = res.path.replace('/', '');
+            if (panicosObj && (panicosObj.estado === 'PENDIENTE' || panicosObj.estado === 'ACTIVO' || !panicosObj.estado)) {
+              activarModalPanico(id, panicosObj);
+            }
+          }
+        } catch(err) {
+          console.error("Error procesando SSE Pánico:", err);
+        }
+      };
+
+      ssePanicoSource.onerror = function(err) {
+        console.warn("Reconectando SSE de pánico...", err);
+      };
+    }
+
+    function activarModalPanico(id, datos) {
+      panicoActivoActualId = id;
+      document.getElementById('panicoNombre').innerText = datos.nombre || 'Vigilador No Especificado';
+      document.getElementById('panicoDetalle').innerText = `Legajo: ${datos.legajo || '-'} | Objetivo: ${datos.objetivo || '-'}`;
+      
+      const horaStr = datos.timestamp ? new Date(datos.timestamp).toLocaleString('es-AR', { hour12: false }) : new Date().toLocaleString('es-AR', { hour12: false });
+      document.getElementById('panicoHora').innerText = `Activado a las: ${horaStr}`;
+
+      const linkGps = document.getElementById('panicoMapaUrl');
+      if (datos.latitud && datos.longitud) {
+        linkGps.href = `https://maps.google.com/?q=${datos.latitud},${datos.longitud}`;
+        document.getElementById('panicoUbicacionBox').classList.remove('hidden');
+      } else {
+        document.getElementById('panicoUbicacionBox').classList.add('hidden');
+      }
+
+      document.getElementById('modalPanicoAdmin').classList.remove('hidden');
+      iniciarSonidoSirena();
+    }
+
+    async function apagarAlertaPanico() {
+      detenerSonidoSirena();
+      document.getElementById('modalPanicoAdmin').classList.add('hidden');
+
+      if (panicoActivoActualId) {
+        try {
+          await fetch(`${URL_FIREBASE}/panicos/${panicoActivoActualId}.json`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ estado: "ATENDIDO", atendidoEn: new Date().toISOString() })
+          });
+        } catch (e) {
+          console.error("Error resolviendo pánico en Firebase:", e);
+        }
+        panicoActivoActualId = null;
+      }
+    }
+
     window.onload = function() {
       generarPinAleatorio();
       if (sessionStorage.getItem('auth_admin') === 'true') {
@@ -477,10 +633,13 @@
       document.getElementById('pantallaLoginAdmin').classList.add('hidden');
       document.getElementById('contenidoAdmin').classList.remove('hidden');
       recargarDatosEfectivo();
+      escucharAlertasPanicoSSE();
     }
 
     function cerrarSesionAdmin() {
       sessionStorage.removeItem('auth_admin');
+      if (ssePanicoSource) ssePanicoSource.close();
+      detenerSonidoSirena();
       location.reload();
     }
 
