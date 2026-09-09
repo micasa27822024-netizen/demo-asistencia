@@ -63,7 +63,7 @@
       <form onsubmit="validarPasswordAdmin(event)" class="space-y-4">
         <div class="relative">
           <i class="fa-solid fa-lock absolute left-3 top-3.5 text-slate-400 text-sm"></i>
-          <input type="password" id="inputPassAdmin" placeholder="Contraseña de acceso" required class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500 text-center tracking-widest text-lg">
+          <input type="password" id="inputPassAdmin" placeholder="Contraseña de acceso" required class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500 text-center tracking-widest text-lg">
         </div>
         <p id="msgErrorPassAdmin" class="text-xs text-rose-400 hidden flex items-center justify-center gap-1">
           <i class="fa-solid fa-circle-exclamation"></i> Contraseña incorrecta. Intenta nuevamente.
@@ -358,7 +358,7 @@
 
       <div class="flex items-center gap-2 border-b border-slate-700 pb-3">
         <i class="fa-solid fa-brain text-amber-400 text-xl"></i>
-        <h3 class="font-bold text-white text-lg">Informe de Auditoría Facil / IA</h3>
+        <h3 class="font-bold text-white text-lg">Informe de Auditoría Facial / IA</h3>
       </div>
 
       <!-- Resumen del Alerta -->
@@ -526,7 +526,7 @@
       if (icono) icono.classList.add('fa-spin');
 
       try {
-        // 1. Cargar Personal primero (para obtener la foto máster en los detalles de auditoría)
+        // 1. Cargar Personal primero
         const resPersonal = await fetch(`${URL_FIREBASE}/personal.json`);
         const dataPersonal = await resPersonal.json();
         datosPersonal = [];
@@ -535,44 +535,49 @@
         if (dataPersonal) {
           Object.keys(dataPersonal).forEach(id => {
             const d = dataPersonal[id];
-            datosPersonal.push([d.legajo, d.nombre, 'Personal', d.pin, d.estado || 'ACTIVO', id, d.fotoMaster || '']);
-            if (d.legajo && d.fotoMaster) {
-              mapaFotosMaster[String(d.legajo)] = d.fotoMaster;
+            if (d) {
+              const legajoStr = d.legajo ? String(d.legajo).trim() : '';
+              datosPersonal.push([legajoStr, d.nombre || '', 'Personal', d.pin || '', d.estado || 'ACTIVO', id, d.fotoMaster || '']);
+              if (legajoStr && d.fotoMaster) {
+                mapaFotosMaster[legajoStr] = d.fotoMaster;
+              }
             }
           });
         }
         renderizarTablaPersonal(datosPersonal);
 
-        // 2. Cargar Marcaciones con campos de IA en Segundo Plano
+        // 2. Cargar Marcaciones
         const resMarcaciones = await fetch(`${URL_FIREBASE}/fichadas.json`);
         const dataMarcaciones = await resMarcaciones.json();
         datosMarcaciones = [];
         if (dataMarcaciones) {
           Object.keys(dataMarcaciones).forEach(id => {
             const d = dataMarcaciones[id];
-            const fecha = d.fechaHoraDispositivo || d.timestamp || '';
-            const mapaUrl = (d.latitud && d.longitud) ? `https://maps.google.com/?q=${d.latitud},${d.longitud}` : '';
-            
-            // Campos provenientes de la verificación en segundo plano
-            const alertaFraude = d.alertaFraude || false;
-            const distanciaEuclidiana = d.distanciaEuclidiana || null;
-            const motivoFraude = d.motivoFraude || '';
-            const fotoMaster = mapaFotosMaster[String(d.legajo)] || '';
+            if (d) {
+              const fecha = d.fechaHoraDispositivo || d.timestamp || '';
+              const mapaUrl = (d.latitud && d.longitud) ? `https://maps.google.com/?q=${d.latitud},${d.longitud}` : '';
+              
+              const legajoStr = d.legajo ? String(d.legajo).trim() : '';
+              const alertaFraude = d.alertaFraude || false;
+              const distanciaEuclidiana = (d.distanciaEuclidiana !== undefined && d.distanciaEuclidiana !== null) ? Number(d.distanciaEuclidiana) : null;
+              const motivoFraude = d.motivoFraude || '';
+              const fotoMaster = mapaFotosMaster[legajoStr] || '';
 
-            datosMarcaciones.push([
-              fecha, 
-              d.legajo, 
-              d.nombre, 
-              d.objetivo, 
-              d.tipo, 
-              mapaUrl, 
-              d.fotoBase64 || '',
-              alertaFraude,
-              distanciaEuclidiana,
-              motivoFraude,
-              fotoMaster,
-              id
-            ]);
+              datosMarcaciones.push([
+                fecha, 
+                legajoStr, 
+                d.nombre || '', 
+                d.objetivo || '', 
+                d.tipo || '', 
+                mapaUrl, 
+                d.fotoBase64 || '',
+                alertaFraude,
+                distanciaEuclidiana,
+                motivoFraude,
+                fotoMaster,
+                id
+              ]);
+            }
           });
         }
         filtrarTablaMarcaciones();
@@ -584,9 +589,11 @@
         if (dataNovedades) {
           Object.keys(dataNovedades).forEach(id => {
             const d = dataNovedades[id];
-            const fecha = d.fechaHoraDispositivo || d.timestamp || '';
-            const mapaUrl = (d.latitud && d.longitud) ? `https://maps.google.com/?q=${d.latitud},${d.longitud}` : '';
-            datosNovedades.push([fecha, d.legajo, d.nombre, d.objetivo, d.tipoIncidencia || 'General', d.descripcion || '', mapaUrl, d.fotoBase64 || '']);
+            if (d) {
+              const fecha = d.fechaHoraDispositivo || d.timestamp || '';
+              const mapaUrl = (d.latitud && d.longitud) ? `https://maps.google.com/?q=${d.latitud},${d.longitud}` : '';
+              datosNovedades.push([fecha, d.legajo ? String(d.legajo) : '', d.nombre || '', d.objetivo || '', d.tipoIncidencia || 'General', d.descripcion || '', mapaUrl, d.fotoBase64 || '']);
+            }
           });
         }
         filtrarTablaNovedades();
@@ -598,8 +605,10 @@
         if (dataObjetivos) {
           Object.keys(dataObjetivos).forEach(id => {
             const d = dataObjetivos[id];
-            const nombreObj = typeof d === 'string' ? d : (d.nombre || id);
-            datosObjetivos.push([id, nombreObj, '', 'ACTIVO']);
+            if (d) {
+              const nombreObj = typeof d === 'string' ? d : (d.nombre || id);
+              datosObjetivos.push([id, nombreObj, '', 'ACTIVO']);
+            }
           });
         }
         renderizarTablaObjetivos(datosObjetivos);
@@ -634,8 +643,6 @@
         // Datos IA en segundo plano
         const alertaFraude = fila[7];
         const distanciaEuclidiana = fila[8];
-        const motivoFraude = fila[9];
-        const fotoMaster = fila[10];
         const firebaseId = fila[11];
 
         const badgeTipo = tipo === 'ENTRADA' 
@@ -646,11 +653,11 @@
         let badgeIA = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"><i class="fa-solid fa-circle-check"></i> OK</span>`;
         
         if (alertaFraude) {
-          badgeIA = `<button onclick='abrirModalAuditoria(${JSON.stringify(fila)})' class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-extrabold bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse hover:bg-rose-500/30 transition shadow-lg cursor-pointer">
+          badgeIA = `<button onclick='abrirModalAuditoriaPorId("${firebaseId}")' class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-extrabold bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse hover:bg-rose-500/30 transition shadow-lg cursor-pointer">
                       <i class="fa-solid fa-triangle-exclamation"></i> SOSPECHA DE FRAUDE
                      </button>`;
         } else if (distanciaEuclidiana !== null) {
-          badgeIA = `<button onclick='abrirModalAuditoria(${JSON.stringify(fila)})' class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-700/60 text-slate-300 hover:bg-slate-700 border border-slate-600 transition">
+          badgeIA = `<button onclick='abrirModalAuditoriaPorId("${firebaseId}")' class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-700/60 text-slate-300 hover:bg-slate-700 border border-slate-600 transition">
                       <i class="fa-solid fa-brain text-emerald-400"></i> Verificado (d: ${distanciaEuclidiana.toFixed(2)})
                      </button>`;
         }
@@ -669,7 +676,7 @@
 
         let btnAccionFraude = '';
         if (alertaFraude) {
-          btnAccionFraude = `<button onclick='abrirModalAccionFraude(${JSON.stringify(fila)})' class="inline-flex items-center gap-1 bg-rose-600 hover:bg-rose-500 text-white font-bold px-2.5 py-1 rounded-lg text-xs transition shadow-md">
+          btnAccionFraude = `<button onclick='abrirModalAccionFraudePorId("${firebaseId}")' class="inline-flex items-center gap-1 bg-rose-600 hover:bg-rose-500 text-white font-bold px-2.5 py-1 rounded-lg text-xs transition shadow-md">
                               <i class="fa-solid fa-shield-cat"></i> 🚨 Resolver Fraude
                              </button>`;
         }
@@ -710,6 +717,21 @@
       });
 
       renderizarTablaMarcaciones(datosFiltradosMarcaciones);
+    }
+
+    // BUSCADOR AUXILIAR DE REGISTROS
+    function obtenerRegistroPorId(id) {
+      return datosMarcaciones.find(f => f[11] === id);
+    }
+
+    function abrirModalAccionFraudePorId(id) {
+      const registro = obtenerRegistroPorId(id);
+      if (registro) abrirModalAccionFraude(registro);
+    }
+
+    function abrirModalAuditoriaPorId(id) {
+      const registro = obtenerRegistroPorId(id);
+      if (registro) abrirModalAuditoria(registro);
     }
 
     // ACCIONES SOBRE FRAUDE
@@ -765,7 +787,6 @@
       }
     }
 
-    // CORRECCIÓN: Pasar el registro activo de forma directa sin blanquear la variable global antes de tiempo
     function verAuditoriaDesdeAccion() {
       if (registroFraudeSeleccionado) {
         const registroParaAuditoria = [...registroFraudeSeleccionado];
@@ -799,7 +820,7 @@
         lblMotivo.innerText = "La coincidencia de rasgos biométricos se encuentra dentro del rango de tolerancia permitido.";
       }
 
-      lblDist.innerText = distancia !== null ? `Distancia Euclidiana: ${distancia.toFixed(4)}` : "Distancia N/A";
+      lblDist.innerText = (distancia !== null && !isNaN(distancia)) ? `Distancia Euclidiana: ${distancia.toFixed(4)}` : "Distancia N/A";
 
       document.getElementById('imgAuditoriaFichada').src = fotoFichada || '';
       document.getElementById('imgAuditoriaMaster').src = fotoMaster || fotoFichada || '';
