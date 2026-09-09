@@ -91,8 +91,8 @@
           <canvas id="canvas" class="hidden"></canvas>
           <img id="preview" class="w-full h-full object-cover hidden absolute inset-0 border-2 border-emerald-500">
         </div>
-        <button type="button" id="btnCapturar" onclick="iniciarPruebaDeVida()" class="w-full bg-amber-600 hover:bg-amber-500 text-xs py-2.5 rounded-lg font-bold transition flex items-center justify-center gap-2">
-          <i class="fa-solid fa-eye"></i> PARPADEE PARA VALIDAR
+        <button type="button" id="btnCapturar" onclick="capturarYValidarRostro()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-xs py-2.5 rounded-lg font-bold transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-camera"></i> CAPTURAR Y VALIDAR ROSTRO
         </button>
         <p id="foto-status" class="text-xs text-rose-400 text-center font-semibold">⚠️ Foto no capturada</p>
       </div>
@@ -144,7 +144,7 @@
         await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
 
         modelosCargados = true;
-        status.innerText = "⚠️ Presione para validar (Parpadee ante la cámara)";
+        status.innerText = "⚠️ Presione el botón para tomar la foto";
         status.className = "text-xs text-amber-400 text-center font-semibold";
       } catch (err) {
         console.error("Error al cargar modelos:", err);
@@ -176,7 +176,6 @@
     }
 
     function cargarObjetivos() {
-      const selectObj = document.getElementById('objetivo');
       let objetivosGuardados = JSON.parse(localStorage.getItem('demo_lista_objetivos') || '[]');
 
       if (objetivosGuardados.length > 0) poblarSelectObjetivos(objetivosGuardados);
@@ -255,75 +254,7 @@
         });
     }
 
-    // CÁLCULO DE APERTURA OCULAR (EAR)
-    function calcularEAR(eye) {
-      const p2_p6 = Math.hypot(eye[1].x - eye[5].x, eye[1].y - eye[5].y);
-      const p3_p5 = Math.hypot(eye[2].x - eye[4].x, eye[2].y - eye[4].y);
-      const p1_p4 = Math.hypot(eye[0].x - eye[3].x, eye[0].y - eye[3].y);
-      return (p2_p6 + p3_p5) / (2.0 * p1_p4);
-    }
-
-    // PRUEBA DE VIDA ACTIVA POR PARPADEO
-    async function iniciarPruebaDeVida() {
-      const video = document.getElementById('webcam');
-      const status = document.getElementById('foto-status');
-      const btn = document.getElementById('btnCapturar');
-      
-      btn.disabled = true;
-      status.innerText = "👁️ PARPADEE AHORA para confirmar que es real...";
-      status.className = "text-xs text-amber-400 text-center font-bold animate-pulse";
-
-      let ojoAbiertoDetectado = false;
-      let parpadeoConfirmado = false;
-      let intentos = 0;
-      const maxIntentos = 30; // 6 segundos (200ms x 30)
-
-      const intervalo = setInterval(async () => {
-        intentos++;
-        
-        const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.25 }))
-                                         .withFaceLandmarks();
-
-        if (detection) {
-          const landmarks = detection.landmarks;
-          const leftEye = landmarks.getLeftEye();
-          const rightEye = landmarks.getRightEye();
-
-          const earLeft = calcularEAR(leftEye);
-          const earRight = calcularEAR(rightEye);
-          const earPromedio = (earLeft + earRight) / 2;
-
-          // Si los ojos están abiertos
-          if (earPromedio > 0.23) {
-            ojoAbiertoDetectado = true;
-          }
-
-          // Si detecta cierre momentáneo de ojos tras haber estado abiertos
-          if (ojoAbiertoDetectado && earPromedio < 0.18) {
-            parpadeoConfirmado = true;
-          }
-        }
-
-        if (parpadeoConfirmado || intentos >= maxIntentos) {
-          clearInterval(intervalo);
-          btn.disabled = false;
-
-          if (parpadeoConfirmado) {
-            status.innerText = "✓ Parpadeo verificado. Procesando rostro...";
-            status.className = "text-xs text-emerald-400 text-center font-semibold";
-            procesarCapturaFinal(video);
-          } else {
-            status.innerText = "❌ Suplantación o falta de movimiento. No se detectó parpadeo real.";
-            status.className = "text-xs text-rose-400 text-center font-bold";
-            sospechaFraudeGlobal = true;
-            motivoSospechaGlobal = "Intento de suplantación con pantalla/imagen estática";
-            fotoBase64Global = "";
-          }
-        }
-      }, 200);
-    }
-
-    // ANALIZADOR AUXILIAR DE TEXTURA SUPERFICIAL (PIEL VS. PANTALLA/IMPRESION)
+    // ANALIZADOR DE TEXTURA EN SEGUNDO PLANO PARA PANTALLAS O FOTOS HD
     function analizarTexturaSuperficial(ctx, box) {
       const x = Math.max(0, Math.floor(box.x));
       const y = Math.max(0, Math.floor(box.y));
@@ -345,40 +276,54 @@
       return variacionTotal / (data.length / 4);
     }
 
-    async function procesarCapturaFinal(video) {
+    // CAPTURA DIRECTA Y ESCANEO EN SEGUNDO PLANO
+    async function capturarYValidarRostro() {
+      const video = document.getElementById('webcam');
       const canvas = document.getElementById('canvas');
       const preview = document.getElementById('preview');
       const status = document.getElementById('foto-status');
+
+      if (!fotoMasterGuardada) {
+        alert("El legajo no tiene Foto Máster registrada o no fue validado.");
+        return;
+      }
+
+      status.innerText = "⏳ Capturando y analizando rostros...";
+      status.className = "text-xs text-amber-400 text-center font-semibold animate-pulse";
 
       canvas.width = 640;
       canvas.height = 480;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0, 640, 480);
 
+      // 1. DETECCIÓN DE ROSTRO EN LA SELFIE
       const deteccionSelfie = await faceapi.detectSingleFace(canvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.25 }))
                                           .withFaceLandmarks()
                                           .withFaceDescriptor();
 
       if (!deteccionSelfie) {
-        status.innerText = "❌ No se pudo enfocar el rostro correctamente.";
+        status.innerText = "❌ Rostro no detectado o mala iluminación.";
         status.className = "text-xs text-rose-400 text-center font-semibold";
         fotoBase64Global = "";
+        preview.classList.add('hidden');
         return;
       }
 
-      // --- FILTRO 1: TAMAÑO RELATIVO (Para rechazar recortes pequeños sosteniendo papeles o teléfonos) ---
       const box = deteccionSelfie.detection.box;
+
+      // 2. FILTRO DE TAMAÑO RELATIVO (Previene fotos pequeñas o distanciadas)
       const altoRelativo = box.height / canvas.height;
       if (altoRelativo < 0.28) {
-        status.innerText = "❌ FRAUDE: Acerque la cara. No se permiten fotos distanciadas ni impresas.";
+        status.innerText = "❌ FRAUDE: Acerque la cara a la cámara. No sostenga fotos ni pantallas lejos.";
         status.className = "text-xs text-rose-400 text-center font-bold";
         sospechaFraudeGlobal = true;
-        motivoSospechaGlobal = "Detección de tamaño reducido (posible papel/pantalla distanciada)";
+        motivoSospechaGlobal = "Cara de tamaño muy reducido en el encuadre (posible papel/pantalla distanciada)";
         fotoBase64Global = "";
+        preview.classList.add('hidden');
         return;
       }
 
-      // --- FILTRO 2: DETECCIÓN DE BORDES BLANCOS/MARCOS RECTANGULARES ---
+      // 3. FILTRO DE MARCOS / BORDES BLANCOS SATURADOS DE HOJA/PANTALLA
       const startX = Math.max(0, box.x - 30);
       const startY = Math.max(0, box.y - 30);
       const width = Math.min(canvas.width - startX, box.width + 60);
@@ -392,71 +337,67 @@
         }
       }
       if ((pixelesSaturados / (imgData.data.length / 4)) > 0.18) {
-        status.innerText = "❌ FRAUDE: Se detectaron bordes de papel impreso o soporte blanco.";
+        status.innerText = "❌ FRAUDE DETECTADO: Se identificaron bordes de papel o pantalla alrededor del rostro.";
         status.className = "text-xs text-rose-400 text-center font-bold";
         sospechaFraudeGlobal = true;
-        motivoSospechaGlobal = "Bordes saturados o marco de hoja impresos envolventes";
+        motivoSospechaGlobal = "Bordes blancos/marcos de hoja impresos envolventes";
         fotoBase64Global = "";
+        preview.classList.add('hidden');
         return;
       }
 
-      // --- EVALUACIÓN DE COMPARACIÓN BIOMÉTRICA CON LA FOTO MÁSTER ---
-      if (fotoMasterGuardada) {
-        try {
-          const imgMaster = new Image();
-          imgMaster.crossOrigin = "anonymous";
-          imgMaster.src = fotoMasterGuardada;
-          await imgMaster.decode();
+      // 4. COMPARACIÓN BIOMÉTRICA CON LA FOTO MÁSTER
+      try {
+        const imgMaster = new Image();
+        imgMaster.crossOrigin = "anonymous";
+        imgMaster.src = fotoMasterGuardada;
+        await imgMaster.decode();
 
-          const deteccionMaster = await faceapi.detectSingleFace(imgMaster, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.25 }))
-                                               .withFaceLandmarks()
-                                               .withFaceDescriptor();
+        const deteccionMaster = await faceapi.detectSingleFace(imgMaster, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.25 }))
+                                             .withFaceLandmarks()
+                                             .withFaceDescriptor();
 
-          if (deteccionMaster) {
-            const distancia = faceapi.euclideanDistance(deteccionSelfie.descriptor, deteccionMaster.descriptor);
-            const porcentaje = Math.round((1 - distancia) * 100);
-            distanciaEuclidianaGlobal = distancia.toFixed(4);
+        if (deteccionMaster) {
+          const distancia = faceapi.euclideanDistance(deteccionSelfie.descriptor, deteccionMaster.descriptor);
+          const porcentaje = Math.round((1 - distancia) * 100);
+          distanciaEuclidianaGlobal = distancia.toFixed(4);
 
-            // UMBRAL MÍNIMO OBLIGATORIO DE 55% DE COINCIDENCIA (distancia <= 0.45)
-            if (distancia > 0.45) {
-              status.innerText = `❌ RECHAZADO: Coincidencia insuficiente (${porcentaje}%). Mínimo: 55%.`;
-              status.className = "text-xs text-rose-400 text-center font-bold";
-              resultadoSimilitudGlobal = `${porcentaje}% COINCIDENCIA (RECHAZADO)`;
-              sospechaFraudeGlobal = true;
-              motivoSospechaGlobal = `Identidad no coincide con Foto Máster (${porcentaje}%)`;
-              fotoBase64Global = "";
-              return;
-            }
-
-            // ESCANEO EN SEGUNDO PLANO (Análisis de textura)
-            const nivelTextura = analizarTexturaSuperficial(ctx, box);
-            const sospechaPantallaHD = nivelTextura < 10;
-
-            sospechaFraudeGlobal = sospechaPantallaHD;
-            motivoSospechaGlobal = sospechaPantallaHD ? "Patrón de textura plano (Posible pantalla HD)" : "";
-            resultadoSimilitudGlobal = `${porcentaje}% COINCIDENCIA`;
-            
-            status.innerText = `✓ Identidad Validada (${porcentaje}% Coincidencia)`;
-            status.className = "text-xs text-emerald-400 text-center font-semibold";
-          } else {
-            status.innerText = "⚠️ Foto Máster no computable.";
-            status.className = "text-xs text-amber-400 text-center font-semibold";
-            resultadoSimilitudGlobal = "MASTER_NO_COMPUTABLE";
+          // 5. UMBRAL OBLIGATORIO DE FICHAJE: MÍNIMO 55% DE COINCIDENCIA (distancia <= 0.45)
+          if (distancia > 0.45) {
+            status.innerText = `❌ RECHAZADO: Coincidencia insuficiente (${porcentaje}%). Requerido: 55%.`;
+            status.className = "text-xs text-rose-400 text-center font-bold";
+            resultadoSimilitudGlobal = `${porcentaje}% COINCIDENCIA (RECHAZADO)`;
+            sospechaFraudeGlobal = true;
+            motivoSospechaGlobal = `No supera el umbral del 55% de coincidencia (${porcentaje}%)`;
+            fotoBase64Global = "";
+            preview.classList.add('hidden');
+            return;
           }
-        } catch (e) {
-          resultadoSimilitudGlobal = "ERROR_EVALUACION";
-          status.innerText = "⚠️ Error al evaluar coincidencia biométrica.";
+
+          // 6. ESCANEO MINUCIOSO EN SEGUNDO PLANO (Evaluación de textura para pantallas HD)
+          const nivelTextura = analizarTexturaSuperficial(ctx, box);
+          const sospechaPantallaHD = nivelTextura < 10;
+
+          sospechaFraudeGlobal = sospechaPantallaHD;
+          motivoSospechaGlobal = sospechaPantallaHD ? "Patrón de textura plano detectado en segundo plano (Posible pantalla HD)" : "Verificación limpia";
+          resultadoSimilitudGlobal = `${porcentaje}% COINCIDENCIA`;
+
+          status.innerText = `✓ Rostro Validado (${porcentaje}% Coincidencia)`;
+          status.className = "text-xs text-emerald-400 text-center font-semibold";
+
+          fotoBase64Global = canvas.toDataURL('image/jpeg', 0.45);
+          preview.src = fotoBase64Global;
+          preview.classList.remove('hidden');
+
+        } else {
+          status.innerText = "⚠️ La foto máster guardada no se puede comparar.";
           status.className = "text-xs text-amber-400 text-center font-semibold";
         }
-      } else {
-        resultadoSimilitudGlobal = "SIN_MASTER";
-        status.innerText = "✓ Rostro Detectado (Sin foto máster previa)";
-        status.className = "text-xs text-emerald-400 text-center font-semibold";
+      } catch (e) {
+        console.error(e);
+        status.innerText = "⚠️ Error durante la comparación de biometría.";
+        status.className = "text-xs text-amber-400 text-center font-semibold";
       }
-
-      fotoBase64Global = canvas.toDataURL('image/jpeg', 0.45);
-      preview.src = fotoBase64Global;
-      preview.classList.remove('hidden');
     }
 
     function procesarEnvio(tipoRecibido) {
@@ -472,7 +413,7 @@
       }
 
       if (!fotoBase64Global) {
-        alert("Primero valide su rostro con parpadeo e identidad correcta.");
+        alert("Primero debe capturar y validar su rostro (mínimo 55% de coincidencia).");
         return;
       }
 
@@ -510,7 +451,7 @@
     }
 
     function sincronizarFichadasPendientes() {
-      // Función reservada para soporte offline si es requerida
+      // Función reservada para soporte offline
     }
   </script>
 </body>
