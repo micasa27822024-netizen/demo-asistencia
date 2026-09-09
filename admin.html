@@ -1,4 +1,4 @@
-<<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
@@ -14,11 +14,10 @@
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
 
-  <!-- ENCABEZADO Y MENÚ CORPORATIVO - DEMO ASISTENCIA -->
+  <!-- ENCABEZADO Y MENÚ CORPORATIVO -->
   <header class="bg-slate-900 border-b border-slate-800 shadow-md">
     <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-4">
       
-     <!-- LOGO Y NOMBRE DE LA EMPRESA -->
      <div class="flex items-center space-x-3">
        <div class="w-10 h-10 bg-slate-800 border border-emerald-500/30 rounded-xl flex items-center justify-center overflow-hidden shadow-inner p-1">
          <img src="https://i.ibb.co/qYcVxcTH/Chat-GPT-Image-3-sept-2026-13-19-18.png" alt="Logo Demo Asistencia" class="w-full h-full object-contain">
@@ -29,7 +28,6 @@
        </div>
      </div>
 
-      <!-- MENÚ DE NAVEGACIÓN RÁPIDA -->
       <nav class="flex flex-wrap justify-center items-center gap-1 bg-slate-800/80 p-1.5 rounded-xl border border-slate-700/60">
         <a href="index.html" class="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition flex items-center space-x-1.5">
           <i class="fa-solid fa-camera-retro text-emerald-400"></i>
@@ -55,26 +53,21 @@
   <!-- MODAL DE ACCESO ADMIN -->
   <div id="pantallaLoginAdmin" class="fixed inset-0 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4 z-50">
     <div class="bg-slate-800 border border-slate-700 p-6 md:p-8 rounded-2xl max-w-md w-full shadow-2xl text-center space-y-6">
-      
       <div class="w-16 h-16 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-2xl flex items-center justify-center mx-auto text-2xl">
         <i class="fa-solid fa-user-gear"></i>
       </div>
-
       <div>
         <h2 class="text-xl font-bold text-white">Acceso Administrador</h2>
         <p class="text-xs text-slate-400 mt-1">Ingresa la contraseña para acceder al panel admin</p>
       </div>
-
       <form onsubmit="validarPasswordAdmin(event)" class="space-y-4">
         <div class="relative">
           <i class="fa-solid fa-lock absolute left-3 top-3.5 text-slate-400 text-sm"></i>
           <input type="password" id="inputPassAdmin" placeholder="Contraseña de acceso" required class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500 text-center tracking-widest text-lg">
         </div>
-
         <p id="msgErrorPassAdmin" class="text-xs text-rose-400 hidden flex items-center justify-center gap-1">
           <i class="fa-solid fa-circle-exclamation"></i> Contraseña incorrecta. Intenta nuevamente.
         </p>
-
         <button type="submit" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-2.5 rounded-xl text-sm transition shadow-lg flex items-center justify-center gap-2">
           <i class="fa-solid fa-key"></i> Ingresar como Admin
         </button>
@@ -85,15 +78,13 @@
   <!-- CONTENIDO PRINCIPAL -->
   <div id="contenidoAdmin" class="max-w-7xl mx-auto space-y-6 p-4 md:p-8 flex-grow hidden w-full">
     
-    <!-- ENCABEZADO INTERNO -->
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
       <div>
         <h2 class="text-2xl font-bold text-white flex items-center gap-2">
           <i class="fa-solid fa-shield-halved text-emerald-500"></i> Panel de Control Operativo
         </h2>
-        <p class="text-xs text-slate-400 mt-1">Gestión de asistencia, novedades, personal autorizado y objetivos</p>
+        <p class="text-xs text-slate-400 mt-1">Gestión de asistencia, auditoría de IA en segundo plano y puestos</p>
       </div>
-      
       <div class="flex items-center gap-3">
         <button onclick="recargarDatosEfectivo()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
           <i class="fa-solid fa-rotate-right" id="icono-reload"></i> Actualizar Datos
@@ -129,6 +120,13 @@
         </div>
         
         <div class="flex flex-wrap md:flex-nowrap items-center gap-3 w-full md:w-auto">
+          <!-- Filtro de Alertas IA -->
+          <select id="filtroAuditoria" onchange="filtrarTablaMarcaciones()" class="w-full md:w-auto bg-slate-900 border border-slate-700 text-amber-400 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-500">
+            <option value="TODOS">Todas las auditorías</option>
+            <option value="FRAUDE">🚨 Solo Fraude / Sospechosos</option>
+            <option value="OK">✅ Solo Verificados</option>
+          </select>
+
           <select id="filtroTipo" onchange="filtrarTablaMarcaciones()" class="w-full md:w-auto bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
             <option value="TODOS">Todos los tipos</option>
             <option value="ENTRADA">Solo Entradas</option>
@@ -154,13 +152,14 @@
                 <th class="p-4">Nombre</th>
                 <th class="p-4">Objetivo</th>
                 <th class="p-4 text-center">Tipo</th>
+                <th class="p-4 text-center">Auditoría IA (2do Plano)</th>
                 <th class="p-4 text-center">Ubicación</th>
-                <th class="p-4 text-center">Foto</th>
+                <th class="p-4 text-center">Acciones</th>
               </tr>
             </thead>
             <tbody id="cuerpoTablaMarcaciones" class="divide-y divide-slate-700/50">
               <tr>
-                <td colspan="7" class="p-8 text-center text-slate-400">
+                <td colspan="8" class="p-8 text-center text-slate-400">
                   <i class="fa-solid fa-spinner fa-spin text-2xl text-emerald-500 mb-2"></i>
                   <p>Cargando información...</p>
                 </td>
@@ -171,14 +170,13 @@
       </div>
     </div>
 
-    <!-- TAB 2: NOVEDADES / INCIDENCIAS -->
+    <!-- TAB 2: NOVEDADES -->
     <div id="tabNovedades" class="hidden space-y-4">
       <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 flex flex-col md:flex-row gap-4 justify-between items-center">
         <div class="flex-1 relative w-full">
           <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
           <input type="text" id="inputBusquedaNovedades" onkeyup="filtrarTablaNovedades()" placeholder="Buscar por Novedad, Objetivo o Personal..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
         </div>
-
         <div class="flex flex-wrap md:flex-nowrap items-center gap-3 w-full md:w-auto">
           <button onclick="exportarExcelNovedades()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md w-full md:w-auto">
             <i class="fa-solid fa-file-excel"></i> Excel
@@ -211,7 +209,7 @@
       </div>
     </div>
 
-    <!-- TAB 3: PERSONAL / PINs -->
+    <!-- TAB 3: PERSONAL -->
     <div id="tabPersonal" class="hidden space-y-6">
       <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
         <h3 class="text-lg font-bold text-white flex items-center gap-2">
@@ -227,16 +225,16 @@
             <input type="text" id="newNombre" required placeholder="Ej: Juan Pérez" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
           </div>
           <div>
-            <label class="block text-xs uppercase text-slate-400 mb-1">PIN Generado (Automático)</label>
+            <label class="block text-xs uppercase text-slate-400 mb-1">PIN Generado</label>
             <div class="flex gap-2">
-              <input type="text" id="newPin" readonly required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm text-amber-400 font-mono font-bold tracking-widest text-center focus:outline-none cursor-not-allowed">
-              <button type="button" onclick="generarPinAleatorio()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 p-2 rounded-xl text-sm transition" title="Generar otro PIN">
+              <input type="text" id="newPin" readonly required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm text-amber-400 font-mono font-bold tracking-widest text-center cursor-not-allowed">
+              <button type="button" onclick="generarPinAleatorio()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 p-2 rounded-xl text-sm transition">
                 <i class="fa-solid fa-arrows-rotate"></i>
               </button>
             </div>
           </div>
           <div>
-            <label class="block text-xs uppercase text-slate-400 mb-1">Foto Máster (Opcional)</label>
+            <label class="block text-xs uppercase text-slate-400 mb-1">Foto Máster (IA)</label>
             <input type="file" id="newFotoMaster" accept="image/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-700 file:text-amber-400 hover:file:bg-slate-600 cursor-pointer">
           </div>
           <button type="submit" id="btnGuardarGuardia" class="bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2">
@@ -274,8 +272,8 @@
         </h3>
         <form onsubmit="guardarObjetivo(event)" class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
           <div class="md:col-span-2">
-            <label class="block text-xs uppercase text-slate-400 mb-1">Nombre del Objetivo / Servicio</label>
-            <input type="text" id="newObjetivo" required placeholder="Ej: Edificio Central - Turno Noche" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
+            <label class="block text-xs uppercase text-slate-400 mb-1">Nombre del Objetivo</label>
+            <input type="text" id="newObjetivo" required placeholder="Ej: Edificio Central" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
           </div>
           <button type="submit" id="btnGuardarObj" class="bg-sky-600 hover:bg-sky-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2">
             <i class="fa-solid fa-plus"></i> Añadir Objetivo
@@ -288,7 +286,7 @@
           <table class="w-full text-left text-sm text-slate-300">
             <thead class="bg-slate-950 text-slate-400 uppercase text-xs border-b border-slate-700">
               <tr>
-                <th class="p-4">ID / Clave</th>
+                <th class="p-4">ID</th>
                 <th class="p-4">Nombre del Objetivo</th>
                 <th class="p-4 text-center">Estado</th>
                 <th class="p-4 text-center">Acciones</th>
@@ -304,7 +302,7 @@
 
   </div>
 
-  <!-- MODAL FOTO -->
+  <!-- MODAL VER FOTO SIMPLE -->
   <div id="modalFoto" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
     <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4 max-w-lg w-full relative space-y-4">
       <button onclick="cerrarModal()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
@@ -313,6 +311,52 @@
       <h3 class="font-bold text-white text-base">Archivo Adjunto / Foto</h3>
       <div class="w-full h-80 bg-slate-950 rounded-xl overflow-hidden flex items-center justify-center relative">
         <img id="imgModal" src="" alt="Foto Adjunta" class="w-full h-full object-contain">
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL AUDITORÍA IA COMPARATIVO DE FOTOS -->
+  <div id="modalAuditoriaIA" class="fixed inset-0 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-2xl w-full relative space-y-5">
+      <button onclick="cerrarModalAuditoria()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <div class="flex items-center gap-2 border-b border-slate-700 pb-3">
+        <i class="fa-solid fa-brain text-amber-400 text-xl"></i>
+        <h3 class="font-bold text-white text-lg">Informe de Auditoría Facil / IA</h3>
+      </div>
+
+      <!-- Resumen del Alerta -->
+      <div id="boxAlertaAuditoria" class="p-4 rounded-xl border flex flex-col gap-2">
+        <div class="flex justify-between items-center">
+          <span id="lblTipoAlerta" class="font-extrabold text-sm uppercase"></span>
+          <span id="lblDistanciaEuclidiana" class="text-xs font-mono bg-slate-900/80 px-2.5 py-1 rounded-md text-amber-300"></span>
+        </div>
+        <p id="lblMotivoFraude" class="text-xs text-slate-300 mt-1"></p>
+      </div>
+
+      <!-- Comparador de Fotos -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-slate-900 border border-slate-700 p-3 rounded-xl text-center space-y-2">
+          <span class="text-xs font-semibold text-slate-400 block uppercase">Foto de Fichada</span>
+          <div class="w-full h-48 bg-slate-950 rounded-lg overflow-hidden flex items-center justify-center">
+            <img id="imgAuditoriaFichada" src="" class="w-full h-full object-contain">
+          </div>
+        </div>
+        
+        <div class="bg-slate-900 border border-slate-700 p-3 rounded-xl text-center space-y-2">
+          <span class="text-xs font-semibold text-slate-400 block uppercase">Foto Máster (Referencia)</span>
+          <div class="w-full h-48 bg-slate-950 rounded-lg overflow-hidden flex items-center justify-center">
+            <img id="imgAuditoriaMaster" src="" class="w-full h-full object-contain">
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-end pt-2">
+        <button onclick="cerrarModalAuditoria()" class="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-4 py-2 rounded-xl text-sm transition">
+          Cerrar Detalle
+        </button>
       </div>
     </div>
   </div>
@@ -431,7 +475,6 @@
       }
     }
 
-    // UTILIDAD: CONVERTIR FILE A BASE64
     function convertirImagenBase64(file) {
       return new Promise((resolve, reject) => {
         if (!file) resolve(null);
@@ -448,7 +491,24 @@
       if (icono) icono.classList.add('fa-spin');
 
       try {
-        // 1. Cargar Marcaciones
+        // 1. Cargar Personal primero (para obtener la foto máster en los detalles de auditoría)
+        const resPersonal = await fetch(`${URL_FIREBASE}/personal.json`);
+        const dataPersonal = await resPersonal.json();
+        datosPersonal = [];
+        let mapaFotosMaster = {};
+
+        if (dataPersonal) {
+          Object.keys(dataPersonal).forEach(id => {
+            const d = dataPersonal[id];
+            datosPersonal.push([d.legajo, d.nombre, 'Personal', d.pin, d.estado || 'ACTIVO', id, d.fotoMaster || '']);
+            if (d.legajo && d.fotoMaster) {
+              mapaFotosMaster[String(d.legajo)] = d.fotoMaster;
+            }
+          });
+        }
+        renderizarTablaPersonal(datosPersonal);
+
+        // 2. Cargar Marcaciones con campos de IA en Segundo Plano
         const resMarcaciones = await fetch(`${URL_FIREBASE}/fichadas.json`);
         const dataMarcaciones = await resMarcaciones.json();
         datosMarcaciones = [];
@@ -457,12 +517,31 @@
             const d = dataMarcaciones[id];
             const fecha = d.fechaHoraDispositivo || d.timestamp || '';
             const mapaUrl = (d.latitud && d.longitud) ? `https://maps.google.com/?q=${d.latitud},${d.longitud}` : '';
-            datosMarcaciones.push([fecha, d.legajo, d.nombre, d.objetivo, d.tipo, mapaUrl, d.fotoBase64 || '']);
+            
+            // Campos provenientes de la verificación en segundo plano
+            const alertaFraude = d.alertaFraude || false;
+            const distanciaEuclidiana = d.distanciaEuclidiana || null;
+            const motivoFraude = d.motivoFraude || '';
+            const fotoMaster = mapaFotosMaster[String(d.legajo)] || '';
+
+            datosMarcaciones.push([
+              fecha, 
+              d.legajo, 
+              d.nombre, 
+              d.objetivo, 
+              d.tipo, 
+              mapaUrl, 
+              d.fotoBase64 || '',
+              alertaFraude,
+              distanciaEuclidiana,
+              motivoFraude,
+              fotoMaster
+            ]);
           });
         }
         filtrarTablaMarcaciones();
 
-        // 2. Cargar Novedades
+        // 3. Cargar Novedades
         const resNovedades = await fetch(`${URL_FIREBASE}/novedades.json`);
         const dataNovedades = await resNovedades.json();
         datosNovedades = [];
@@ -475,18 +554,6 @@
           });
         }
         filtrarTablaNovedades();
-
-        // 3. Cargar Personal
-        const resPersonal = await fetch(`${URL_FIREBASE}/personal.json`);
-        const dataPersonal = await resPersonal.json();
-        datosPersonal = [];
-        if (dataPersonal) {
-          Object.keys(dataPersonal).forEach(id => {
-            const d = dataPersonal[id];
-            datosPersonal.push([d.legajo, d.nombre, 'Personal', d.pin, d.estado || 'ACTIVO', id, d.fotoMaster || '']);
-          });
-        }
-        renderizarTablaPersonal(datosPersonal);
 
         // 4. Cargar Objetivos
         const resObjetivos = await fetch(`${URL_FIREBASE}/objetivos.json`);
@@ -513,7 +580,7 @@
       cuerpo.innerHTML = "";
 
       if (!registros || registros.length === 0) {
-        cuerpo.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-400">No hay registros cargados aún en Firebase.</td></tr>`;
+        cuerpo.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-400">No hay registros cargados aún en Firebase.</td></tr>`;
         return;
       }
 
@@ -527,10 +594,29 @@
         const tipo = fila[4] || '-';
         const urlMapa = fila[5] || '';
         const urlFoto = fila[6] || '';
+        
+        // Datos IA en segundo plano
+        const alertaFraude = fila[7];
+        const distanciaEuclidiana = fila[8];
+        const motivoFraude = fila[9];
+        const fotoMaster = fila[10];
 
-        const badgeColor = tipo === 'ENTRADA' 
+        const badgeTipo = tipo === 'ENTRADA' 
           ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
           : 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+
+        // Badge de Alerta IA
+        let badgeIA = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"><i class="fa-solid fa-circle-check"></i> OK</span>`;
+        
+        if (alertaFraude) {
+          badgeIA = `<button onclick='abrirModalAuditoria(${JSON.stringify(fila)})' class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-extrabold bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse hover:bg-rose-500/30 transition shadow-lg cursor-pointer">
+                      <i class="fa-solid fa-triangle-exclamation"></i> SOSPECHA DE FRAUDE
+                     </button>`;
+        } else if (distanciaEuclidiana !== null) {
+          badgeIA = `<button onclick='abrirModalAuditoria(${JSON.stringify(fila)})' class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-700/60 text-slate-300 hover:bg-slate-700 border border-slate-600 transition">
+                      <i class="fa-solid fa-brain text-emerald-400"></i> Verificado (d: ${distanciaEuclidiana.toFixed(2)})
+                     </button>`;
+        }
 
         const btnMapa = (urlMapa && urlMapa.includes('http'))
           ? `<a href="${urlMapa}" target="_blank" class="inline-flex items-center gap-1 bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
@@ -540,20 +626,21 @@
 
         const btnFoto = (urlFoto && urlFoto.length > 50)
           ? `<button onclick="abrirFoto('${urlFoto}')" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
-              <i class="fa-solid fa-image"></i> Ver Foto
+              <i class="fa-solid fa-image"></i> Foto
              </button>`
           : `<span class="text-xs text-slate-500">Sin Foto</span>`;
 
         const tr = document.createElement('tr');
-        tr.className = "hover:bg-slate-700/30 transition";
+        tr.className = alertaFraude ? "bg-rose-950/20 hover:bg-rose-900/30 transition border-l-4 border-l-rose-500" : "hover:bg-slate-700/30 transition";
         tr.innerHTML = `
           <td class="p-4 font-mono text-xs text-slate-300">${fecha}</td>
           <td class="p-4 font-semibold text-white">${legajo}</td>
           <td class="p-4 font-medium text-slate-200">${nombre}</td>
           <td class="p-4 text-slate-400">${objetivo}</td>
           <td class="p-4 text-center">
-            <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${badgeColor}">${tipo}</span>
+            <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${badgeTipo}">${tipo}</span>
           </td>
+          <td class="p-4 text-center">${badgeIA}</td>
           <td class="p-4 text-center">${btnMapa}</td>
           <td class="p-4 text-center">${btnFoto}</td>
         `;
@@ -564,16 +651,56 @@
     function filtrarTablaMarcaciones() {
       const busqueda = document.getElementById('inputBusqueda').value.toLowerCase();
       const filtroTipo = document.getElementById('filtroTipo').value;
+      const filtroAuditoria = document.getElementById('filtroAuditoria').value;
 
       datosFiltradosMarcaciones = datosMarcaciones.filter(fila => {
         const textoFila = `${fila[1]} ${fila[2]} ${fila[3]}`.toLowerCase();
         const coincideBusqueda = textoFila.includes(busqueda);
         const coincideTipo = (filtroTipo === 'TODOS') || (fila[4] === filtroTipo);
+        
+        let coincideAuditoria = true;
+        if (filtroAuditoria === 'FRAUDE') coincideAuditoria = fila[7] === true;
+        if (filtroAuditoria === 'OK') coincideAuditoria = fila[7] === false;
 
-        return coincideBusqueda && coincideTipo;
+        return coincideBusqueda && coincideTipo && coincideAuditoria;
       });
 
       renderizarTablaMarcaciones(datosFiltradosMarcaciones);
+    }
+
+    // ABRIR DETALLE DE AUDITORÍA IA DE FRAUDE
+    function abrirModalAuditoria(registro) {
+      const alertaFraude = registro[7];
+      const distancia = registro[8];
+      const motivo = registro[9];
+      const fotoFichada = registro[6];
+      const fotoMaster = registro[10];
+
+      const box = document.getElementById('boxAlertaAuditoria');
+      const lblTipo = document.getElementById('lblTipoAlerta');
+      const lblDist = document.getElementById('lblDistanciaEuclidiana');
+      const lblMotivo = document.getElementById('lblMotivoFraude');
+
+      if (alertaFraude) {
+        box.className = "p-4 rounded-xl border flex flex-col gap-2 bg-rose-950/40 border-rose-500/50 text-rose-200";
+        lblTipo.innerText = "🚨 ALERTA: Sospecha de Suplantación o Fraude";
+        lblMotivo.innerText = motivo || "La coincidencia facial no alcanzó el umbral de seguridad requerido o se detectó uso de foto estática/pantalla.";
+      } else {
+        box.className = "p-4 rounded-xl border flex flex-col gap-2 bg-emerald-950/40 border-emerald-500/50 text-emerald-200";
+        lblTipo.innerText = "✅ Verificación Satisfactoria";
+        lblMotivo.innerText = "La coincidencia de rasgos biométricos se encuentra dentro del rango de tolerancia permitido.";
+      }
+
+      lblDist.innerText = distancia !== null ? `Distancia Euclidiana: ${distancia.toFixed(4)}` : "Distancia N/A";
+
+      document.getElementById('imgAuditoriaFichada').src = fotoFichada || '';
+      document.getElementById('imgAuditoriaMaster').src = fotoMaster || fotoFichada || '';
+
+      document.getElementById('modalAuditoriaIA').classList.remove('hidden');
+    }
+
+    function cerrarModalAuditoria() {
+      document.getElementById('modalAuditoriaIA').classList.add('hidden');
     }
 
     function renderizarTablaNovedades(registros) {
@@ -605,7 +732,7 @@
 
         const btnFoto = (urlFoto && urlFoto.length > 50)
           ? `<button onclick="abrirFoto('${urlFoto}')" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
-              <i class="fa-solid fa-image"></i> Ver Foto
+              <i class="fa-solid fa-image"></i> Foto
              </button>`
           : `<span class="text-xs text-slate-500">Sin Foto</span>`;
 
@@ -616,7 +743,7 @@
           <td class="p-4"><span class="font-bold text-white">${nombre}</span><br><span class="text-xs text-slate-400">Leg: ${legajo}</span></td>
           <td class="p-4 text-slate-300">${objetivo}</td>
           <td class="p-4"><span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded text-xs font-bold">${tipoIncidencia}</span></td>
-          <td class="p-4 text-slate-200" style="max-width: 300px; white-space: normal; word-break: break-word;" title="${descripcion}">${descripcion}</td>
+          <td class="p-4 text-slate-200" style="max-width: 300px; white-space: normal; word-break: break-word;">${descripcion}</td>
           <td class="p-4 text-center">${btnMapa}</td>
           <td class="p-4 text-center">${btnFoto}</td>
         `;
@@ -667,10 +794,10 @@
           <td class="p-4 text-center">${btnFotoMaster}</td>
           <td class="p-4 text-center"><span class="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded text-xs">${estadoStr}</span></td>
           <td class="p-4 text-center flex justify-center gap-2">
-            <button onclick="abrirModalEditar('${firebaseId}', '${legajoStr}', '${nombreStr.replace(/'/g, "\\'")}', '${pinStr}', '${fotoMaster ? fotoMaster.replace(/'/g, "\\'") : ''}')" class="bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1" title="Editar Personal">
+            <button onclick="abrirModalEditar('${firebaseId}', '${legajoStr}', '${nombreStr.replace(/'/g, "\\'")}', '${pinStr}', '${fotoMaster ? fotoMaster.replace(/'/g, "\\'") : ''}')" class="bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1">
               <i class="fa-solid fa-pen"></i> Editar
             </button>
-            <button onclick="eliminarPersonal('${firebaseId}')" class="bg-rose-600/20 text-rose-400 hover:bg-rose-600/40 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1" title="Eliminar Registro">
+            <button onclick="eliminarPersonal('${firebaseId}')" class="bg-rose-600/20 text-rose-400 hover:bg-rose-600/40 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1">
               <i class="fa-solid fa-trash"></i> Eliminar
             </button>
           </td>
@@ -820,7 +947,7 @@
           <td class="p-4 font-medium text-white">${nombreObj}</td>
           <td class="p-4 text-center"><span class="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded text-xs">ACTIVO</span></td>
           <td class="p-4 text-center">
-            <button onclick="eliminarObjetivo('${firebaseId}')" class="bg-rose-600/20 text-rose-400 hover:bg-rose-600/40 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1" title="Eliminar Objetivo">
+            <button onclick="eliminarObjetivo('${firebaseId}')" class="bg-rose-600/20 text-rose-400 hover:bg-rose-600/40 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1">
               <i class="fa-solid fa-trash"></i> Eliminar
             </button>
           </td>
@@ -884,14 +1011,16 @@
         return alert("No hay datos visibles para exportar.");
       }
 
-      const cabeceras = [["Fecha y Hora", "Legajo", "Nombre", "Objetivo", "Tipo", "Ubicación (Mapa)"]];
+      const cabeceras = [["Fecha y Hora", "Legajo", "Nombre", "Objetivo", "Tipo", "Auditoría IA", "Distancia Euclidiana", "Motivo Fraude"]];
       const filas = datosFiltradosMarcaciones.map(f => [
         f[0] ? new Date(f[0]).toLocaleString('es-AR', { hour12: false }) : '',
         f[1] !== undefined ? String(f[1]) : '',
         f[2] || '',
         f[3] || '',
         f[4] || '',
-        f[5] || ''
+        f[7] ? 'SOSPECHA DE FRAUDE' : 'VERIFICADO',
+        f[8] !== null ? f[8] : '',
+        f[9] || ''
       ]);
 
       const wb = XLSX.utils.book_new();
@@ -909,17 +1038,18 @@
       const doc = new jsPDF();
 
       doc.setFontSize(16);
-      doc.text("Reporte de Marcaciones de Asistencia", 14, 15);
+      doc.text("Reporte de Marcaciones y Auditoría IA", 14, 15);
       doc.setFontSize(10);
       doc.text(`Generado el: ${new Date().toLocaleString('es-AR', { hour12: false })}`, 14, 22);
 
-      const columnas = ["Fecha y Hora", "Legajo", "Nombre", "Objetivo", "Tipo"];
+      const columnas = ["Fecha y Hora", "Legajo", "Nombre", "Objetivo", "Tipo", "Auditoría IA"];
       const filas = datosFiltradosMarcaciones.map(f => [
         f[0] ? new Date(f[0]).toLocaleString('es-AR', { hour12: false }) : '',
         f[1] !== undefined ? String(f[1]) : '',
         f[2] || '',
         f[3] || '',
-        f[4] || ''
+        f[4] || '',
+        f[7] ? 'SOSPECHA FRAUDE' : 'VERIFICADO'
       ]);
 
       doc.autoTable({
@@ -940,21 +1070,20 @@
         return alert("No hay datos visibles para exportar.");
       }
 
-      const cabeceras = [["Fecha y Hora", "Legajo", "Nombre", "Objetivo", "Tipo Incidencia", "Descripción", "Ubicación (Mapa)"]];
+      const cabeceras = [["Fecha y Hora", "Legajo", "Nombre", "Objetivo", "Tipo Incidencia", "Descripción"]];
       const filas = registrosAExportar.map(f => [
         f[0] ? new Date(f[0]).toLocaleString('es-AR', { hour12: false }) : '',
         f[1] !== undefined ? String(f[1]) : '',
         f[2] || '',
         f[3] || '',
         f[4] || '',
-        f[5] || '',
-        f[6] || ''
+        f[5] || ''
       ]);
 
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet([...cabeceras, ...filas]);
       XLSX.utils.book_append_sheet(wb, ws, "Novedades");
-      XLSX.writeFile(wb, `Reporte_Novedades_${new Date().toISOString().slice(0,10)}.toISOString().slice(0,10)}.xlsx`);
+      XLSX.writeFile(wb, `Reporte_Novedades_${new Date().toISOString().slice(0,10)}.xlsx`);
     }
 
     function exportarPDFNovedades() {
