@@ -790,7 +790,7 @@
         }
         filtrarTablaNovedades();
 
-        // 4. Cargar Pánicos
+        // 4. Cargar Pánicos (dentro de recargarDatosEfectivo)
         const resPanicos = await fetch(`${URL_FIREBASE}/panicos.json`);
         const dataPanicos = await resPanicos.json();
         datosPanicos = [];
@@ -798,14 +798,16 @@
           Object.keys(dataPanicos).forEach(id => {
             const d = dataPanicos[id];
             if (d) {
-              const fecha = d.fechaHora || d.timestamp || '';
+              // Priorizamos fechaHora o timestamp enviado desde mis-horas
+              const rawFecha = d.fechaHora || d.timestamp || d.fecha || '';
               const mapaUrl = (d.latitud && d.longitud) ? `https://maps.google.com/?q=${d.latitud},${d.longitud}` : '';
+              
               datosPanicos.push([
                 id,
-                fecha,
-                d.legajo ? String(d.legajo) : '',
-                d.nombre || '',
-                d.objetivo || '',
+                rawFecha,
+                d.legajo ? String(d.legajo) : '-',
+                d.nombre || 'Sin Nombre',
+                d.objetivo || 'Sin Objetivo',
                 d.estado || 'PENDIENTE',
                 mapaUrl
               ]);
@@ -1100,16 +1102,29 @@
         return;
       }
 
+      // Ordenar del más reciente al más antiguo
       const ordenados = [...registros].reverse();
 
       ordenados.forEach(fila => {
         const id = fila[0];
-        const fecha = fila[1] ? new Date(fila[1]).toLocaleString('es-AR', { hour12: false }) : '-';
-        const legajo = fila[2] || '-';
-        const nombre = fila[3] || '-';
-        const objetivo = fila[4] || '-';
-        const estado = fila[5] || 'PENDIENTE';
-        const urlMapa = fila[6] || '';
+        const rawFecha = fila[1];
+        
+        // Formateo seguro de la fecha y hora para Argentina (DD/MM/YYYY HH:mm:ss)
+        let fechaFormateada = '-';
+        if (rawFecha) {
+          const fechaObj = !isNaN(rawFecha) ? new Date(Number(rawFecha)) : new Date(rawFecha);
+          if (!isNaN(fechaObj.getTime())) {
+            fechaFormateada = fechaObj.toLocaleString('es-AR', { hour12: false });
+          } else {
+            fechaFormateada = String(rawFecha);
+          }
+        }
+
+        const legajo = fila[2];
+        const nombre = fila[3];
+        const objetivo = fila[4];
+        const estado = fila[5];
+        const urlMapa = fila[6];
 
         const badgeEstado = estado === 'ATENDIDO' 
           ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
@@ -1124,8 +1139,8 @@
         const tr = document.createElement('tr');
         tr.className = "hover:bg-slate-700/30 transition";
         tr.innerHTML = `
-          <td class="p-4 font-mono text-xs text-slate-300">${fecha}</td>
-          <td class="p-4 font-semibold text-white">${legajo}</td>
+          <td class="p-4 font-mono text-xs text-slate-300">${fechaFormateada}</td>
+          <td class="p-4 font-bold text-white">${legajo}</td>
           <td class="p-4 font-medium text-slate-200">${nombre}</td>
           <td class="p-4 text-slate-400">${objetivo}</td>
           <td class="p-4 text-center">
