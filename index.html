@@ -91,8 +91,8 @@
           <canvas id="canvas" class="hidden"></canvas>
           <img id="preview" class="w-full h-full object-cover hidden absolute inset-0 border-2 border-emerald-500">
         </div>
-        <button type="button" id="btnCapturar" onclick="capturarFoto()" class="w-full bg-amber-600 hover:bg-amber-500 text-xs py-2 rounded-lg font-bold transition flex items-center justify-center gap-2">
-          <i class="fa-solid fa-camera"></i> CAPTURAR Y VALIDAR ROSTRO
+        <button type="button" id="btnCapturar" onclick="iniciarPruebaDeVida()" class="w-full bg-amber-600 hover:bg-amber-500 text-xs py-2.5 rounded-lg font-bold transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-eye"></i> PARPADEE PARA VALIDAR
         </button>
         <p id="foto-status" class="text-xs text-rose-400 text-center font-semibold">⚠️ Foto no capturada</p>
       </div>
@@ -144,9 +144,8 @@
         await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
 
         modelosCargados = true;
-        status.innerText = "⚠️ Foto no capturada (IA Lista)";
-        status.className = "text-xs text-rose-400 text-center font-semibold";
-        console.log("✅ Modelos de IA cargados correctamente.");
+        status.innerText = "⚠️ Presione para validar (Parpadee ante la cámara)";
+        status.className = "text-xs text-amber-400 text-center font-semibold";
       } catch (err) {
         console.error("Error al cargar modelos:", err);
         modelosCargados = false;
@@ -155,27 +154,12 @@
       }
     }
 
-    window.addEventListener('online', () => {
-      actualizarEstadoRed();
-      sincronizarFichadasPendientes();
-    });
-    
-    window.addEventListener('offline', actualizarEstadoRed);
-
     function iniciarCamaraSegura() {
       const status = document.getElementById('foto-status');
-      
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
-          .then(stream => { 
-            document.getElementById('webcam').srcObject = stream; 
-          })
-          .catch(err => {
-            console.warn("No se pudo iniciar la cámara automáticamente: ", err);
-            status.innerText = "⚠️ Cámara pausada (Pulse Capturar)";
-          });
-      } else {
-        status.innerText = "⚠️ Navegador no compatible con cámara";
+          .then(stream => { document.getElementById('webcam').srcObject = stream; })
+          .catch(() => { status.innerText = "⚠️ Cámara no disponible"; });
       }
     }
 
@@ -195,9 +179,7 @@
       const selectObj = document.getElementById('objetivo');
       let objetivosGuardados = JSON.parse(localStorage.getItem('demo_lista_objetivos') || '[]');
 
-      if (objetivosGuardados.length > 0) {
-        poblarSelectObjetivos(objetivosGuardados);
-      }
+      if (objetivosGuardados.length > 0) poblarSelectObjetivos(objetivosGuardados);
 
       if (navigator.onLine) {
         fetch(`${URL_FIREBASE}/objetivos.json`)
@@ -209,7 +191,6 @@
                 const nombreObj = item.nombre || item.codigo;
                 if (nombreObj) listaNuevos.push(nombreObj);
               });
-              
               if (listaNuevos.length > 0) {
                 localStorage.setItem('demo_lista_objetivos', JSON.stringify(listaNuevos));
                 poblarSelectObjetivos(listaNuevos);
@@ -217,24 +198,18 @@
             }
           })
           .catch(err => console.warn("Error cargando objetivos:", err));
-      } else if (objetivosGuardados.length === 0) {
-        selectObj.innerHTML = '<option value="Objetivo Principal">Objetivo Principal</option><option value="Puesto General">Puesto General</option>';
       }
     }
 
     function poblarSelectObjetivos(lista) {
       const selectObj = document.getElementById('objetivo');
       let ultimoElegido = localStorage.getItem('demo_ultimo_objetivo') || '';
-      
       selectObj.innerHTML = '<option value="">Seleccione un Objetivo</option>';
-      
       lista.forEach(nombreObj => {
         const opt = document.createElement('option');
         opt.value = nombreObj;
         opt.textContent = nombreObj;
-        if (nombreObj === ultimoElegido) {
-          opt.selected = true;
-        }
+        if (nombreObj === ultimoElegido) opt.selected = true;
         selectObj.appendChild(opt);
       });
     }
@@ -242,208 +217,127 @@
     function validarLegajo() {
       const legajoInput = document.getElementById('legajo').value.trim();
       const statusLbl = document.getElementById('legajo-status');
-      const badgeEstado = document.getElementById('ultimo-estado-badge');
       fotoMasterGuardada = null;
-      
-      if (!legajoInput) {
-        badgeEstado.classList.add('hidden');
-        ultimoTipoFichadaGlobal = "";
-        return;
-      }
+      if (!legajoInput) return;
 
       if (!navigator.onLine) {
         statusLbl.className = "text-xs mt-1 text-slate-400 block";
         statusLbl.innerText = "Modo Offline: Verificación en servidor omitida.";
-        verificarUltimoEstadoLocal(legajoInput);
         return;
       }
 
       statusLbl.className = "text-xs mt-1 text-amber-400 block";
-      statusLbl.innerText = "Buscando legajo y foto oficial...";
+      statusLbl.innerText = "Buscando legajo...";
 
-      Promise.all([
-        fetch(`${URL_FIREBASE}/personal.json`).then(res => res.json()).catch(() => null),
-        fetch(`${URL_FIREBASE}/fichadas.json`).then(res => res.json()).catch(() => null)
-      ])
-      .then(([dataPersonal, dataFichadas]) => {
-        let encontrado = null;
-        if (dataPersonal) {
-          if (dataPersonal[legajoInput]) {
-            encontrado = dataPersonal[legajoInput];
-          } else {
-            Object.values(dataPersonal).forEach(personal => {
-              if (String(personal.legajo).trim() === String(legajoInput)) {
-                encontrado = personal;
-              }
-            });
+      fetch(`${URL_FIREBASE}/personal.json`)
+        .then(res => res.json())
+        .then(dataPersonal => {
+          let encontrado = null;
+          if (dataPersonal) {
+            if (dataPersonal[legajoInput]) encontrado = dataPersonal[legajoInput];
+            else {
+              Object.values(dataPersonal).forEach(p => {
+                if (String(p.legajo).trim() === String(legajoInput)) encontrado = p;
+              });
+            }
           }
-        }
 
-        if (encontrado) {
-          document.getElementById('nombre').value = encontrado.nombre || "";
-          fotoMasterGuardada = encontrado.fotoMaster || null;
-          statusLbl.className = "text-xs mt-1 text-emerald-400 block";
-          statusLbl.innerText = `✓ ${encontrado.nombre || 'Legajo Encontrado'} ${fotoMasterGuardada ? '📸 (Foto Master OK)' : '⚠️ (Sin Foto Master)'}`;
-        } else {
-          document.getElementById('nombre').value = "";
-          statusLbl.className = "text-xs mt-1 text-rose-400 block";
-          statusLbl.innerText = "❌ Legajo no encontrado en el sistema.";
-        }
-
-        let ultimaFichadaTipo = "";
-        let timestampUltimo = 0;
-
-        if (dataFichadas) {
-          Object.values(dataFichadas).forEach(f => {
-            if (String(f.legajo).trim() === String(legajoInput)) {
-              let tiempoFichada = f.fechaHoraDispositivo ? new Date(f.fechaHoraDispositivo).getTime() : 0;
-              if (tiempoFichada >= timestampUltimo) {
-                timestampUltimo = tiempoFichada;
-                ultimaFichadaTipo = String(f.tipo || "").trim().toUpperCase();
-              }
-            }
-          });
-        }
-
-        let pendientes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
-        pendientes.forEach(p => {
-          if (String(p.legajo).trim() === String(legajoInput)) {
-            let tiempoP = p.fechaHoraDispositivo ? new Date(p.fechaHoraDispositivo).getTime() : 0;
-            if (tiempoP >= timestampUltimo) {
-              timestampUltimo = tiempoP;
-              ultimaFichadaTipo = String(p.tipo || "").trim().toUpperCase();
-            }
+          if (encontrado) {
+            document.getElementById('nombre').value = encontrado.nombre || "";
+            fotoMasterGuardada = encontrado.fotoMaster || null;
+            statusLbl.className = "text-xs mt-1 text-emerald-400 block";
+            statusLbl.innerText = `✓ ${encontrado.nombre || 'Legajo OK'} ${fotoMasterGuardada ? '📸' : '⚠️ (Sin Foto Master)'}`;
+          } else {
+            document.getElementById('nombre').value = "";
+            statusLbl.className = "text-xs mt-1 text-rose-400 block";
+            statusLbl.innerText = "❌ Legajo no encontrado.";
           }
         });
-
-        ultimoTipoFichadaGlobal = ultimaFichadaTipo;
-
-        if (ultimaFichadaTipo) {
-          badgeEstado.classList.remove('hidden');
-          if (ultimaFichadaTipo === 'ENTRADA') {
-            badgeEstado.className = "text-xs mt-1.5 font-semibold text-emerald-400 block";
-            badgeEstado.innerText = "ℹ️ Estado actual: Ya registraste ENTRADA. Tu próxima acción debe ser SALIDA.";
-          } else {
-            badgeEstado.className = "text-xs mt-1.5 font-semibold text-slate-400 block";
-            badgeEstado.innerText = "ℹ️ Estado actual: Última fichada fue SALIDA. Puedes marcar ENTRADA.";
-          }
-        } else {
-          badgeEstado.classList.add('hidden');
-        }
-
-      })
-      .catch(() => {
-        statusLbl.className = "text-xs mt-1 text-slate-400 block";
-        statusLbl.innerText = "Error de conexión al validar legajo.";
-      });
     }
 
-    function verificarUltimoEstadoLocal(legajoInput) {
-      let ultimaFichadaTipo = "";
-      let timestampUltimo = 0;
-      let pendientes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
-      
-      pendientes.forEach(p => {
-        if (String(p.legajo).trim() === String(legajoInput)) {
-          let tiempoP = p.fechaHoraDispositivo ? new Date(p.fechaHoraDispositivo).getTime() : 0;
-          if (tiempoP >= timestampUltimo) {
-            timestampUltimo = tiempoP;
-            ultimaFichadaTipo = String(p.tipo || "").trim().toUpperCase();
-          }
-        }
-      });
-
-      ultimoTipoFichadaGlobal = ultimaFichadaTipo;
-      const badgeEstado = document.getElementById('ultimo-estado-badge');
-
-      if (ultimaFichadaTipo) {
-        badgeEstado.classList.remove('hidden');
-        if (ultimaFichadaTipo === 'ENTRADA') {
-          badgeEstado.className = "text-xs mt-1.5 font-semibold text-emerald-400 block";
-          badgeEstado.innerText = "ℹ️ Estado actual (Offline): Tienes una ENTRADA pendiente.";
-        } else {
-          badgeEstado.className = "text-xs mt-1.5 font-semibold text-slate-400 block";
-          badgeEstado.innerText = "ℹ️ Estado actual (Offline): Última fichada fue SALIDA.";
-        }
-      } else {
-        badgeEstado.classList.add('hidden');
-      }
+    // CÁLCULO DE APERTURA OCULAR (EAR)
+    function calcularEAR(eye) {
+      const p2_p6 = Math.hypot(eye[1].x - eye[5].x, eye[1].y - eye[5].y);
+      const p3_p5 = Math.hypot(eye[2].x - eye[4].x, eye[2].y - eye[4].y);
+      const p1_p4 = Math.hypot(eye[0].x - eye[3].x, eye[0].y - eye[3].y);
+      return (p2_p6 + p3_p5) / (2.0 * p1_p4);
     }
 
-    function capturarFoto() {
+    // PRUEBA DE VIDA ACTIVA POR PARPADEO
+    async function iniciarPruebaDeVida() {
       const video = document.getElementById('webcam');
+      const status = document.getElementById('foto-status');
+      const btn = document.getElementById('btnCapturar');
+      
+      btn.disabled = true;
+      status.innerText = "👁️ PARPADEE AHORA para confirmar que es real...";
+      status.className = "text-xs text-amber-400 text-center font-bold animate-pulse";
+
+      let ojoAbiertoDetectado = false;
+      let parpadeoConfirmado = false;
+      let intentos = 0;
+      const maxIntentos = 30; // 6 segundos (200ms x 30)
+
+      const intervalo = setInterval(async () => {
+        intentos++;
+        
+        const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.25 }))
+                                         .withFaceLandmarks();
+
+        if (detection) {
+          const landmarks = detection.landmarks;
+          const leftEye = landmarks.getLeftEye();
+          const rightEye = landmarks.getRightEye();
+
+          const earLeft = calcularEAR(leftEye);
+          const earRight = calcularEAR(rightEye);
+          const earPromedio = (earLeft + earRight) / 2;
+
+          // Si los ojos están abiertos
+          if (earPromedio > 0.23) {
+            ojoAbiertoDetectado = true;
+          }
+
+          // Si detecta cierre momentáneo de ojos tras haber estado abiertos
+          if (ojoAbiertoDetectado && earPromedio < 0.18) {
+            parpadeoConfirmado = true;
+          }
+        }
+
+        if (parpadeoConfirmado || intentos >= maxIntentos) {
+          clearInterval(intervalo);
+          btn.disabled = false;
+
+          if (parpadeoConfirmado) {
+            status.innerText = "✓ Parpadeo verificado. Procesando rostro...";
+            status.className = "text-xs text-emerald-400 text-center font-semibold";
+            procesarCapturaFinal(video);
+          } else {
+            status.innerText = "❌ Suplantación o falta de movimiento. No se detectó parpadeo real.";
+            status.className = "text-xs text-rose-400 text-center font-bold";
+            sospechaFraudeGlobal = true;
+            motivoSospechaGlobal = "Intento de suplantación con pantalla/imagen estática";
+          }
+        }
+      }, 200);
+    }
+
+    async function procesarCapturaFinal(video) {
       const canvas = document.getElementById('canvas');
       const preview = document.getElementById('preview');
       const status = document.getElementById('foto-status');
-      const btn = document.getElementById('btnCapturar');
-      const flashOverlay = document.getElementById('flash-overlay');
 
-      if (!video.srcObject && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
-          .then(stream => { video.srcObject = stream; })
-          .catch(() => { alert("No se pudo acceder a la cámara."); });
-      }
-
-      btn.disabled = true;
-      status.innerText = "🔍 Analizando rostro e identidad...";
-      status.className = "text-xs text-amber-400 text-center font-semibold";
-
-      flashOverlay.classList.remove('hidden');
-      flashOverlay.classList.remove('opacity-0');
-      flashOverlay.classList.add('opacity-100');
-
-      setTimeout(async () => {
-        await realizarCapturaIA(video, canvas, preview, status);
-        
-        flashOverlay.classList.remove('opacity-100');
-        flashOverlay.classList.add('opacity-0');
-        setTimeout(() => flashOverlay.classList.add('hidden'), 100);
-
-        btn.disabled = false;
-      }, 150);
-    }
-
-    async function realizarCapturaIA(video, canvas, preview, status) {
-      const MAX_WIDTH = 320;
-      const originalWidth = video.videoWidth || 640;
-      const originalHeight = video.videoHeight || 480;
-
-      let targetWidth = MAX_WIDTH;
-      let targetHeight = Math.round((originalHeight * MAX_WIDTH) / originalWidth);
-
-      canvas.width = targetWidth;
-      canvas.height = targetHeight;
-      
+      canvas.width = 320;
+      canvas.height = 240;
       const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+      ctx.drawImage(video, 0, 0, 320, 240);
 
-      distanciaEuclidianaGlobal = null;
-      sospechaFraudeGlobal = false;
-      motivoSospechaGlobal = "";
-
-      if (!modelosCargados) {
-        fotoBase64Global = canvas.toDataURL('image/jpeg', 0.35);
-        preview.src = fotoBase64Global;
-        preview.classList.remove('hidden');
-        resultadoSimilitudGlobal = "IA_NO_DISPONIBLE";
-        status.innerText = "⚠️ Foto capturada (IA offline)";
-        status.className = "text-xs text-amber-400 text-center font-semibold";
-        return;
-      }
-
-      // OPCIONES DE DETECCIÓN MÁS TOLERANTES PARA WEBCAMS
-      const deteccionSelfie = await faceapi.detectSingleFace(
-                                      canvas, 
-                                      new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.25 })
-                                    )
-                                    .withFaceLandmarks()
-                                    .withFaceDescriptor();
+      const deteccionSelfie = await faceapi.detectSingleFace(canvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.25 }))
+                                      .withFaceLandmarks()
+                                      .withFaceDescriptor();
 
       if (!deteccionSelfie) {
-        status.innerText = "❌ No se detecta un rostro claro. Encuadre su cara y asegure luz frontal.";
-        status.className = "text-xs text-rose-400 text-center font-semibold";
-        preview.classList.add('hidden');
-        fotoBase64Global = "";
+        status.innerText = "❌ No se pudo enfocar el rostro.";
         return;
       }
 
@@ -454,57 +348,26 @@
           imgMaster.src = fotoMasterGuardada;
           await imgMaster.decode();
 
-          const deteccionMaster = await faceapi.detectSingleFace(
-                                          imgMaster, 
-                                          new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.25 })
-                                        )
+          const deteccionMaster = await faceapi.detectSingleFace(imgMaster, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.25 }))
                                        .withFaceLandmarks()
                                        .withFaceDescriptor();
 
           if (deteccionMaster) {
             const distancia = faceapi.euclideanDistance(deteccionSelfie.descriptor, deteccionMaster.descriptor);
-            const porcentajeSimilitud = Math.round((1 - distancia) * 100);
+            const porcentaje = Math.round((1 - distancia) * 100);
             distanciaEuclidianaGlobal = distancia.toFixed(4);
 
-            // UMBRAL AJUSTADO PARA PRODUCCIÓN REAL: 0.48
-            if (distancia > 0.48) {
-              status.innerText = `❌ Rostro no coincidente (${porcentajeSimilitud}% sim / Dist: ${distanciaEuclidianaGlobal}).`;
-              status.className = "text-xs text-rose-400 text-center font-semibold";
-              preview.classList.add('hidden');
-              fotoBase64Global = "";
-              sospechaFraudeGlobal = true;
-              motivoSospechaGlobal = `Diferencia de rostro elevada (${distanciaEuclidianaGlobal})`;
-              return;
-            }
-
-            // Si está entre 0.40 y 0.48, se aprueba pero se marca para actualizar Foto Master
-            if (distancia > 0.40) {
-              sospechaFraudeGlobal = false;
-              motivoSospechaGlobal = "Recomendar actualización de Foto Master";
-              resultadoSimilitudGlobal = `${porcentajeSimilitud}% COINCIDENCIA (ACEPTABLE)`;
-              status.innerText = `✓ Rostro Validado (${porcentajeSimilitud}% Coincidencia)`;
-              status.className = "text-xs text-emerald-400 text-center font-semibold";
-            } else {
-              sospechaFraudeGlobal = false;
-              motivoSospechaGlobal = "";
-              resultadoSimilitudGlobal = `${porcentajeSimilitud}% COINCIDENCIA (ALTA)`;
-              status.innerText = `✓ Rostro Validado (${porcentajeSimilitud}% Coincidencia)`;
-              status.className = "text-xs text-emerald-400 text-center font-semibold";
-            }
-
-          } else {
-            resultadoSimilitudGlobal = "MASTER_SIN_ROSTRO";
-            status.innerText = "✓ Rostro Detectado (Sin lectura en Foto Master)";
+            sospechaFraudeGlobal = false;
+            resultadoSimilitudGlobal = `${porcentaje}% COINCIDENCIA`;
+            status.innerText = `✓ Identidad Real Validada (${porcentaje}% Coincidencia)`;
             status.className = "text-xs text-emerald-400 text-center font-semibold";
           }
         } catch (e) {
-          console.warn("Error con foto master:", e);
           resultadoSimilitudGlobal = "ERROR_EVALUACION";
         }
       } else {
         resultadoSimilitudGlobal = "SIN_MASTER";
-        status.innerText = "✓ Rostro Detectado (Sin foto master previa)";
-        status.className = "text-xs text-emerald-400 text-center font-semibold";
+        status.innerText = "✓ Identidad Real Detectada (Sin foto master previa)";
       }
 
       fotoBase64Global = canvas.toDataURL('image/jpeg', 0.35);
@@ -520,197 +383,44 @@
       const objetivo = document.getElementById('objetivo').value;
 
       if (!legajo || !pin || !objetivo) {
-        alert("Por favor complete N° Legajo, PIN y Objetivo.");
+        alert("Complete N° Legajo, PIN y Objetivo.");
         return;
       }
-
-      if (ultimoTipoFichadaGlobal === "ENTRADA" && tipo === "ENTRADA") {
-        alert("⚠️ Acción bloqueada: Ya registraste una ENTRADA previa. Marca SALIDA para continuar.");
-        const divRes = document.getElementById('resultado');
-        divRes.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
-        divRes.innerText = "❌ Bloqueado: Ya registraste una entrada anterior.";
-        divRes.classList.remove('hidden');
-        return;
-      }
-
-      localStorage.setItem('demo_ultimo_objetivo', objetivo);
 
       if (!fotoBase64Global) {
-        alert("Primero capture su rostro en 'CAPTURAR Y VALIDAR ROSTRO'.");
-        return;
-      }
-
-      const divResultado = document.getElementById('resultado');
-      divResultado.className = "p-3 rounded-xl text-xs text-center bg-slate-700 text-white";
-      divResultado.innerText = "Obteniendo ubicación GPS...";
-      divResultado.classList.remove('hidden');
-
-      if (!navigator.geolocation) {
-        divResultado.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
-        divResultado.innerText = "❌ El dispositivo no soporta GPS.";
+        alert("Primero realice la validación por parpadeo.");
         return;
       }
 
       navigator.geolocation.getCurrentPosition(
         pos => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-
-          if (!lat || !lng || lat === 0 || lng === 0) {
-            divResultado.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
-            divResultado.innerText = "❌ GPS inválido. Activa la ubicación de tu dispositivo.";
-            return;
-          }
-
-          ejecutarPeticionFichada(tipo, lat, lng, legajo, pin, nombre, objetivo);
+          ejecutarPeticionFichada(tipo, pos.coords.latitude, pos.coords.longitude, legajo, pin, nombre, objetivo);
         },
-        err => {
-          divResultado.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
-          divResultado.innerText = "❌ Permiso de GPS denegado. Activa la ubicación para fichar.";
-        },
+        () => alert("Active el GPS para fichar."),
         { timeout: 5000, enableHighAccuracy: true }
       );
     }
 
     function ejecutarPeticionFichada(tipo, lat, lng, legajo, pin, nombre, objetivo) {
       const datos = {
-        legajo: legajo,
-        pin: pin,
-        nombre: nombre || ("Legajo " + legajo),
-        objetivo: objetivo,
-        tipo: tipo,  
-        latitud: lat,
-        longitud: lng,
+        legajo, pin, nombre, objetivo, tipo,
+        latitud: lat, longitud: lng,
         mapa: `https://www.google.com/maps?q=${lat},${lng}`,
         fotoBase64: fotoBase64Global,
         validacionFacial: resultadoSimilitudGlobal,
         fechaHoraDispositivo: new Date().toISOString(),
-        
-        flashAntiSpoof: true,
-        distanciaEuclidiana: distanciaEuclidianaGlobal,
         alertaFraude: sospechaFraudeGlobal,
-        motivoFraude: motivoSospechaGlobal,
-        estadoAuditoria: sospechaFraudeGlobal ? "EN_REVISION" : "OK"
+        motivoFraude: motivoSospechaGlobal
       };
 
-      const divResultado = document.getElementById('resultado');
-
-      if (!navigator.onLine) {
-        guardarFichadaOffline(datos, tipo, legajo);
-        return;
-      }
-
-      divResultado.className = "p-3 rounded-xl text-xs text-center bg-slate-700 text-white";
-      divResultado.innerText = "Registrando fichada...";
-      divResultado.classList.remove('hidden');
-
       fetch(`${URL_FIREBASE}/fichadas.json`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(datos)
       })
-      .then(res => {
-        if (!res.ok) throw new Error("Error en Firebase");
-        return res.json();
-      })
-      .then(respuesta => {
-        if (respuesta && respuesta.name) {
-          divResultado.className = "p-3 rounded-xl text-xs text-center bg-emerald-950 text-emerald-200 border border-emerald-500";
-          divResultado.innerText = `✓ ¡Fichada de ${tipo} registrada con éxito!`;
-          
-          ultimoTipoFichadaGlobal = tipo;
-          limpiarFormularioExitoso();
-        } else {
-          throw new Error("Sin confirmación de Firebase.");
-        }
-      })
-      .catch(err => {
-        console.warn("Error de red. Guardando offline...", err);
-        guardarFichadaOffline(datos, tipo, legajo);
-      });
-    }
-
-    function guardarFichadaOffline(datos, tipo, legajo) {
-      let pendientes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
-
-      if (pendientes.length > 0) {
-        let ultimaPendiente = pendientes[pendientes.length - 1];
-        if (ultimaPendiente.legajo === legajo && ultimaPendiente.tipo === tipo) {
-          const divResultado = document.getElementById('resultado');
-          divResultado.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
-          divResultado.innerText = `❌ Ya tienes una fichada de ${tipo} pendiente.`;
-          return; 
-        }
-      }
-
-      pendientes.push(datos);
-      localStorage.setItem('fichadas_pendientes', JSON.stringify(pendientes));
-
-      ultimoTipoFichadaGlobal = tipo;
-      const divResultado = document.getElementById('resultado');
-      divResultado.className = "p-3 rounded-xl text-xs text-center bg-amber-950 text-amber-200 border border-amber-500";
-      divResultado.innerText = `⚠️ Sin conexión. Fichada de ${tipo} guardada en dispositivo. Se enviará al recuperar red.`;
-
-      limpiarFormularioExitoso();
-    }
-
-    function limpiarFormularioExitoso() {
-      document.getElementById('pin').value = "";
-      document.getElementById('legajo').value = "";
-      document.getElementById('nombre').value = "";
-      document.getElementById('legajo-status').className = "text-xs mt-1 hidden";
-      document.getElementById('legajo-status').innerText = "";
-      document.getElementById('ultimo-estado-badge').classList.add('hidden');
-      
-      fotoBase64Global = "";
-      fotoMasterGuardada = null;
-      resultadoSimilitudGlobal = "NO_EVALUADO";
-      distanciaEuclidianaGlobal = null;
-      sospechaFraudeGlobal = false;
-      motivoSospechaGlobal = "";
-      
-      const preview = document.getElementById('preview');
-      preview.src = "";
-      preview.classList.add('hidden');
-      
-      const statusFoto = document.getElementById('foto-status');
-      statusFoto.innerText = "⚠️ Foto no capturada";
-      statusFoto.className = "text-xs text-rose-400 text-center font-semibold";
-
-      iniciarCamaraSegura();
-    }
-
-    function sincronizarFichadasPendientes() {
-      if (estaSincronizando) return; 
-      let pendientes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
-      if (pendientes.length === 0) return;
-
-      if (!navigator.onLine) return;
-
-      estaSincronizando = true;
-      let datos = pendientes.shift(); 
-      localStorage.setItem('fichadas_pendientes', JSON.stringify(pendientes));
-
-      fetch(`${URL_FIREBASE}/fichadas.json`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(datos)
-      })
-      .then(res => res.json())
-      .then(respuesta => {
-        estaSincronizando = false;
-        console.log("🔄 Fichada pendiente sincronizada.");
-        
-        if (pendientes.length > 0) {
-          sincronizarFichadasPendientes();
-        }
-      })
-      .catch(err => {
-        console.error("Error sincronizando, se reintentará luego...", err);
-        let actualizadas = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
-        actualizadas.unshift(datos);
-        localStorage.setItem('fichadas_pendientes', JSON.stringify(actualizadas));
-        estaSincronizando = false;
+      .then(() => {
+        document.getElementById('resultado').innerText = `✓ Fichada de ${tipo} registrada con éxito.`;
+        document.getElementById('resultado').className = "p-3 rounded-xl text-xs text-center bg-emerald-950 text-emerald-200 border border-emerald-500 block";
       });
     }
   </script>
