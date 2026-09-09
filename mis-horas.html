@@ -80,6 +80,20 @@
       </div>
     </div>
 
+    <!-- MÓDULO DE BOTÓN DE PÁNICO EN VIVO -->
+    <div id="seccionPanico" class="hidden bg-rose-950/40 border-2 border-rose-600/60 p-6 rounded-2xl shadow-2xl text-center space-y-3">
+      <div class="flex items-center justify-center gap-2 text-rose-500 font-black tracking-wider text-xs uppercase">
+        <i class="fa-solid fa-triangle-exclamation animate-pulse text-lg"></i> Alerta de Emergencia Operativa
+      </div>
+      <h3 class="text-lg font-extrabold text-white">¿Enfrentas una situación de peligro inminente?</h3>
+      <p class="text-xs text-slate-300 max-w-lg mx-auto">
+        Al presionar este botón enviará inmediatamente una señal crítica con tu ubicación GPS en tiempo real a la Central de Operaciones.
+      </p>
+      <button onclick="dispararAlertaPanico()" class="w-full max-w-md mx-auto bg-rose-600 hover:bg-rose-700 text-white font-black py-4 px-6 rounded-2xl text-base tracking-wide transition transform active:scale-95 shadow-lg shadow-rose-600/40 flex items-center justify-center gap-3 border border-rose-400/30">
+        <i class="fa-solid fa-shield-cat text-2xl animate-bounce"></i> ACTIVAR BOTÓN DE PÁNICO
+      </button>
+    </div>
+
     <!-- FILTROS DE FECHA (MES Y DÍA) -->
     <div id="seccionFiltros" class="hidden bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-wrap items-center justify-between gap-4">
       <div class="flex items-center gap-3 flex-wrap">
@@ -196,6 +210,7 @@
         document.getElementById('lblLegajoActivo').innerText = legajoGuardado;
         document.getElementById('lblNombreActivo').innerText = nombreGuardado || `Legajo ${legajoGuardado}`;
         document.getElementById('btnCerrarSesion').classList.remove('hidden');
+        document.getElementById('seccionPanico').classList.remove('hidden');
         document.getElementById('seccionNovedades').classList.remove('hidden'); 
         
         ejecutarConsulta(legajoGuardado);
@@ -251,7 +266,6 @@
         let empleadoEncontrado = null;
         let nombreEmpleado = `Legajo ${legajoIngresado}`;
 
-        // Validar personal y PIN
         if (personalData) {
           Object.values(personalData).forEach(p => {
             const pLegajo = String(p.legajo || "").trim();
@@ -265,7 +279,6 @@
           });
         }
 
-        // Extraer fichadas del empleado
         let misFichadas = [];
         if (fichadasData) {
           Object.values(fichadasData).forEach(f => {
@@ -296,6 +309,7 @@
         document.getElementById('lblLegajoActivo').innerText = legajoIngresado;
         document.getElementById('lblNombreActivo').innerText = nombreEmpleado;
         document.getElementById('btnCerrarSesion').classList.remove('hidden');
+        document.getElementById('seccionPanico').classList.remove('hidden');
         document.getElementById('seccionNovedades').classList.remove('hidden'); 
 
         poblarSelectMeses(datosVigiladorGlobal);
@@ -447,6 +461,77 @@
       document.getElementById('contenedorTabla').classList.remove('hidden');
     }
 
+    // 🚨 FUNCIÓN DEL BOTÓN DE PÁNICO
+    function dispararAlertaPanico() {
+      const legajo = sessionStorage.getItem('vigilador_legajo');
+      const nombreVigilador = sessionStorage.getItem('vigilador_nombre') || `Legajo ${legajo}`;
+
+      if (!legajo) {
+        alert("Debe iniciar sesión para emitir una alerta.");
+        return;
+      }
+
+      let enServicio = false;
+      let objetivoActual = "Objetivo Asignado";
+
+      if (datosVigiladorGlobal.length > 0) {
+        let ordenadas = [...datosVigiladorGlobal].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+        let ultimaMar = ordenadas[ordenadas.length - 1];
+        
+        if (ultimaMar && ultimaMar.tipo === 'ENTRADA') {
+          enServicio = true;
+          if (ultimaMar.objetivo) objetivoActual = ultimaMar.objetivo;
+        }
+      }
+
+      if (!enServicio) {
+        alert("❌ No se puede enviar la alerta de pánico: Se encuentra fuera de servicio (requiere tener una Entrada activa).");
+        return;
+      }
+
+      if (!confirm("⚠️ ¿CONFIRMA ACTIVAR EL BOTÓN DE PÁNICO?\n\nEsta acción enviará una señal de alerta de emergencia crítica a la Central de Operaciones.")) {
+        return;
+      }
+
+      if (!navigator.geolocation) {
+        alert("Tu dispositivo no soporta geolocalización.");
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        function(position) {
+          const lat = position.coords.latitude;
+          const lon = position.coords.longitude;
+
+          const payloadPanico = {
+            fechaHora: new Date().toISOString(),
+            legajo: legajo,
+            nombre: nombreVigilador,
+            objetivo: objetivoActual,
+            latitud: lat,
+            longitud: lon,
+            estado: "PENDIENTE"
+          };
+
+          fetch(`${URL_FIREBASE}/panicos.json`, {
+            method: "POST",
+            body: JSON.stringify(payloadPanico)
+          })
+          .then(res => res.json())
+          .then(() => {
+            alert("🚨 ALERTA DE PÁNICO ENVIADA A LA CENTRAL. EL PERSONAL OPERATIVO HA SIDO NOTIFICADO.");
+          })
+          .catch(error => {
+            alert("Error al enviar alerta de pánico: " + error.toString());
+          });
+        },
+        function(error) {
+          alert("Error: Es obligatorio permitir el acceso al GPS para activar la alerta de pánico.");
+        },
+        { enableHighAccuracy: true }
+      );
+    }
+
     // 📝 ENVÍO DE NOVEDAD A FIREBASE
     function enviarNovedadPortal() {
       const legajo = sessionStorage.getItem('vigilador_legajo');
@@ -547,6 +632,7 @@
       document.getElementById('formLoginVigilador').classList.remove('hidden');
       document.getElementById('infoSesionActiva').classList.add('hidden');
       document.getElementById('btnCerrarSesion').classList.add('hidden');
+      document.getElementById('seccionPanico').classList.add('hidden');
       document.getElementById('seccionFiltros').classList.add('hidden');
       document.getElementById('resumenHoras').classList.add('hidden');
       document.getElementById('seccionNovedades').classList.add('hidden'); 
