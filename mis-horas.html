@@ -6,6 +6,17 @@
   <title>VGA 24 - Mi Historial de Horas y Marcaciones</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <style>
+    /* Desactivar selección de texto en el botón de pánico para evitar interferencias al mantener presionado */
+    .no-select {
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      -khtml-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+    }
+  </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
 
@@ -57,7 +68,7 @@
       </div>
 
       <!-- Formulario de Login -->
-      <div id="formLoginVigilador" class="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <form id="formLoginVigilador" onsubmit="event.preventDefault(); buscarMisHoras();" class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div class="relative">
           <i class="fa-solid fa-id-badge absolute left-3 top-3 text-slate-400 text-sm"></i>
           <input type="text" id="legajoInput" placeholder="Número de Legajo..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
@@ -66,10 +77,10 @@
           <i class="fa-solid fa-key absolute left-3 top-3 text-slate-400 text-sm"></i>
           <input type="password" id="pinInput" placeholder="PIN de seguridad..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
         </div>
-        <button onclick="buscarMisHoras()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-2 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
+        <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-2 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
           <i class="fa-solid fa-lock-open"></i> Verificar e Ingresar
         </button>
-      </div>
+      </form>
 
       <!-- Indicador de Sesión Activa -->
       <div id="infoSesionActiva" class="hidden flex flex-col md:flex-row items-center justify-between bg-slate-900/60 border border-emerald-500/30 px-4 py-2.5 rounded-xl text-xs gap-2">
@@ -81,17 +92,26 @@
     </div>
 
     <!-- MÓDULO DE BOTÓN DE PÁNICO EN VIVO -->
-    <div id="seccionPanico" class="hidden bg-rose-950/40 border-2 border-rose-600/60 p-6 rounded-2xl shadow-2xl text-center space-y-3">
+    <div id="seccionPanico" class="hidden bg-rose-950/40 border-2 border-rose-600/60 p-6 rounded-2xl shadow-2xl text-center space-y-4">
       <div class="flex items-center justify-center gap-2 text-rose-500 font-black tracking-wider text-xs uppercase">
         <i class="fa-solid fa-triangle-exclamation animate-pulse text-lg"></i> Alerta de Emergencia Operativa
       </div>
       <h3 class="text-lg font-extrabold text-white">¿Enfrentas una situación de peligro inminente?</h3>
       <p class="text-xs text-slate-300 max-w-lg mx-auto">
-        Al presionar este botón enviará inmediatamente una señal crítica con tu ubicación GPS en tiempo real a la Central de Operaciones.
+        Mantén presionado el botón durante <strong>3 segundos</strong> para enviar una señal crítica con tu ubicación GPS a la Central.
       </p>
-      <button onclick="dispararAlertaPanico()" class="w-full max-w-md mx-auto bg-rose-600 hover:bg-rose-700 text-white font-black py-4 px-6 rounded-2xl text-base tracking-wide transition transform active:scale-95 shadow-lg shadow-rose-600/40 flex items-center justify-center gap-3 border border-rose-400/30">
-        <i class="fa-solid fa-shield-cat text-2xl animate-bounce"></i> ACTIVAR BOTÓN DE PÁNICO
-      </button>
+
+      <div class="max-w-md mx-auto space-y-2">
+        <button id="btnPanico" class="no-select w-full bg-rose-600 hover:bg-rose-700 text-white font-black py-4 px-6 rounded-2xl text-base tracking-wide transition transform active:scale-95 shadow-lg shadow-rose-600/40 flex items-center justify-center gap-3 border border-rose-400/30 cursor-pointer">
+          <i class="fa-solid fa-shield-cat text-2xl animate-bounce"></i>
+          <span id="textoPanico">MANTÉN PRESIONADO (3s)</span>
+        </button>
+
+        <!-- Barra de Progreso de la Presión -->
+        <div class="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden border border-rose-900/50">
+          <div id="barraProgresoPanico" class="bg-rose-500 h-full w-0 transition-all duration-75"></div>
+        </div>
+      </div>
     </div>
 
     <!-- FILTROS DE FECHA (MES Y DÍA) -->
@@ -190,6 +210,20 @@
     let temporizadorInactividad;
     let datosVigiladorGlobal = []; 
 
+    // Variables para control del Botón de Pánico sostenido
+    let temporizadorPanico = null;
+    let intervaloProgresoPanico = null;
+    let tiempoPresionadoMs = 0;
+    const TIEMPO_REQUERIDO_MS = 3000; // 3 segundos
+
+    function parseFechaSegura(fechaStr) {
+      if (!fechaStr) return new Date(NaN);
+      let d = new Date(fechaStr);
+      if (!isNaN(d.getTime())) return d;
+      d = new Date(String(fechaStr).replace(/-/g, '/'));
+      return d;
+    }
+
     function reiniciarTemporizador() {
       clearTimeout(temporizadorInactividad);
       temporizadorInactividad = setTimeout(() => {
@@ -217,6 +251,8 @@
         activarEscuchasInactividad();
         reiniciarTemporizador();
       }
+
+      inicializarBotonPanicoSostenido();
     };
 
     function activarEscuchasInactividad() {
@@ -227,12 +263,12 @@
     }
 
     function calcularHoras(f1, f2) {
-      let inicio = new Date(f1);
-      let fin = new Date(f2);
-      if (isNaN(inicio) || isNaN(fin) || fin <= inicio) return { d: 0, n: 0, t: 0 };
+      let inicio = parseFechaSegura(f1);
+      let fin = parseFechaSegura(f2);
+      if (isNaN(inicio.getTime()) || isNaN(fin.getTime()) || fin <= inicio) return { d: 0, n: 0, t: 0 };
 
       let diurnas = 0, nocturnas = 0;
-      let cur = new Date(inicio);
+      let cur = new Date(inicio.getTime());
 
       while (cur < fin) {
         let h = cur.getHours();
@@ -357,8 +393,8 @@
       const mesesSet = new Set();
       datos.forEach(f => {
         if(f.fecha) {
-          const d = new Date(f.fecha);
-          if(!isNaN(d)) {
+          const d = parseFechaSegura(f.fecha);
+          if(!isNaN(d.getTime())) {
             const anio = d.getFullYear();
             const mes = String(d.getMonth() + 1).padStart(2, '0');
             mesesSet.add(`${anio}-${mes}`);
@@ -373,7 +409,7 @@
 
       mesesOrdenados.forEach(m => {
         const [anio, mesNum] = m.split('-');
-        const nombreMesTexto = `${nombresMeses[parseInt(mesNum) - 1]} ${anio}`;
+        const nombreMesTexto = `${nombresMeses[parseInt(mesNum, 10) - 1]} ${anio}`;
         const opt = document.createElement('option');
         opt.value = m;
         opt.innerText = nombreMesTexto;
@@ -393,7 +429,8 @@
 
       if (mesFiltro !== 'todos') {
         filtrados = filtrados.filter(f => {
-          const d = new Date(f.fecha);
+          const d = parseFechaSegura(f.fecha);
+          if (isNaN(d.getTime())) return false;
           const anio = d.getFullYear();
           const mes = String(d.getMonth() + 1).padStart(2, '0');
           return `${anio}-${mes}` === mesFiltro;
@@ -402,7 +439,8 @@
 
       if (diaFiltro) {
         filtrados = filtrados.filter(f => {
-          const d = new Date(f.fecha);
+          const d = parseFechaSegura(f.fecha);
+          if (isNaN(d.getTime())) return false;
           const anio = d.getFullYear();
           const mes = String(d.getMonth() + 1).padStart(2, '0');
           const dia = String(d.getDate()).padStart(2, '0');
@@ -420,7 +458,7 @@
     }
 
     function procesarYRenderizar(marcacionesVigilador) {
-      marcacionesVigilador.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+      marcacionesVigilador.sort((a, b) => parseFechaSegura(a.fecha) - parseFechaSegura(b.fecha));
 
       let totalD = 0, totalN = 0, totalT = 0;
       const tabla = document.getElementById('cuerpoDetalle');
@@ -438,11 +476,14 @@
           totalN += horas.n;
           totalT += horas.t;
 
+          const fEntrada = parseFechaSegura(entrada.fecha);
+          const fSalida = salida ? parseFechaSegura(salida.fecha) : null;
+
           const tr = document.createElement('tr');
           tr.className = "hover:bg-slate-700/30 transition";
           tr.innerHTML = `
-            <td class="p-4 text-xs font-mono">${new Date(entrada.fecha).toLocaleString('es-AR', { hour12: false })}</td>
-            <td class="p-4 text-xs font-mono">${salida ? new Date(salida.fecha).toLocaleString('es-AR', { hour12: false }) : '<span class="text-amber-400">En Turno</span>'}</td>
+            <td class="p-4 text-xs font-mono">${!isNaN(fEntrada.getTime()) ? fEntrada.toLocaleString('es-AR', { hour12: false }) : entrada.fecha}</td>
+            <td class="p-4 text-xs font-mono">${salida ? (!isNaN(fSalida.getTime()) ? fSalida.toLocaleString('es-AR', { hour12: false }) : salida.fecha) : '<span class="text-amber-400">En Turno</span>'}</td>
             <td class="p-4 text-xs text-slate-300 font-medium">${objetivoNombre}</td>
             <td class="p-4 text-center text-xs font-semibold text-amber-400">${formatearAHorasReloj(horas.d)}</td>
             <td class="p-4 text-center text-xs font-semibold text-indigo-400">${formatearAHorasReloj(horas.n)}</td>
@@ -461,7 +502,46 @@
       document.getElementById('contenedorTabla').classList.remove('hidden');
     }
 
-    // 🚨 FUNCIÓN DEL BOTÓN DE PÁNICO
+    // 🚨 CONFIGURACIÓN DEL BOTÓN DE PÁNICO SOSTENIDO (3 SEGUNDOS)
+    function inicializarBotonPanicoSostenido() {
+      const btn = document.getElementById('btnPanico');
+      
+      const iniciarPresion = (e) => {
+        e.preventDefault();
+        tiempoPresionadoMs = 0;
+        document.getElementById('textoPanico').innerText = "MANTÉN PRESIONADO...";
+        
+        intervaloProgresoPanico = setInterval(() => {
+          tiempoPresionadoMs += 50;
+          let porcentaje = Math.min((tiempoPresionadoMs / TIEMPO_REQUERIDO_MS) * 100, 100);
+          document.getElementById('barraProgresoPanico').style.width = `${porcentaje}%`;
+        }, 50);
+
+        temporizadorPanico = setTimeout(() => {
+          cancelarPresion();
+          dispararAlertaPanico();
+        }, TIEMPO_REQUERIDO_MS);
+      };
+
+      const cancelarPresion = () => {
+        clearTimeout(temporizadorPanico);
+        clearInterval(intervaloProgresoPanico);
+        tiempoPresionadoMs = 0;
+        document.getElementById('barraProgresoPanico').style.width = '0%';
+        document.getElementById('textoPanico').innerText = "MANTÉN PRESIONADO (3s)";
+      };
+
+      // Eventos para Desktop y Mobile
+      btn.addEventListener('mousedown', iniciarPresion);
+      btn.addEventListener('mouseup', cancelarPresion);
+      btn.addEventListener('mouseleave', cancelarPresion);
+
+      btn.addEventListener('touchstart', iniciarPresion);
+      btn.addEventListener('touchend', cancelarPresion);
+      btn.addEventListener('touchcancel', cancelarPresion);
+    }
+
+    // 🚨 EJECUCIÓN DE LA ALERTA DE PÁNICO
     function dispararAlertaPanico() {
       const legajo = sessionStorage.getItem('vigilador_legajo');
       const nombreVigilador = sessionStorage.getItem('vigilador_nombre') || `Legajo ${legajo}`;
@@ -475,7 +555,7 @@
       let objetivoActual = "Objetivo Asignado";
 
       if (datosVigiladorGlobal.length > 0) {
-        let ordenadas = [...datosVigiladorGlobal].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+        let ordenadas = [...datosVigiladorGlobal].sort((a, b) => parseFechaSegura(a.fecha) - parseFechaSegura(b.fecha));
         let ultimaMar = ordenadas[ordenadas.length - 1];
         
         if (ultimaMar && ultimaMar.tipo === 'ENTRADA') {
@@ -486,10 +566,6 @@
 
       if (!enServicio) {
         alert("❌ No se puede enviar la alerta de pánico: Se encuentra fuera de servicio (requiere tener una Entrada activa).");
-        return;
-      }
-
-      if (!confirm("⚠️ ¿CONFIRMA ACTIVAR EL BOTÓN DE PÁNICO?\n\nEsta acción enviará una señal de alerta de emergencia crítica a la Central de Operaciones.")) {
         return;
       }
 
@@ -549,7 +625,7 @@
       let objetivoActual = "Objetivo Asignado";
 
       if (datosVigiladorGlobal.length > 0) {
-        let ordenadas = [...datosVigiladorGlobal].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+        let ordenadas = [...datosVigiladorGlobal].sort((a, b) => parseFechaSegura(a.fecha) - parseFechaSegura(b.fecha));
         let ultimaMar = ordenadas[ordenadas.length - 1];
         
         if (ultimaMar && ultimaMar.tipo === 'ENTRADA') {
