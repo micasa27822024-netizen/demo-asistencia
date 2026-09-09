@@ -403,26 +403,56 @@
       }, 200);
     }
 
-    // INSPECCIÓN DE TEXTURA PARA DETECTAR PANTALLAS HD EN SEGUNDO PLANO
+    // INSPECCIÓN PRECISA DE TEXTURA PARA DETECTAR PANTALLAS HD
     function analizarTexturaSuperficial(ctx, box) {
-      const x = Math.max(0, Math.floor(box.x));
-      const y = Math.max(0, Math.floor(box.y));
-      const w = Math.min(ctx.canvas.width - x, Math.floor(box.width));
-      const h = Math.min(ctx.canvas.height - y, Math.floor(box.height));
+      const margen = 15;
+      const x = Math.max(0, Math.floor(box.x - margen));
+      const y = Math.max(0, Math.floor(box.y - margen));
+      const w = Math.min(ctx.canvas.width - x, Math.floor(box.width + (margen * 2)));
+      const h = Math.min(ctx.canvas.height - y, Math.floor(box.height + (margen * 2)));
 
-      if (w <= 0 || h <= 0) return 0;
+      if (w <= 0 || h <= 0) return { esSospechoso: false, motivo: "" };
 
       const imageData = ctx.getImageData(x, y, w, h);
       const data = imageData.data;
-      let variacionTotal = 0;
+      
+      let sumaGris = 0;
+      let totalPixeles = data.length / 4;
+      let pixelesSaturadosBrillo = 0;
 
-      for (let i = 0; i < data.length - 4; i += 4) {
-        const brilloActual = (data[i] + data[i+1] + data[i+2]) / 3;
-        const brilloSiguiente = (data[i+4] + data[i+5] + data[i+6]) / 3;
-        variacionTotal += Math.abs(brilloActual - brilloSiguiente);
+      const valoresGris = new Uint8Array(totalPixeles);
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i+1];
+        const b = data[i+2];
+        
+        const gris = 0.299 * r + 0.587 * g + 0.114 * b;
+        valoresGris[i / 4] = gris;
+        sumaGris += gris;
+
+        if (r > 245 && g > 245 && b > 245) {
+          pixelesSaturadosBrillo++;
+        }
       }
 
-      return variacionTotal / (data.length / 4);
+      const promedio = sumaGris / totalPixeles;
+
+      let sumaDiferenciasCuadradas = 0;
+      for (let i = 0; i < totalPixeles; i++) {
+        sumaDiferenciasCuadradas += Math.pow(valoresGris[i] - promedio, 2);
+      }
+      
+      const desviacionEstandard = Math.sqrt(sumaDiferenciasCuadradas / totalPixeles);
+      const porcentajeBrillo = (pixelesSaturadosBrillo / totalPixeles) * 100;
+
+      if (desviacionEstandard < 8.0 && porcentajeBrillo > 12.0) {
+        return {
+          esSospechoso: true,
+          motivo: `Patrón liso detectado en segundo plano (Posible imagen en pantalla HD - Desv: ${desviacionEstandard.toFixed(1)}, Brillo: ${porcentajeBrillo.toFixed(1)}%)`
+        };
+      }
+
+      return { esSospechoso: false, motivo: "" };
     }
 
     async function realizarCapturaIA(video, canvas, preview, status) {
@@ -524,10 +554,10 @@
             }
 
             // ANÁLISIS EN SEGUNDO PLANO DE TEXTURA PIEL VS PANTALLAS
-            const nivelTextura = analizarTexturaSuperficial(ctx, box);
-            if (nivelTextura < 10) {
+            const analisisTextura = analizarTexturaSuperficial(ctx, box);
+            if (analisisTextura.esSospechoso) {
               sospechaFraudeGlobal = true;
-              motivoSospechaGlobal = "Patrón liso detectado en segundo plano (Posible imagen en pantalla HD)";
+              motivoSospechaGlobal = analisisTextura.motivo;
             }
 
             resultadoSimilitudGlobal = `${porcentajeSimilitud}% COINCIDENCIA`;
