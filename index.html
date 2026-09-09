@@ -428,7 +428,7 @@
       // Reiniciar variables de auditoría de fondo
       distanciaEuclidianaGlobal = null;
       sospechaFraudeGlobal = false;
-      motivoSospechaGlobal = "Ninguna";
+      motivoSospechaGlobal = "";
 
       if (!modelosCargados) {
         fotoBase64Global = canvas.toDataURL('image/jpeg', 0.35);
@@ -442,8 +442,8 @@
 
       // 1. DETECTAR ROSTRO Y EXTRAER VECTOR MATEMÁTICO DE LA SELFIE
       const deteccionSelfie = await faceapi.detectSingleFace(canvas, new faceapi.TinyFaceDetectorOptions())
-                                          .withFaceLandmarks()
-                                          .withFaceDescriptor();
+                                           .withFaceLandmarks()
+                                           .withFaceDescriptor();
 
       if (!deteccionSelfie) {
         status.innerText = "❌ Rechazado: No se detecta un rostro humano claro (evite tapar la cámara o fotos al techo).";
@@ -470,20 +470,20 @@
             const porcentajeSimilitud = Math.round((1 - distancia) * 100);
             distanciaEuclidianaGlobal = distancia.toFixed(4);
 
-            // UMBRAL MÁS STRICTO PARA ENTRADA EN VIVO (Máximo 0.45 = Aprox 75-80% Similitud)
+            // UMBRAL DE CORTE GENERAL: Máximo 0.45 de distancia (Acepta desde ~55% de coincidencia en adelante)
             if (distancia > 0.45) {
               status.innerText = `❌ Rechazado: Suplantación de identidad. El rostro no coincide con el legajo (${porcentajeSimilitud}% sim).`;
               status.className = "text-xs text-rose-400 text-center font-semibold";
               preview.classList.add('hidden');
               fotoBase64Global = "";
+              sospechaFraudeGlobal = true;
+              motivoSospechaGlobal = `Rechazado por baja coincidencia (${porcentajeSimilitud}%)`;
               return;
             }
 
-            // BANDERA PARA AUDITORÍA DE FONDO (Si la distancia está entre 0.38 y 0.45 la marca como sospechosa de pantalla)
-            if (distancia > 0.38) {
-              sospechaFraudeGlobal = true;
-              motivoSospechaGlobal = "Similitud borderline / Posible captura de pantalla de otro dispositivo";
-            }
+            // Si la distancia es <= 0.45 (>= 55% de similitud), es totalmente VÁLIDA y NO genera alerta de fraude
+            sospechaFraudeGlobal = false;
+            motivoSospechaGlobal = "";
 
             resultadoSimilitudGlobal = `${porcentajeSimilitud}% COINCIDENCIA`;
             status.innerText = `✓ Rostro Validado (${porcentajeSimilitud}% Coincidencia)`;
