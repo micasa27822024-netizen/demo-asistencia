@@ -534,23 +534,22 @@
         if (!event.data) return;
         try {
           const res = JSON.parse(event.data);
-          if (!res || !res.data) return;
+          if (!res) return;
 
-          let panicosObj = res.data;
+          // Manejo robusto para cargas completas o parches de Firebase SSE
+          let panicosObj = res.data !== undefined ? res.data : res;
           
-          if (res.path === '/') {
+          if (!panicosObj) return;
+
+          if (typeof panicosObj === 'object') {
             let keys = Object.keys(panicosObj);
             for (let id of keys) {
               let p = panicosObj[id];
+              // Validar si el pánico se encuentra pendiente o activo
               if (p && (p.estado === 'PENDIENTE' || p.estado === 'ACTIVO' || !p.estado)) {
                 activarModalPanico(id, p);
                 break;
               }
-            }
-          } else if (res.path && res.path.length > 1) {
-            let id = res.path.replace('/', '');
-            if (panicosObj && (panicosObj.estado === 'PENDIENTE' || panicosObj.estado === 'ACTIVO' || !panicosObj.estado)) {
-              activarModalPanico(id, panicosObj);
             }
           }
         } catch(err) {
@@ -878,7 +877,6 @@
       renderizarTablaMarcaciones(datosFiltradosMarcaciones);
     }
 
-    // BUSCADOR AUXILIAR DE REGISTROS
     function obtenerRegistroPorId(id) {
       return datosMarcaciones.find(f => f[11] === id);
     }
@@ -893,7 +891,6 @@
       if (registro) abrirModalAuditoria(registro);
     }
 
-    // ACCIONES SOBRE FRAUDE
     function abrirModalAccionFraude(registro) {
       registroFraudeSeleccionado = registro;
       document.getElementById('fraudeFirebaseId').value = registro[11];
@@ -956,7 +953,6 @@
       }
     }
 
-    // ABRIR DETALLE DE AUDITORÍA IA DE FRAUDE
     function abrirModalAuditoria(registro) {
       const alertaFraude = registro[7];
       const distancia = registro[8];
