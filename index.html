@@ -710,13 +710,20 @@
         }
       }
 
+      // 🛡️ SEGURIDAD ANTI-TRAMPA: Fuerza la alerta si se fichó sin cotejo de Foto Master
+      if (resultadoSimilitudGlobal === "SIN_MASTER" || resultadoSimilitudGlobal === "IA_NO_DISPONIBLE" || resultadoSimilitudGlobal === "NO_EVALUADO") {
+        datos.alertaFraude = true;
+        datos.motivoFraude = "⚠️ Fichada Offline: Requiere revisión manual (Rostro no cotejado en servidor)";
+        datos.validacionFacial = "OFFLINE_AUDITORIA_REQUERIDA";
+      }
+
       pendientes.push(datos);
       localStorage.setItem('fichadas_pendientes', JSON.stringify(pendientes));
 
       ultimoTipoFichadaGlobal = tipo;
       const divResultado = document.getElementById('resultado');
       divResultado.className = "p-3 rounded-xl text-xs text-center bg-amber-950 text-amber-200 border border-amber-500";
-      divResultado.innerText = `⚠️ Sin conexión. Tu fichada de ${tipo} fue guardada en el dispositivo y se enviará al recuperar internet.`;
+      divResultado.innerText = `⚠️ Registrada Offline. Al no haber conexión para verificar tu identidad, esta fichada requerirá REVISIÓN MANUAL por RRHH.`;
 
       limpiarFormularioExitoso();
     }
