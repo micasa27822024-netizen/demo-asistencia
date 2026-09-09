@@ -476,7 +476,7 @@
     let osc2 = null;
     let panicoInterval = null;
     let panicoActivoActualId = null;
-    let ssePanicoSource = null;
+    let intervaloPanicoPoll = null;
 
     function iniciarSonidoSirena() {
       if (audioCtxPanico) return; 
@@ -525,41 +525,32 @@
       panicoInterval = null;
     }
 
+    // Sistema de sondeo por intervalos optimizado para GitHub Pages
     function escucharAlertasPanicoSSE() {
-      if (ssePanicoSource) ssePanicoSource.close();
+      if (intervaloPanicoPoll) clearInterval(intervaloPanicoPoll);
       
-      ssePanicoSource = new EventSource(`${URL_FIREBASE}/panicos.json`);
-      
-      ssePanicoSource.onmessage = function(event) {
-        if (!event.data) return;
+      intervaloPanicoPoll = setInterval(async () => {
         try {
-          const res = JSON.parse(event.data);
-          if (!res) return;
-
-          // Manejo robusto para cargas completas o parches de Firebase SSE
-          let panicosObj = res.data !== undefined ? res.data : res;
+          const res = await fetch(`${URL_FIREBASE}/panicos.json`);
+          const panicosObj = await res.json();
           
           if (!panicosObj) return;
 
-          if (typeof panicosObj === 'object') {
-            let keys = Object.keys(panicosObj);
-            for (let id of keys) {
-              let p = panicosObj[id];
-              // Validar si el pánico se encuentra pendiente o activo
-              if (p && (p.estado === 'PENDIENTE' || p.estado === 'ACTIVO' || !p.estado)) {
+          let keys = Object.keys(panicosObj);
+          for (let id of keys) {
+            let p = panicosObj[id];
+            // Si hay un pánico pendiente o activo
+            if (p && (p.estado === 'PENDIENTE' || p.estado === 'ACTIVO')) {
+              if (panicoActivoActualId !== id) {
                 activarModalPanico(id, p);
-                break;
               }
+              break; 
             }
           }
-        } catch(err) {
-          console.error("Error procesando SSE Pánico:", err);
+        } catch (err) {
+          console.warn("Error consultando pánicos:", err);
         }
-      };
-
-      ssePanicoSource.onerror = function(err) {
-        console.warn("Reconectando SSE de pánico...", err);
-      };
+      }, 3000);
     }
 
     function activarModalPanico(id, datos) {
@@ -567,7 +558,7 @@
       document.getElementById('panicoNombre').innerText = datos.nombre || 'Vigilador No Especificado';
       document.getElementById('panicoDetalle').innerText = `Legajo: ${datos.legajo || '-'} | Objetivo: ${datos.objetivo || '-'}`;
       
-      const horaStr = datos.timestamp ? new Date(datos.timestamp).toLocaleString('es-AR', { hour12: false }) : new Date().toLocaleString('es-AR', { hour12: false });
+      const horaStr = datos.fechaHora ? new Date(datos.fechaHora).toLocaleString('es-AR', { hour12: false }) : (datos.timestamp ? new Date(datos.timestamp).toLocaleString('es-AR', { hour12: false }) : new Date().toLocaleString('es-AR', { hour12: false }));
       document.getElementById('panicoHora').innerText = `Activado a las: ${horaStr}`;
 
       const linkGps = document.getElementById('panicoMapaUrl');
@@ -637,7 +628,7 @@
 
     function cerrarSesionAdmin() {
       sessionStorage.removeItem('auth_admin');
-      if (ssePanicoSource) ssePanicoSource.close();
+      if (intervaloPanicoPoll) clearInterval(intervaloPanicoPoll);
       detenerSonidoSirena();
       location.reload();
     }
@@ -798,7 +789,6 @@
         const urlMapa = fila[5] || '';
         const urlFoto = fila[6] || '';
         
-        // Datos IA en segundo plano
         const alertaFraude = fila[7];
         const distanciaEuclidiana = fila[8];
         const firebaseId = fila[11];
@@ -807,7 +797,6 @@
           ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
           : 'bg-rose-500/10 text-rose-400 border-rose-500/20';
 
-        // Badge de Alerta IA
         let badgeIA = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"><i class="fa-solid fa-circle-check"></i> OK</span>`;
         
         if (alertaFraude) {
