@@ -541,7 +541,7 @@
       btn.addEventListener('touchcancel', cancelarPresion);
     }
 
-    // 🚨 EJECUCIÓN DE LA ALERTA DE PÁNICO
+    // 🚨 EJECUCIÓN DE LA ALERTA DE PÁNICO CORREGIDA
     function dispararAlertaPanico() {
       const legajo = sessionStorage.getItem('vigilador_legajo');
       const nombreVigilador = sessionStorage.getItem('vigilador_nombre') || `Legajo ${legajo}`;
@@ -579,23 +579,28 @@
           const lat = position.coords.latitude;
           const lon = position.coords.longitude;
 
+          // Payload estandarizado con campos clave para el panel admin
           const payloadPanico = {
-            fechaHora: new Date().toISOString(),
-            legajo: legajo,
+            tipo: "PANICO",
+            legajo: String(legajo),
             nombre: nombreVigilador,
             objetivo: objetivoActual,
             latitud: lat,
             longitud: lon,
-            estado: "PENDIENTE"
+            mapa: `https://www.google.com/maps?q=${lat},${lon}`,
+            fechaHoraDispositivo: new Date().toISOString(),
+            estado: "PENDIENTE",
+            atendido: false
           };
 
           fetch(`${URL_FIREBASE}/panicos.json`, {
             method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payloadPanico)
           })
           .then(res => res.json())
           .then(() => {
-            alert("🚨 ALERTA DE PÁNICO ENVIADA A LA CENTRAL. EL PERSONAL OPERATIVO HA SIDO NOTIFICADO.");
+            alert("🚨 ¡ALERTA DE PÁNICO ENVIADA A LA CENTRAL. EL PERSONAL OPERATIVO HA SIDO NOTIFICADO!");
           })
           .catch(error => {
             alert("Error al enviar alerta de pánico: " + error.toString());
