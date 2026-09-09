@@ -116,7 +116,6 @@
     let modelosCargados = false;
     let resultadoSimilitudGlobal = "NO_EVALUADO";
     
-    // VARIABLES PARA AUDITORÍA Y BANDERAS ANTI-SPOOFING DE FONDO
     let distanciaEuclidianaGlobal = null;
     let sospechaFraudeGlobal = false;
     let motivoSospechaGlobal = "";
@@ -132,10 +131,9 @@
       }
     };
 
-    // CARGAR MODELOS DESDE LA CARPETA LOCAL /models
     async function cargarModelosIA() {
       const status = document.getElementById('foto-status');
-      status.innerText = "⏳ Cargando modelos de Inteligencia Artificial...";
+      status.innerText = "⏳ Cargando modelos de IA...";
       status.className = "text-xs text-amber-400 text-center font-semibold";
       
       try {
@@ -148,11 +146,11 @@
         modelosCargados = true;
         status.innerText = "⚠️ Foto no capturada (IA Lista)";
         status.className = "text-xs text-rose-400 text-center font-semibold";
-        console.log("✅ Modelos de IA cargados con éxito desde la carpeta local.");
+        console.log("✅ Modelos de IA cargados correctamente.");
       } catch (err) {
-        console.error("Error al cargar modelos de la IA:", err);
+        console.error("Error al cargar modelos:", err);
         modelosCargados = false;
-        status.innerText = "⚠️ Modo IA no disponible (Error al cargar modelos)";
+        status.innerText = "⚠️ Modo IA no disponible";
         status.className = "text-xs text-amber-400 text-center font-semibold";
       }
     }
@@ -174,10 +172,10 @@
           })
           .catch(err => {
             console.warn("No se pudo iniciar la cámara automáticamente: ", err);
-            status.innerText = "⚠️ Cámara pausada o sin permisos (pulse Capturar Foto)";
+            status.innerText = "⚠️ Cámara pausada (Pulse Capturar)";
           });
       } else {
-        status.innerText = "⚠️ Su navegador no soporta el acceso a la cámara";
+        status.innerText = "⚠️ Navegador no compatible con cámara";
       }
     }
 
@@ -218,9 +216,9 @@
               }
             }
           })
-          .catch(err => console.warn("No se pudieron actualizar los objetivos desde Firebase:", err));
+          .catch(err => console.warn("Error cargando objetivos:", err));
       } else if (objetivosGuardados.length === 0) {
-        selectObj.innerHTML = '<option value="Objetivo Principal">Objetivo Principal (Modo Offline)</option><option value="Puesto General">Puesto General</option>';
+        selectObj.innerHTML = '<option value="Objetivo Principal">Objetivo Principal</option><option value="Puesto General">Puesto General</option>';
       }
     }
 
@@ -324,7 +322,7 @@
           badgeEstado.classList.remove('hidden');
           if (ultimaFichadaTipo === 'ENTRADA') {
             badgeEstado.className = "text-xs mt-1.5 font-semibold text-emerald-400 block";
-            badgeEstado.innerText = "ℹ️ Estado actual: Ya registraste una ENTRADA. Tu próxima acción debe ser SALIDA.";
+            badgeEstado.innerText = "ℹ️ Estado actual: Ya registraste ENTRADA. Tu próxima acción debe ser SALIDA.";
           } else {
             badgeEstado.className = "text-xs mt-1.5 font-semibold text-slate-400 block";
             badgeEstado.innerText = "ℹ️ Estado actual: Última fichada fue SALIDA. Puedes marcar ENTRADA.";
@@ -372,31 +370,27 @@
       }
     }
 
-    // FUNCIÓN AUXILIAR: DETECCIÓN DE MARCO Y PANTALLA SECUNDARIA EN CANVAS
+    // CONTROL ANTI-SPOOFING RECALIBRADO PARA EVITAR FALSOS POSITIVOS
     function detectarPantallaOFoto(ctx, width, height, detection) {
-      // 1. Verificar si el rostro cubre un espacio anormal respecto al marco (pantalla sostenida cerca)
       const box = detection.detection.box;
       const ratioRostroPantalla = (box.width * box.height) / (width * height);
       
-      // Si el rostro es muy pequeño respecto a la toma, suele indicar foto lejana a otra pantalla
-      if (ratioRostroPantalla < 0.08) {
-        return { detectado: true, motivo: "Rostro demasiado pequeño o lejano (Posible recuadro de celular)" };
+      // Filtro por proporción extrema de encuadre
+      if (ratioRostroPantalla < 0.04) {
+        return { detectado: true, motivo: "Rostro muy alejado de la cámara." };
       }
 
-      // 2. Análisis de brillo e iluminación en los bordes para detectar marco rectangular de pantalla
+      // Verificación de borde exterior con umbral permisivo (brillo extremo > 245)
       const imgData = ctx.getImageData(0, 0, width, height);
       const data = imgData.data;
       
       let sumaBordes = 0;
       let muestras = 0;
 
-      // Inspeccionar píxeles del perímetro (Borde superior e inferior)
-      for (let x = 0; x < width; x += 5) {
-        // Fila Superior
+      for (let x = 0; x < width; x += 10) {
         let idxSup = (0 * width + x) * 4;
         sumaBordes += (data[idxSup] + data[idxSup + 1] + data[idxSup + 2]) / 3;
         
-        // Fila Inferior
         let idxInf = ((height - 1) * width + x) * 4;
         sumaBordes += (data[idxInf] + data[idxInf + 1] + data[idxInf + 2]) / 3;
         muestras += 2;
@@ -404,9 +398,8 @@
 
       let brilloPromedioBordes = sumaBordes / muestras;
 
-      // Si el entorno exterior tiene alto brillo uniforme o contraste abrupto de marco
-      if (brilloPromedioBordes > 210) {
-        return { detectado: true, motivo: "Reflejo / Marco luminoso detectado alrededor de la cara" };
+      if (brilloPromedioBordes > 245) {
+        return { detectado: true, motivo: "Saturación de luz extrema en el marco exterior." };
       }
 
       return { detectado: false, motivo: "" };
@@ -431,10 +424,9 @@
       }
 
       btn.disabled = true;
-      status.innerText = "🔍 Analizando rostro e identidad con IA...";
+      status.innerText = "🔍 Analizando rostro e identidad...";
       status.className = "text-xs text-amber-400 text-center font-semibold";
 
-      // 1. DISPARAR FLASH INVISIBLE ANTI-SPOOFING (150 ms)
       flashOverlay.classList.remove('hidden');
       flashOverlay.classList.remove('opacity-0');
       flashOverlay.classList.add('opacity-100');
@@ -442,7 +434,6 @@
       setTimeout(async () => {
         await realizarCapturaIA(video, canvas, preview, status);
         
-        // Apagar el flash
         flashOverlay.classList.remove('opacity-100');
         flashOverlay.classList.add('opacity-0');
         setTimeout(() => flashOverlay.classList.add('hidden'), 100);
@@ -465,7 +456,6 @@
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
 
-      // Reiniciar variables de auditoría de fondo
       distanciaEuclidianaGlobal = null;
       sospechaFraudeGlobal = false;
       motivoSospechaGlobal = "";
@@ -475,37 +465,38 @@
         preview.src = fotoBase64Global;
         preview.classList.remove('hidden');
         resultadoSimilitudGlobal = "IA_NO_DISPONIBLE";
-        status.innerText = "⚠️ Foto capturada sin análisis facial de IA.";
+        status.innerText = "⚠️ Foto capturada (IA offline)";
         status.className = "text-xs text-amber-400 text-center font-semibold";
         return;
       }
 
-      // 1. DETECTAR ROSTRO Y EXTRAER VECTOR MATEMÁTICO DE LA SELFIE
-      const deteccionSelfie = await faceapi.detectSingleFace(canvas, new faceapi.TinyFaceDetectorOptions())
-                                           .withFaceLandmarks()
-                                           .withFaceDescriptor();
+      // SENSIBILIDAD DEL DETECTOR FACIAL MEJORADA (scoreThreshold: 0.3)
+      const deteccionSelfie = await faceapi.detectSingleFace(
+                                      canvas, 
+                                      new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.3 })
+                                    )
+                                    .withFaceLandmarks()
+                                    .withFaceDescriptor();
 
       if (!deteccionSelfie) {
-        status.innerText = "❌ Rechazado: No se detecta un rostro humano claro (evite tapar la cámara o fotos al techo).";
+        status.innerText = "❌ No se detectó un rostro claro. Mire de frente a la cámara y asegure buena iluminación.";
         status.className = "text-xs text-rose-400 text-center font-semibold";
         preview.classList.add('hidden');
         fotoBase64Global = "";
         return;
       }
 
-      // 2. VALIDACIÓN ANTI-SPOOFING (DETECCIÓN DE PANTALLAS O MARCOS EN LA CAPTURA)
       const analisisPantalla = detectarPantallaOFoto(ctx, targetWidth, targetHeight, deteccionSelfie);
       if (analisisPantalla.detectado) {
-        status.innerText = `❌ Rechazado: Captura no válida. (${analisisPantalla.motivo})`;
+        status.innerText = `❌ Captura no válida (${analisisPantalla.motivo})`;
         status.className = "text-xs text-rose-400 text-center font-semibold";
         preview.classList.add('hidden');
         fotoBase64Global = "";
         sospechaFraudeGlobal = true;
-        motivoSospechaGlobal = `Ataque de Presentación / Foto a Pantalla: ${analisisPantalla.motivo}`;
+        motivoSospechaGlobal = `Anomalía en captura: ${analisisPantalla.motivo}`;
         return;
       }
 
-      // 3. COMPARAR CON FOTO MASTER (SI EXISTE)
       if (fotoMasterGuardada) {
         try {
           const imgMaster = new Image();
@@ -513,28 +504,29 @@
           imgMaster.src = fotoMasterGuardada;
           await imgMaster.decode();
 
-          const deteccionMaster = await faceapi.detectSingleFace(imgMaster, new faceapi.TinyFaceDetectorOptions())
-                                               .withFaceLandmarks()
-                                               .withFaceDescriptor();
+          const deteccionMaster = await faceapi.detectSingleFace(
+                                          imgMaster, 
+                                          new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.3 })
+                                        )
+                                       .withFaceLandmarks()
+                                       .withFaceDescriptor();
 
           if (deteccionMaster) {
             const distancia = faceapi.euclideanDistance(deteccionSelfie.descriptor, deteccionMaster.descriptor);
             const porcentajeSimilitud = Math.round((1 - distancia) * 100);
             distanciaEuclidianaGlobal = distancia.toFixed(4);
 
-            // NUEVO UMBRAL ESTRICTO DE CORTE: Máximo 0.38 de distancia
-            // (La distancia de la foto del celular era 0.4451, por lo que será automáticamente rechazada)
-            if (distancia > 0.38) {
-              status.innerText = `❌ Rechazado: Suplantación o discrepancia. No coincide con el legajo (${porcentajeSimilitud}% sim / Dist: ${distanciaEuclidianaGlobal}).`;
+            // UMBRAL AJUSTADO A 0.40 (Rechaza la pantalla de 0.445 y valida la cara real)
+            if (distancia > 0.40) {
+              status.innerText = `❌ No coincide con la foto registrada (${porcentajeSimilitud}% sim / Dist: ${distanciaEuclidianaGlobal}).`;
               status.className = "text-xs text-rose-400 text-center font-semibold";
               preview.classList.add('hidden');
               fotoBase64Global = "";
               sospechaFraudeGlobal = true;
-              motivoSospechaGlobal = `Rechazado por distancia euclidiana alta (${distanciaEuclidianaGlobal})`;
+              motivoSospechaGlobal = `Diferencia de rostro (Dist: ${distanciaEuclidianaGlobal})`;
               return;
             }
 
-            // Si la distancia es <= 0.38, se valida
             sospechaFraudeGlobal = false;
             motivoSospechaGlobal = "";
 
@@ -543,16 +535,16 @@
             status.className = "text-xs text-emerald-400 text-center font-semibold";
           } else {
             resultadoSimilitudGlobal = "MASTER_SIN_ROSTRO";
-            status.innerText = "✓ Rostro Humano OK (Master ilegible)";
+            status.innerText = "✓ Rostro Detectado (Master ilegible)";
             status.className = "text-xs text-emerald-400 text-center font-semibold";
           }
         } catch (e) {
-          console.warn("Error evaluando Foto Master:", e);
+          console.warn("Error con foto master:", e);
           resultadoSimilitudGlobal = "ERROR_EVALUACION";
         }
       } else {
         resultadoSimilitudGlobal = "SIN_MASTER";
-        status.innerText = "✓ Rostro Humano Detectado (Sin foto master de cotejo)";
+        status.innerText = "✓ Rostro Detectado (Sin foto master previa)";
         status.className = "text-xs text-emerald-400 text-center font-semibold";
       }
 
@@ -569,12 +561,12 @@
       const objetivo = document.getElementById('objetivo').value;
 
       if (!legajo || !pin || !objetivo) {
-        alert("Por favor complete su N° de Legajo, PIN de Seguridad y seleccione un Objetivo.");
+        alert("Por favor complete N° Legajo, PIN y Objetivo.");
         return;
       }
 
       if (ultimoTipoFichadaGlobal === "ENTRADA" && tipo === "ENTRADA") {
-        alert("⚠️ Acción bloqueada: Ya registraste una ENTRADA previa. No puedes volver a fichar entrada hasta registrar tu SALIDA.");
+        alert("⚠️ Acción bloqueada: Ya registraste una ENTRADA previa. Marca SALIDA para continuar.");
         const divRes = document.getElementById('resultado');
         divRes.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
         divRes.innerText = "❌ Bloqueado: Ya registraste una entrada anterior.";
@@ -585,7 +577,7 @@
       localStorage.setItem('demo_ultimo_objetivo', objetivo);
 
       if (!fotoBase64Global) {
-        alert("Primero capture una selfie válida haciendo clic en 'CAPTURAR Y VALIDAR ROSTRO'.");
+        alert("Primero capture su rostro en 'CAPTURAR Y VALIDAR ROSTRO'.");
         return;
       }
 
@@ -596,7 +588,7 @@
 
       if (!navigator.geolocation) {
         divResultado.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
-        divResultado.innerText = "❌ El dispositivo/navegador no soporta localización GPS.";
+        divResultado.innerText = "❌ El dispositivo no soporta GPS.";
         return;
       }
 
@@ -607,7 +599,7 @@
 
           if (!lat || !lng || lat === 0 || lng === 0) {
             divResultado.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
-            divResultado.innerText = "❌ No se obtuvo una coordenada GPS válida. Activa la ubicación para fichar.";
+            divResultado.innerText = "❌ GPS inválido. Activa la ubicación de tu dispositivo.";
             return;
           }
 
@@ -615,7 +607,7 @@
         },
         err => {
           divResultado.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
-          divResultado.innerText = "❌ Permiso de GPS denegado o no disponible. Activa la ubicación en tu dispositivo.";
+          divResultado.innerText = "❌ Permiso de GPS denegado. Activa la ubicación para fichar.";
         },
         { timeout: 5000, enableHighAccuracy: true }
       );
@@ -635,7 +627,6 @@
         validacionFacial: resultadoSimilitudGlobal,
         fechaHoraDispositivo: new Date().toISOString(),
         
-        // CAMPOS Y BANDERAS DE AUDITORÍA Y ANTI-SPOOFING PARA EL PANEL ADMIN / SEGUNDO PLANO
         flashAntiSpoof: true,
         distanciaEuclidiana: distanciaEuclidianaGlobal,
         alertaFraude: sospechaFraudeGlobal,
@@ -660,7 +651,7 @@
         body: JSON.stringify(datos)
       })
       .then(res => {
-        if (!res.ok) throw new Error("Error en la respuesta de Firebase");
+        if (!res.ok) throw new Error("Error en Firebase");
         return res.json();
       })
       .then(respuesta => {
@@ -671,11 +662,11 @@
           ultimoTipoFichadaGlobal = tipo;
           limpiarFormularioExitoso();
         } else {
-          throw new Error("No se pudo confirmar el guardado en Firebase.");
+          throw new Error("Sin confirmación de Firebase.");
         }
       })
       .catch(err => {
-        console.warn("Fallo al conectar con Firebase. Guardando offline automáticamente...", err);
+        console.warn("Error de red. Guardando offline...", err);
         guardarFichadaOffline(datos, tipo, legajo);
       });
     }
@@ -688,7 +679,7 @@
         if (ultimaPendiente.legajo === legajo && ultimaPendiente.tipo === tipo) {
           const divResultado = document.getElementById('resultado');
           divResultado.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
-          divResultado.innerText = `❌ Ya tienes una fichada de ${tipo} pendiente de sincronización. No puedes repetirla dos veces seguidas.`;
+          divResultado.innerText = `❌ Ya tienes una fichada de ${tipo} pendiente.`;
           return; 
         }
       }
@@ -699,7 +690,7 @@
       ultimoTipoFichadaGlobal = tipo;
       const divResultado = document.getElementById('resultado');
       divResultado.className = "p-3 rounded-xl text-xs text-center bg-amber-950 text-amber-200 border border-amber-500";
-      divResultado.innerText = `⚠️ Sin conexión. Tu fichada de ${tipo} fue guardada en el dispositivo y se enviará al recuperar internet.`;
+      divResultado.innerText = `⚠️ Sin conexión. Fichada de ${tipo} guardada en dispositivo. Se enviará al recuperar red.`;
 
       limpiarFormularioExitoso();
     }
@@ -749,14 +740,14 @@
       .then(res => res.json())
       .then(respuesta => {
         estaSincronizando = false;
-        console.log("🔄 Fichada pendiente sincronizada con Firebase.");
+        console.log("🔄 Fichada pendiente sincronizada.");
         
         if (pendientes.length > 0) {
           sincronizarFichadasPendientes();
         }
       })
       .catch(err => {
-        console.error("Error al sincronizar fichada pendiente, devolviéndola a la cola...", err);
+        console.error("Error sincronizando, se reintentará luego...", err);
         let actualizadas = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
         actualizadas.unshift(datos);
         localStorage.setItem('fichadas_pendientes', JSON.stringify(actualizadas));
