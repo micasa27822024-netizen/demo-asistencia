@@ -542,7 +542,7 @@
     }
 
     // 🚨 EJECUCIÓN DE LA ALERTA DE PÁNICO CORREGIDA
-    function dispararAlertaPanico() {
+    async function dispararAlertaPanico() {
       const legajo = sessionStorage.getItem('vigilador_legajo');
       const nombreVigilador = sessionStorage.getItem('vigilador_nombre') || `Legajo ${legajo}`;
 
@@ -569,48 +569,47 @@
         return;
       }
 
-      if (!navigator.geolocation) {
-        alert("Tu dispositivo no soporta geolocalización.");
-        return;
+      // Obtención de geolocalización o envío con respaldo ante fallas del GPS
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(async (position) => {
+          await enviarDatosPanicoFirebase(legajo, nombreVigilador, objetivoActual, position.coords.latitude, position.coords.longitude);
+        }, async (error) => {
+          // Si falla el GPS igual enviamos el pánico sin coordenadas
+          await enviarDatosPanicoFirebase(legajo, nombreVigilador, objetivoActual, null, null);
+        }, { timeout: 10000, enableHighAccuracy: true });
+      } else {
+        await enviarDatosPanicoFirebase(legajo, nombreVigilador, objetivoActual, null, null);
       }
+    }
 
-      navigator.geolocation.getCurrentPosition(
-        function(position) {
-          const lat = position.coords.latitude;
-          const lon = position.coords.longitude;
+    async function enviarDatosPanicoFirebase(legajo, nombreVigilador, objetivoActual, lat, lon) {
+      const fechaActualIso = new Date().toISOString(); // Formato estándar de fecha y hora exacta
 
-          // Payload estandarizado con campos clave para el panel admin
-          const payloadPanico = {
-            tipo: "PANICO",
-            legajo: String(legajo),
-            nombre: nombreVigilador,
-            objetivo: objetivoActual,
-            latitud: lat,
-            longitud: lon,
-            mapa: `https://www.google.com/maps?q=${lat},${lon}`,
-            fechaHoraDispositivo: new Date().toISOString(),
-            estado: "PENDIENTE",
-            atendido: false
-          };
+      const payloadPanico = {
+        tipo: "PANICO",
+        legajo: String(legajo),
+        nombre: nombreVigilador,
+        objetivo: objetivoActual,
+        fechaHora: fechaActualIso,      // <-- Clave unificada para la fecha y hora exacta leída por el admin
+        timestamp: Date.now(),          // <-- Respaldado en milisegundos numéricos
+        latitud: lat,
+        longitud: lon,
+        mapa: (lat && lon) ? `https://www.google.com/maps?q=${lat},${lon}` : '',
+        estado: "PENDIENTE",
+        atendido: false
+      };
 
-          fetch(`${URL_FIREBASE}/panicos.json`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payloadPanico)
-          })
-          .then(res => res.json())
-          .then(() => {
-            alert("🚨 ¡ALERTA DE PÁNICO ENVIADA A LA CENTRAL. EL PERSONAL OPERATIVO HA SIDO NOTIFICADO!");
-          })
-          .catch(error => {
-            alert("Error al enviar alerta de pánico: " + error.toString());
-          });
-        },
-        function(error) {
-          alert("Error: Es obligatorio permitir el acceso al GPS para activar la alerta de pánico.");
-        },
-        { enableHighAccuracy: true }
-      );
+      try {
+        await fetch(`${URL_FIREBASE}/panicos.json`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payloadPanico)
+        });
+        alert("🚨 ¡ALERTA DE PÁNICO ENVIADA A LA CENTRAL. EL PERSONAL OPERATIVO HA SIDO NOTIFICADO!");
+      } catch (e) {
+        console.error("Error al enviar pánico:", e);
+        alert("Error al enviar alerta de pánico: " + e.toString());
+      }
     }
 
     // 📝 ENVÍO DE NOVEDAD A FIREBASE
