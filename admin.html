@@ -103,6 +103,9 @@
       <button id="tabBtnNovedades" onclick="cambiarTab('novedades')" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
         <i class="fa-solid fa-triangle-exclamation"></i> Novedades / Incidencias
       </button>
+      <button id="tabBtnPanicos" onclick="cambiarTab('panicos')" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
+        <i class="fa-solid fa-bell text-rose-400"></i> Pánicos
+      </button>
       <button id="tabBtnPersonal" onclick="cambiarTab('personal')" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
         <i class="fa-solid fa-id-card"></i> Personal / PINs
       </button>
@@ -209,6 +212,39 @@
       </div>
     </div>
 
+    <!-- TAB NUEVA: PÁNICOS -->
+    <div id="tabPanicos" class="hidden space-y-4">
+      <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 flex justify-between items-center">
+        <div>
+          <h3 class="text-lg font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-triangle-exclamation text-rose-500"></i> Historial de Alertas de Pánico
+          </h3>
+          <p class="text-xs text-slate-400 mt-1">Registro de todas las alertas emitidas por el personal operativo</p>
+        </div>
+      </div>
+
+      <div class="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm text-slate-300">
+            <thead class="bg-slate-950 text-slate-400 uppercase text-xs border-b border-slate-700">
+              <tr>
+                <th class="p-4">Fecha y Hora</th>
+                <th class="p-4">Legajo</th>
+                <th class="p-4">Nombre</th>
+                <th class="p-4">Objetivo</th>
+                <th class="p-4 text-center">Estado</th>
+                <th class="p-4 text-center">Ubicación GPS</th>
+                <th class="p-4 text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="cuerpoTablaPanicos" class="divide-y divide-slate-700/50">
+              <tr><td colspan="7" class="p-8 text-center text-slate-400">Cargando registros de pánico...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- TAB 3: PERSONAL -->
     <div id="tabPersonal" class="hidden space-y-6">
       <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
@@ -302,9 +338,9 @@
 
   </div>
 
-  <!-- MODAL DE ALERTA DE PÁNICO DE EMERGENCIA CRÍTICA -->
+  <!-- MODAL DE ALERTA DE PÁNICO DE EMERGENCIA CRÍTICA (ESTÁTICO PARA FACILITAR LECTURA Y CLICS) -->
   <div id="modalPanicoAdmin" class="fixed inset-0 bg-rose-950/90 backdrop-blur-md hidden flex items-center justify-center p-4 z-50">
-    <div class="bg-slate-900 border-2 border-rose-500 rounded-2xl p-6 max-w-md w-full text-center space-y-5 shadow-2xl animate-bounce">
+    <div class="bg-slate-900 border-2 border-rose-500 rounded-2xl p-6 max-w-md w-full text-center space-y-5 shadow-2xl">
       <div class="w-20 h-20 bg-rose-600 text-white rounded-full flex items-center justify-center mx-auto text-3xl animate-pulse shadow-lg shadow-rose-600/50">
         <i class="fa-solid fa-triangle-exclamation"></i>
       </div>
@@ -321,7 +357,7 @@
         </a>
       </div>
 
-      <button onclick="apagarAlertaPanico()" class="w-full bg-rose-600 hover:bg-rose-500 text-white font-black py-3.5 rounded-xl text-base transition shadow-xl flex items-center justify-center gap-2">
+      <button onclick="apagarAlertaPanico()" class="w-full bg-rose-600 hover:bg-rose-500 text-white font-black py-3.5 rounded-xl text-base transition shadow-xl flex items-center justify-center gap-2 cursor-pointer">
         <i class="fa-solid fa-volume-xmark text-xl"></i> APAGAR ALARMA / ATENDER
       </button>
     </div>
@@ -464,6 +500,7 @@
 
     let datosMarcaciones = [];
     let datosNovedades = [];
+    let datosPanicos = [];
     let datosFiltradosNovedades = [];
     let datosFiltradosMarcaciones = [];
     let datosPersonal = [];
@@ -588,6 +625,7 @@
           console.error("Error resolviendo pánico en Firebase:", e);
         }
         panicoActivoActualId = null;
+        recargarDatosEfectivo();
       }
     }
 
@@ -636,11 +674,13 @@
     function cambiarTab(tab) {
       document.getElementById('tabMarcaciones').classList.add('hidden');
       document.getElementById('tabNovedades').classList.add('hidden');
+      document.getElementById('tabPanicos').classList.add('hidden');
       document.getElementById('tabPersonal').classList.add('hidden');
       document.getElementById('tabObjetivos').classList.add('hidden');
 
       document.getElementById('tabBtnMarcaciones').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
       document.getElementById('tabBtnNovedades').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
+      document.getElementById('tabBtnPanicos').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
       document.getElementById('tabBtnPersonal').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
       document.getElementById('tabBtnObjetivos').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
 
@@ -650,6 +690,9 @@
       } else if (tab === 'novedades') {
         document.getElementById('tabNovedades').classList.remove('hidden');
         document.getElementById('tabBtnNovedades').className = "px-5 py-3 font-semibold text-sm border-b-2 border-amber-500 text-amber-400 flex items-center gap-2 transition";
+      } else if (tab === 'panicos') {
+        document.getElementById('tabPanicos').classList.remove('hidden');
+        document.getElementById('tabBtnPanicos').className = "px-5 py-3 font-semibold text-sm border-b-2 border-rose-500 text-rose-400 flex items-center gap-2 transition";
       } else if (tab === 'personal') {
         document.getElementById('tabPersonal').classList.remove('hidden');
         document.getElementById('tabBtnPersonal').className = "px-5 py-3 font-semibold text-sm border-b-2 border-amber-500 text-amber-400 flex items-center gap-2 transition";
@@ -747,7 +790,31 @@
         }
         filtrarTablaNovedades();
 
-        // 4. Cargar Objetivos
+        // 4. Cargar Pánicos
+        const resPanicos = await fetch(`${URL_FIREBASE}/panicos.json`);
+        const dataPanicos = await resPanicos.json();
+        datosPanicos = [];
+        if (dataPanicos) {
+          Object.keys(dataPanicos).forEach(id => {
+            const d = dataPanicos[id];
+            if (d) {
+              const fecha = d.fechaHora || d.timestamp || '';
+              const mapaUrl = (d.latitud && d.longitud) ? `https://maps.google.com/?q=${d.latitud},${d.longitud}` : '';
+              datosPanicos.push([
+                id,
+                fecha,
+                d.legajo ? String(d.legajo) : '',
+                d.nombre || '',
+                d.objetivo || '',
+                d.estado || 'PENDIENTE',
+                mapaUrl
+              ]);
+            }
+          });
+        }
+        renderizarTablaPanicos(datosPanicos);
+
+        // 5. Cargar Objetivos
         const resObjetivos = await fetch(`${URL_FIREBASE}/objetivos.json`);
         const dataObjetivos = await resObjetivos.json();
         datosObjetivos = [];
@@ -1022,6 +1089,68 @@
         `;
         cuerpo.appendChild(tr);
       });
+    }
+
+    function renderizarTablaPanicos(registros) {
+      const cuerpo = document.getElementById('cuerpoTablaPanicos');
+      cuerpo.innerHTML = "";
+
+      if (!registros || registros.length === 0) {
+        cuerpo.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-400">No hay alertas de pánico registradas.</td></tr>`;
+        return;
+      }
+
+      const ordenados = [...registros].reverse();
+
+      ordenados.forEach(fila => {
+        const id = fila[0];
+        const fecha = fila[1] ? new Date(fila[1]).toLocaleString('es-AR', { hour12: false }) : '-';
+        const legajo = fila[2] || '-';
+        const nombre = fila[3] || '-';
+        const objetivo = fila[4] || '-';
+        const estado = fila[5] || 'PENDIENTE';
+        const urlMapa = fila[6] || '';
+
+        const badgeEstado = estado === 'ATENDIDO' 
+          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+          : 'bg-rose-500/10 text-rose-400 border-rose-500/20 animate-pulse';
+
+        const btnMapa = (urlMapa && urlMapa.includes('http'))
+          ? `<a href="${urlMapa}" target="_blank" class="inline-flex items-center gap-1 bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
+              <i class="fa-solid fa-map-location-dot"></i> Mapa
+             </a>`
+          : `<span class="text-xs text-slate-500">Sin GPS</span>`;
+
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-700/30 transition";
+        tr.innerHTML = `
+          <td class="p-4 font-mono text-xs text-slate-300">${fecha}</td>
+          <td class="p-4 font-semibold text-white">${legajo}</td>
+          <td class="p-4 font-medium text-slate-200">${nombre}</td>
+          <td class="p-4 text-slate-400">${objetivo}</td>
+          <td class="p-4 text-center">
+            <span class="inline-block px-2.5 py-1 rounded-full text-xs font-bold border ${badgeEstado}">${estado}</span>
+          </td>
+          <td class="p-4 text-center">${btnMapa}</td>
+          <td class="p-4 text-center">
+            <button onclick="eliminarPanico('${id}')" class="bg-rose-600/20 text-rose-400 hover:bg-rose-600/40 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1">
+              <i class="fa-solid fa-trash"></i> Borrar
+            </button>
+          </td>
+        `;
+        cuerpo.appendChild(tr);
+      });
+    }
+
+    async function eliminarPanico(id) {
+      if (!confirm("¿Está seguro de que desea eliminar este registro de pánico?")) return;
+      try {
+        await fetch(`${URL_FIREBASE}/panicos/${id}.json`, { method: "DELETE" });
+        alert("Registro de pánico eliminado.");
+        recargarDatosEfectivo();
+      } catch (e) {
+        alert("Error al eliminar el registro: " + e.toString());
+      }
     }
 
     function filtrarTablaNovedades() {
