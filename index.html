@@ -3,836 +3,826 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Demo Asistencia - Control de Asistencia</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <title>Radio 88.1 FM - Gloria de Dios</title>
   
-  <!-- LIBRERÍA FACE-API.JS COMPLETA Y ESTABLE -->
-  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+  <!-- Iconos de FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body, html {
+      height: 100%;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      overflow: hidden;
+      color: #ffffff;
+    }
+
+    /* Fondo por defecto para celulares */
+    .background-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: url('fondo.jpg') no-repeat center center/cover;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px;
+    }
+
+    @media (min-width: 768px) {
+      .background-container {
+        background-image: url('fondo-pc.jpg');
+      }
+    }
+
+    .overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.25);
+      z-index: 1;
+    }
+
+    .content {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Barra Superior */
+    .top-bar {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .live-badge {
+      background: rgba(220, 38, 38, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 800;
+      letter-spacing: 1px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-transform: uppercase;
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      background-color: #ffffff;
+      border-radius: 50%;
+      box-shadow: 0 0 0 rgba(255, 255, 255, 0.7);
+      animation: pulse 1.6s infinite;
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7); }
+      70% { box-shadow: 0 0 0 10px rgba(255, 255, 255, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+    }
+
+    .top-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .btn-top {
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      color: white;
+      height: 40px;
+      padding: 0 12px;
+      border-radius: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      gap: 6px;
+      transition: transform 0.2s, background 0.2s;
+    }
+
+    .btn-top:hover {
+      transform: scale(1.05);
+      background: rgba(255, 255, 255, 0.35);
+    }
+
+    /* Tarjeta de Versículo Rotativo */
+    .verse-card {
+      background: rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 15px;
+      padding: 10px 16px;
+      max-width: 90%;
+      text-align: center;
+      margin-top: 15px;
+      transition: opacity 0.5s ease-in-out;
+    }
+
+    .verse-text {
+      font-size: 0.85rem;
+      font-style: italic;
+      color: #f3f4f6;
+    }
+
+    .verse-ref {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #f59e0b;
+      margin-top: 3px;
+    }
+
+    /* Reproductor */
+    .player-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-top: auto;
+      margin-bottom: 15px;
+      gap: 12px;
+    }
+
+    .btn-play {
+      width: 85px;
+      height: 85px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      border: 4px solid rgba(255, 255, 255, 0.9);
+      box-shadow: 0 0 25px rgba(245, 158, 11, 0.7);
+      color: white;
+      font-size: 2.2rem;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      padding-left: 5px;
+    }
+
+    .btn-play.playing {
+      padding-left: 0;
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      box-shadow: 0 0 25px rgba(239, 68, 68, 0.7);
+    }
+
+    .volume-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(6px);
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .volume-slider {
+      -webkit-appearance: none;
+      width: 75px;
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.4);
+      outline: none;
+    }
+
+    .volume-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #ffffff;
+      cursor: pointer;
+    }
+
+    /* Pie de Página */
+    .footer-section {
+      width: 100%;
+      max-width: 600px;
+      text-align: center;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(10px);
+      padding: 15px 10px 20px 10px;
+      border-radius: 20px 20px 0 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .footer-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .footer-subtitle {
+      font-size: 0.8rem;
+      color: #e5e7eb;
+      margin-bottom: 12px;
+    }
+
+    .social-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .social-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      font-size: 1.3rem;
+      text-decoration: none;
+      transition: transform 0.2s, filter 0.2s;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+
+    .facebook { background-color: #1877f2; }
+    .whatsapp { background-color: #25d366; }
+    .oracion  { background-color: #f59e0b; }
+    .youtube  { background-color: #ff0000; }
+
+    /* Modales */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(8px);
+      z-index: 10;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .modal-content {
+      background: #121824;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 16px;
+      padding: 20px;
+      max-width: 440px;
+      width: 100%;
+      color: #fff;
+      max-height: 85vh;
+      overflow-y: auto;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      padding-bottom: 10px;
+      margin-bottom: 15px;
+    }
+
+    .schedule-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px dashed rgba(255,255,255,0.1);
+    }
+
+    .schedule-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .schedule-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #ffffff;
+    }
+
+    .schedule-days {
+      font-size: 0.75rem;
+      color: #9ca3af;
+    }
+
+    .schedule-time {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #f59e0b;
+      white-space: nowrap;
+    }
+
+    /* Banner & Estilos Prédicas */
+    .yt-banner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(185, 28, 28, 0.45));
+      border: 1px solid rgba(239, 68, 68, 0.5);
+      padding: 12px;
+      border-radius: 12px;
+      color: white;
+      text-decoration: none;
+      transition: transform 0.2s, background 0.2s;
+      margin-bottom: 15px;
+    }
+
+    .yt-banner:hover {
+      transform: scale(1.02);
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.35), rgba(185, 28, 28, 0.6));
+    }
+
+    .yt-banner i.fa-satellite-dish {
+      font-size: 1.5rem;
+      color: #ef4444;
+    }
+
+    .yt-banner strong {
+      display: block;
+      font-size: 0.88rem;
+    }
+
+    .yt-banner p {
+      font-size: 0.75rem;
+      color: #d1d5db;
+    }
+
+    .btn-action-sm {
+      background: #f59e0b;
+      color: #000;
+      border: none;
+      padding: 6px 10px;
+      border-radius: 12px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      text-decoration: none;
+      transition: transform 0.2s, background 0.2s;
+    }
+
+    .btn-action-sm:hover {
+      background: #d97706;
+      color: #fff;
+      transform: scale(1.05);
+    }
+
+    .video-container {
+      display: none;
+      position: relative;
+      padding-bottom: 56.25%;
+      height: 0;
+      overflow: hidden;
+      border-radius: 12px;
+      margin-top: 15px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .video-container iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+  </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
+<body>
 
-  <!-- ENCABEZADO Y MENÚ CORPORATIVO -->
-  <header class="bg-slate-900 border-b border-slate-800 shadow-md mb-4">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-4">
-      
-      <div class="flex items-center space-x-3">
-        <div class="w-10 h-10 bg-slate-800 border border-emerald-500/30 rounded-xl flex items-center justify-center overflow-hidden shadow-inner p-1">
-          <i class="fa-solid fa-shield-halved text-white text-lg"></i>
+  <div class="background-container">
+    <div class="overlay"></div>
+
+    <div class="content">
+      <!-- Barra Superior -->
+      <div class="top-bar">
+        <div class="live-badge">
+          <div class="pulse-dot"></div>
+          <span>En Vivo</span>
         </div>
-        <div>
-          <span class="text-[10px] font-extrabold tracking-widest text-emerald-400 uppercase block">Demo Asistencia</span>
-          <h1 class="text-lg font-bold text-white tracking-wide">Fichadas</h1>
-        </div>
-      </div>
 
-      <nav class="flex flex-wrap justify-center items-center gap-1 bg-slate-800/80 p-1.5 rounded-xl border border-slate-700/60">
-        <a href="index.html" class="px-3 py-1.5 text-xs font-medium text-white bg-slate-700 rounded-lg transition flex items-center space-x-1.5 shadow-sm">
-          <i class="fa-solid fa-camera-retro text-emerald-400"></i>
-          <span>Fichadas</span>
-        </a>
-        <a href="admin.html" class="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition flex items-center space-x-1.5">
-          <i class="fa-solid fa-building-shield text-emerald-400"></i>
-          <span>Centro de Operaciones</span>
-        </a>
-        <a href="panel.html" class="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition flex items-center space-x-1.5">
-          <i class="fa-solid fa-chart-line text-emerald-400"></i>
-          <span>Control en Tiempo Real</span>
-        </a>
-        <a href="mis-horas.html" class="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition flex items-center space-x-1.5">
-          <i class="fa-solid fa-clock text-emerald-400"></i>
-          <span>Control de Mis Horas</span>
-        </a>
-      </nav>
+        <div class="top-actions">
+          <!-- Temporizador -->
+          <button class="btn-top" onclick="cycleTimer()" id="timerBtn" title="Temporizador de apagado">
+            <i class="fa-solid fa-clock"></i>
+            <span id="timerLabel">Off</span>
+          </button>
 
-    </div>
-  </header>
+          <!-- Horarios -->
+          <button class="btn-top" onclick="toggleModal('scheduleModal', true)" title="Programación">
+            <i class="fa-solid fa-calendar-days"></i>
+          </button>
 
-  <!-- CONTENEDOR PRINCIPAL DE FICHAJE -->
-  <main class="flex-grow flex items-center justify-center p-4">
-    <div class="w-full max-w-md bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 p-6 space-y-4">
-      <div class="flex justify-between items-center">
-        <h2 class="text-xl font-bold text-white tracking-wide uppercase">Registro de Asistencia</h2>
-        <span id="estadoRed" class="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-500/30">🟢 Online</span>
-      </div>
+          <!-- Prédicas y YouTube -->
+          <button class="btn-top" onclick="toggleModal('podcastsModal', true)" title="Prédicas y Transmisiones">
+            <i class="fa-brands fa-youtube" style="color: #ff4d4d;"></i>
+            <span>Prédicas</span>
+          </button>
 
-      <!-- LEGAJO Y VALIDACIÓN -->
-      <div>
-        <label class="block text-xs uppercase text-slate-400 mb-1">N° Legajo</label>
-        <div class="relative">
-          <input type="text" id="legajo" onblur="validarLegajo()" placeholder="Ingrese su legajo (ej: 0286)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500">
-          <button type="button" onclick="validarLegajo()" class="absolute right-2 top-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs px-2 py-1 rounded">
-            <i class="fa-solid fa-magnifying-glass"></i>
+          <!-- App -->
+          <a href="https://www.appcreator24.com/app4188732-4ujkte" target="_blank" class="btn-top" title="Descargar App">
+            <i class="fa-solid fa-mobile-screen-button"></i>
+          </a>
+
+          <!-- Compartir -->
+          <button class="btn-top" onclick="shareWebsite()" title="Compartir">
+            <i class="fa-solid fa-share-nodes"></i>
           </button>
         </div>
-        <p id="legajo-status" class="text-xs mt-1 hidden"></p>
-        <p id="ultimo-estado-badge" class="text-xs mt-1.5 font-semibold hidden"></p>
       </div>
 
-      <!-- NOMBRE -->
-      <div>
-        <label class="block text-xs uppercase text-slate-400 mb-1">Nombre Completo</label>
-        <input type="text" id="nombre" readonly placeholder="Se autocompletará con su legajo" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-slate-400 cursor-not-allowed">
+      <!-- Versículo Bíblico Diario -->
+      <div class="verse-card">
+        <div class="verse-text" id="verseText"></div>
+        <div class="verse-ref" id="verseRef"></div>
       </div>
 
-      <!-- PIN DE SEGURIDAD -->
-      <div>
-        <label class="block text-xs uppercase text-slate-400 mb-1">PIN / Clave de Personal</label>
-        <input type="password" id="pin" maxlength="6" placeholder="****" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500">
-      </div>
-
-      <!-- OBJETIVO / PUESTO -->
-      <div>
-        <label class="block text-xs uppercase text-slate-400 mb-1">Objetivo / Puesto</label>
-        <select id="objetivo" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500">
-          <option value="">Cargando objetivos...</option>
-        </select>
-      </div>
-
-      <!-- CÁMARA Y RECONOCIMIENTO FACIAL -->
-      <div class="space-y-2">
-        <label class="block text-xs uppercase text-slate-400">Validación Facial IA</label>
-        <div class="relative w-full h-48 bg-slate-950 rounded-lg overflow-hidden border border-slate-700 flex items-center justify-center">
-          <video id="webcam" autoplay playsinline class="w-full h-full object-cover -scale-x-100"></video>
-          <canvas id="canvas" class="hidden"></canvas>
-          <img id="preview" class="w-full h-full object-cover -scale-x-100 hidden absolute inset-0 border-2 border-emerald-500">
-        </div>
-        <button type="button" id="btnCapturar" onclick="capturarFoto()" class="w-full bg-amber-600 hover:bg-amber-500 text-xs py-2 rounded-lg font-bold transition flex items-center justify-center gap-2">
-          <i class="fa-solid fa-camera"></i> CAPTURAR Y VALIDAR ROSTRO
+      <!-- Reproductor -->
+      <div class="player-container">
+        <button class="btn-play" id="playBtn" onclick="toggleAudio()">
+          <i class="fa-solid fa-play" id="playIcon"></i>
         </button>
-        <p id="foto-status" class="text-xs text-rose-400 text-center font-semibold">⚠️ Foto no capturada</p>
+
+        <div class="volume-container">
+          <i class="fa-solid fa-volume-high" id="volIcon" onclick="toggleMute()" style="cursor:pointer; font-size: 0.9rem;"></i>
+          <input type="range" class="volume-slider" id="volSlider" min="0" max="1" step="0.05" value="1" oninput="setVolume(this.value)">
+        </div>
       </div>
 
-      <!-- BOTONES DE ENVÍO -->
-      <div class="grid grid-cols-2 gap-4 pt-2">
-        <button onclick="procesarEnvio('ENTRADA')" class="bg-emerald-600 hover:bg-emerald-500 font-bold py-3 rounded-xl transition">ENTRADA</button>
-        <button onclick="procesarEnvio('SALIDA')" class="bg-rose-600 hover:bg-rose-500 font-bold py-3 rounded-xl transition">SALIDA</button>
-      </div>
+      <audio id="radioStream" preload="none"></audio>
 
-      <div id="resultado" class="hidden p-3 rounded-xl text-xs text-center"></div>
+      <!-- Pie de página -->
+      <div class="footer-section">
+        <div class="footer-title">¡Mándanos un mensaje!</div>
+        <div class="footer-subtitle">Y seguinos en las redes sociales</div>
+
+        <div class="social-buttons">
+          <a href="https://www.facebook.com/ptordaniel" target="_blank" class="social-btn facebook" title="Facebook">
+            <i class="fa-brands fa-facebook-f"></i>
+          </a>
+          
+          <a href="https://wa.me/5493416948385?text=Hola%20Radio%2088.1%20FM,%20quiero%20mandar%20un%20saludo" target="_blank" class="social-btn whatsapp" title="WhatsApp">
+            <i class="fa-brands fa-whatsapp"></i>
+          </a>
+
+          <a href="https://wa.me/5493416948385?text=Hola%20Radio%2088.1%20FM,%20quisiera%20dejar%20una%20petición%20de%20oración:" target="_blank" class="social-btn oracion" title="Pedir Oración">
+            <i class="fa-solid fa-hands-praying"></i>
+          </a>
+
+          <a href="https://www.youtube.com/@iglesiamontedesantidad6232" target="_blank" class="social-btn youtube" title="YouTube">
+            <i class="fa-brands fa-youtube"></i>
+          </a>
+        </div>
+      </div>
     </div>
-  </main>
+  </div>
+
+  <!-- Modal de Programación -->
+  <div class="modal" id="scheduleModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 style="font-size: 1.1rem; color: #f59e0b;"><i class="fa-solid fa-radio"></i> Programación</h3>
+        <i class="fa-solid fa-xmark" style="cursor: pointer; font-size: 1.2rem;" onclick="toggleModal('scheduleModal', false)"></i>
+      </div>
+      
+      <div class="schedule-item">
+        <div class="schedule-info">
+          <span class="schedule-title">Caminando en Libertad</span>
+          <span class="schedule-days">Lunes, Miércoles y Viernes</span>
+        </div>
+        <span class="schedule-time">10:00 - 12:00</span>
+      </div>
+
+      <div class="schedule-item">
+        <div class="schedule-info">
+          <span class="schedule-title">Transformando tu Vida</span>
+          <span class="schedule-days">Jueves</span>
+        </div>
+        <span class="schedule-time">09:00 - 11:00</span>
+      </div>
+
+      <div class="schedule-item">
+        <div class="schedule-info">
+          <span class="schedule-title">Conectados</span>
+          <span class="schedule-days">Miércoles</span>
+        </div>
+        <span class="schedule-time">18:00 - 20:00</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Prédicas y Transmisiones -->
+  <div class="modal" id="podcastsModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 style="font-size: 1.1rem; color: #f59e0b;">
+          <i class="fa-brands fa-youtube" style="color: #ff4d4d;"></i> Prédicas y Mensajes
+        </h3>
+        <i class="fa-solid fa-xmark" style="cursor: pointer; font-size: 1.2rem;" onclick="closePodcastsModal()"></i>
+      </div>
+
+      <!-- Banner de Canal Oficial -->
+      <a href="https://www.youtube.com/@iglesiamontedesantidad6232/streams" target="_blank" onclick="pauseAudio()" class="yt-banner">
+        <i class="fa-solid fa-satellite-dish"></i>
+        <div>
+          <strong>Canal Oficial de Transmisiones</strong>
+          <p>Ver cultos en vivo y grabado en YouTube</p>
+        </div>
+        <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.8rem; margin-left: auto;"></i>
+      </a>
+
+      <!-- Contenedor del Reproductor de Video Integrado -->
+      <div class="video-container" id="videoBox">
+        <iframe id="ytPlayer" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+      </div>
+
+      <div style="margin-top: 15px; font-size: 0.8rem; font-weight: 700; color: #9ca3af; text-transform: uppercase;">
+        Últimas Reuniones
+      </div>
+
+      <!-- Lista de Prédicas -->
+      <div class="schedule-item">
+        <div class="schedule-info">
+          <span class="schedule-title">Domingo - Día del Señor</span>
+          <span class="schedule-days">Reunión Principal & Adoración</span>
+        </div>
+        <a href="https://www.youtube.com/@iglesiamontedesantidad6232/streams" target="_blank" onclick="pauseAudio()" class="btn-action-sm">
+          <i class="fa-solid fa-play"></i> Ver
+        </a>
+      </div>
+
+      <div class="schedule-item">
+        <div class="schedule-info">
+          <span class="schedule-title">Oración por las Familias</span>
+          <span class="schedule-days">Martes de Clamor e Intercesión</span>
+        </div>
+        <a href="https://www.youtube.com/@iglesiamontedesantidad6232/streams" target="_blank" onclick="pauseAudio()" class="btn-action-sm">
+          <i class="fa-solid fa-play"></i> Ver
+        </a>
+      </div>
+
+      <div class="schedule-item">
+        <div class="schedule-info">
+          <span class="schedule-title">Noche de Liberación y Milagros</span>
+          <span class="schedule-days">Sábados de Fe & Poder</span>
+        </div>
+        <a href="https://www.youtube.com/@iglesiamontedesantidad6232/streams" target="_blank" onclick="pauseAudio()" class="btn-action-sm">
+          <i class="fa-solid fa-play"></i> Ver
+        </a>
+      </div>
+
+      <div class="schedule-item">
+        <div class="schedule-info">
+          <span class="schedule-title">Estudio Bíblico & Discipulado</span>
+          <span class="schedule-days">Jueves de Enseñanza</span>
+        </div>
+        <a href="https://www.youtube.com/@iglesiamontedesantidad6232/streams" target="_blank" onclick="pauseAudio()" class="btn-action-sm">
+          <i class="fa-solid fa-play"></i> Ver
+        </a>
+      </div>
+    </div>
+  </div>
 
   <script>
-    const URL_FIREBASE = "https://fir-asistencia-fad12-default-rtdb.firebaseio.com";
-    
-    let fotoBase64Global = "";
-    let estaSincronizando = false;
-    let ultimoTipoFichadaGlobal = "";
-    let fotoMasterGuardada = null;
-    let imagenMasterCacheDecodificada = null; // 🚀 CACHÉ EN MEMORIA PARA EVITAR DESCARGAS RED REPETIDAS
-    let modelosCargados = false;
-    let resultadoSimilitudGlobal = "NO_EVALUADO";
-    let sospechaFraudeGlobal = false;
-    let motivoSospechaGlobal = "";
+    const streamUrl = "https://stream.zeno.fm/ggq0ed8yus8uv.mp3";
+    const shareUrl = "https://www.appcreator24.com/app4188732-4ujkte";
+    const audio = document.getElementById('radioStream');
+    const playBtn = document.getElementById('playBtn');
+    const playIcon = document.getElementById('playIcon');
+    const volSlider = document.getElementById('volSlider');
+    const volIcon = document.getElementById('volIcon');
 
-    window.onload = async function() {
-      iniciarCamaraSegura();
-      cargarObjetivos();
-      actualizarEstadoRed();
-      cargarModelosIA();
+    let timerTimeout = null;
+    let timerMinutes = 0;
+    let isUserPaused = true;
+    let isReconnecting = false;
 
-      if (navigator.onLine) {
-        sincronizarFichadasPendientes();
-      }
-    };
+    // Colección de versículos para rotación diaria
+    const verses = [
+      { text: '"El Señor es mi pastor; nada me faltará."', ref: "Salmos 23:1" },
+      { text: '"Todo lo puedo en Cristo que me fortalece."', ref: "Filipenses 4:13" },
+      { text: '"Porque yo sé los pensamientos que tengo acerca de vosotros..."', ref: "Jeremías 29:11" },
+      { text: '"Clama a mí, y yo te responderé, y te enseñaré cosas grandes..."', ref: "Jeremías 33:3" }
+    ];
 
-    // CARGAR MODELOS DESDE LA CARPETA LOCAL /models
-    async function cargarModelosIA() {
-      const status = document.getElementById('foto-status');
-      status.innerText = "⏳ Cargando modelos de Inteligencia Artificial...";
-      status.className = "text-xs text-amber-400 text-center font-semibold";
-      
-      try {
-        const MODEL_URL = './models';
+    function setDailyVerse() {
+      const now = new Date();
+      const currentDay = Math.floor(now.getTime() / (1000 * 60 * 60 * 24));
+      const verseIndex = currentDay % verses.length;
 
-        await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-        await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
-        await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
-
-        modelosCargados = true;
-        status.innerText = "⚠️ Foto no capturada (IA Lista)";
-        status.className = "text-xs text-rose-400 text-center font-semibold";
-        console.log("✅ Modelos de IA cargados con éxito desde la carpeta local.");
-      } catch (err) {
-        console.error("Error al cargar modelos de la IA:", err);
-        modelosCargados = false;
-        status.innerText = "⚠️ Modo IA no disponible (Error al cargar modelos)";
-        status.className = "text-xs text-amber-400 text-center font-semibold";
-      }
+      document.getElementById('verseText').innerText = verses[verseIndex].text;
+      document.getElementById('verseRef').innerText = verses[verseIndex].ref;
     }
 
-    window.addEventListener('online', () => {
-      actualizarEstadoRed();
-      sincronizarFichadasPendientes();
-    });
-    
-    window.addEventListener('offline', actualizarEstadoRed);
+    setDailyVerse();
 
-    function iniciarCamaraSegura() {
-      const status = document.getElementById('foto-status');
-      
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
-          .then(stream => { 
-            document.getElementById('webcam').srcObject = stream; 
-          })
-          .catch(err => {
-            console.warn("No se pudo iniciar la cámara automáticamente: ", err);
-            status.innerText = "⚠️ Cámara pausada o sin permisos (pulse Capturar Foto)";
-          });
-      } else {
-        status.innerText = "⚠️ Su navegador no soporta el acceso a la cámara";
-      }
-    }
-
-    function actualizarEstadoRed() {
-      const indicador = document.getElementById('estadoRed');
-      if (!indicador) return;
-      if (navigator.onLine) {
-        indicador.className = "text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-500/30";
-        indicador.innerText = "🟢 Online";
-      } else {
-        indicador.className = "text-[11px] font-semibold px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-500/30";
-        indicador.innerText = "⚠️ Modo Offline";
-      }
-    }
-
-    function cargarObjetivos() {
-      const selectObj = document.getElementById('objetivo');
-      let objetivosGuardados = JSON.parse(localStorage.getItem('demo_lista_objetivos') || '[]');
-
-      if (objetivosGuardados.length > 0) {
-        poblarSelectObjetivos(objetivosGuardados);
-      }
-
-      if (navigator.onLine) {
-        fetch(`${URL_FIREBASE}/objetivos.json`)
-          .then(res => res.json())
-          .then(data => {
-            if (data) {
-              let listaNuevos = [];
-              Object.values(data).forEach(item => {
-                const nombreObj = item.nombre || item.codigo;
-                if (nombreObj) listaNuevos.push(nombreObj);
-              });
-              
-              if (listaNuevos.length > 0) {
-                localStorage.setItem('demo_lista_objetivos', JSON.stringify(listaNuevos));
-                poblarSelectObjetivos(listaNuevos);
-              }
-            }
-          })
-          .catch(err => console.warn("No se pudieron actualizar los objetivos desde Firebase:", err));
-      } else if (objetivosGuardados.length === 0) {
-        selectObj.innerHTML = '<option value="Objetivo Principal">Objetivo Principal (Modo Offline)</option><option value="Puesto General">Puesto General</option>';
-      }
-    }
-
-    function poblarSelectObjetivos(lista) {
-      const selectObj = document.getElementById('objetivo');
-      let ultimoElegido = localStorage.getItem('demo_ultimo_objetivo') || '';
-      
-      selectObj.innerHTML = '<option value="">Seleccione un Objetivo</option>';
-      
-      lista.forEach(nombreObj => {
-        const opt = document.createElement('option');
-        opt.value = nombreObj;
-        opt.textContent = nombreObj;
-        if (nombreObj === ultimoElegido) {
-          opt.selected = true;
-        }
-        selectObj.appendChild(opt);
-      });
-    }
-
-    function validarLegajo() {
-      const legajoInput = document.getElementById('legajo').value.trim();
-      const statusLbl = document.getElementById('legajo-status');
-      const badgeEstado = document.getElementById('ultimo-estado-badge');
-      fotoMasterGuardada = null;
-      imagenMasterCacheDecodificada = null; // Limpiamos caché al cambiar de legajo
-      
-      if (!legajoInput) {
-        badgeEstado.classList.add('hidden');
-        ultimoTipoFichadaGlobal = "";
-        return;
-      }
-
-      if (!navigator.onLine) {
-        statusLbl.className = "text-xs mt-1 text-slate-400 block";
-        statusLbl.innerText = "Modo Offline: Verificación en servidor omitida.";
-        verificarUltimoEstadoLocal(legajoInput);
-        return;
-      }
-
-      statusLbl.className = "text-xs mt-1 text-amber-400 block";
-      statusLbl.innerText = "Buscando legajo y foto oficial...";
-
-      Promise.all([
-        fetch(`${URL_FIREBASE}/personal.json`).then(res => res.json()).catch(() => null),
-        fetch(`${URL_FIREBASE}/fichadas.json`).then(res => res.json()).catch(() => null)
-      ])
-      .then(async ([dataPersonal, dataFichadas]) => {
-        let encontrado = null;
-        if (dataPersonal) {
-          if (dataPersonal[legajoInput]) {
-            encontrado = dataPersonal[legajoInput];
-          } else {
-            Object.values(dataPersonal).forEach(personal => {
-              if (String(personal.legajo).trim() === String(legajoInput)) {
-                encontrado = personal;
-              }
-            });
-          }
-        }
-
-        if (encontrado) {
-          document.getElementById('nombre').value = encontrado.nombre || "";
-          fotoMasterGuardada = encontrado.fotoMaster || null;
-          statusLbl.className = "text-xs mt-1 text-emerald-400 block";
-          statusLbl.innerText = `✓ ${encontrado.nombre || 'Legajo Encontrado'} ${fotoMasterGuardada ? '📸 (Foto Master OK)' : '⚠️ (Sin Foto Master)'}`;
-          
-          // 🚀 Precarga en segundo plano de la Foto Master para que esté lista instantáneamente al capturar
-          if (fotoMasterGuardada) {
-            try {
-              const imgMaster = new Image();
-              imgMaster.crossOrigin = "anonymous";
-              imgMaster.src = fotoMasterGuardada;
-              await imgMaster.decode();
-              imagenMasterCacheDecodificada = imgMaster;
-            } catch (e) {
-              console.warn("No se pudo precargar la foto master en caché:", e);
-            }
-          }
-        } else {
-          document.getElementById('nombre').value = "";
-          statusLbl.className = "text-xs mt-1 text-rose-400 block";
-          statusLbl.innerText = "❌ Legajo no encontrado en el sistema.";
-        }
-
-        let ultimaFichadaTipo = "";
-        let timestampUltimo = 0;
-
-        if (dataFichadas) {
-          Object.values(dataFichadas).forEach(f => {
-            if (String(f.legajo).trim() === String(legajoInput)) {
-              let tiempoFichada = f.fechaHoraDispositivo ? new Date(f.fechaHoraDispositivo).getTime() : 0;
-              if (tiempoFichada >= timestampUltimo) {
-                timestampUltimo = tiempoFichada;
-                ultimaFichadaTipo = String(f.tipo || "").trim().toUpperCase();
-              }
-            }
-          });
-        }
-
-        let pendientes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
-        pendientes.forEach(p => {
-          if (String(p.legajo).trim() === String(legajoInput)) {
-            let tiempoP = p.fechaHoraDispositivo ? new Date(p.fechaHoraDispositivo).getTime() : 0;
-            if (tiempoP >= timestampUltimo) {
-              timestampUltimo = tiempoP;
-              ultimaFichadaTipo = String(p.tipo || "").trim().toUpperCase();
-            }
-          }
+    function setupMediaSession() {
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: 'Radio 88.1 FM',
+          artist: 'Gloria de Dios',
+          album: 'En Vivo',
+          artwork: [{ src: 'fondo.jpg', sizes: '512x512', type: 'image/jpeg' }]
         });
 
-        ultimoTipoFichadaGlobal = ultimaFichadaTipo;
+        navigator.mediaSession.setActionHandler('play', () => { playAudio(); });
+        navigator.mediaSession.setActionHandler('pause', () => { pauseAudio(); });
+        navigator.mediaSession.setActionHandler('stop', () => { pauseAudio(); });
+      }
+    }
 
-        if (ultimaFichadaTipo) {
-          badgeEstado.classList.remove('hidden');
-          if (ultimaFichadaTipo === 'ENTRADA') {
-            badgeEstado.className = "text-xs mt-1.5 font-semibold text-emerald-400 block";
-            badgeEstado.innerText = "ℹ️ Estado actual: Ya registraste una ENTRADA. Tu próxima acción debe ser SALIDA.";
-          } else {
-            badgeEstado.className = "text-xs mt-1.5 font-semibold text-slate-400 block";
-            badgeEstado.innerText = "ℹ️ Estado actual: Última fichada fue SALIDA. Puedes marcar ENTRADA.";
-          }
+    function updateMediaSessionState(state) {
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = state;
+      }
+    }
+
+    function playAudio() {
+      // Si hay un video de YouTube reproduciéndose, se detiene
+      closeVideoEmbedded();
+
+      isUserPaused = false;
+      playIcon.className = 'fa-solid fa-spinner fa-spin';
+      audio.src = streamUrl + "?t=" + new Date().getTime();
+      
+      audio.play().then(() => {
+        playBtn.classList.add('playing');
+        playIcon.className = 'fa-solid fa-pause';
+        setupMediaSession();
+        updateMediaSessionState('playing');
+      }).catch(error => {
+        if (!isUserPaused) {
+          setTimeout(playAudio, 1500);
         } else {
-          badgeEstado.classList.add('hidden');
+          playIcon.className = 'fa-solid fa-play';
+          playBtn.classList.remove('playing');
+          updateMediaSessionState('paused');
         }
-
-      })
-      .catch(() => {
-        statusLbl.className = "text-xs mt-1 text-slate-400 block";
-        statusLbl.innerText = "Error de conexión al validar legajo.";
       });
     }
 
-    function verificarUltimoEstadoLocal(legajoInput) {
-      let ultimaFichadaTipo = "";
-      let timestampUltimo = 0;
-      let pendientes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
-      
-      pendientes.forEach(p => {
-        if (String(p.legajo).trim() === String(legajoInput)) {
-          let tiempoP = p.fechaHoraDispositivo ? new Date(p.fechaHoraDispositivo).getTime() : 0;
-          if (tiempoP >= timestampUltimo) {
-            timestampUltimo = tiempoP;
-            ultimaFichadaTipo = String(p.tipo || "").trim().toUpperCase();
-          }
-        }
-      });
+    function pauseAudio() {
+      isUserPaused = true;
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.load();
+      playBtn.classList.remove('playing');
+      playIcon.className = 'fa-solid fa-play';
+      updateMediaSessionState('paused');
+    }
 
-      ultimoTipoFichadaGlobal = ultimaFichadaTipo;
-      const badgeEstado = document.getElementById('ultimo-estado-badge');
-
-      if (ultimaFichadaTipo) {
-        badgeEstado.classList.remove('hidden');
-        if (ultimaFichadaTipo === 'ENTRADA') {
-          badgeEstado.className = "text-xs mt-1.5 font-semibold text-emerald-400 block";
-          badgeEstado.innerText = "ℹ️ Estado actual (Offline): Tienes una ENTRADA pendiente.";
-        } else {
-          badgeEstado.className = "text-xs mt-1.5 font-semibold text-slate-400 block";
-          badgeEstado.innerText = "ℹ️ Estado actual (Offline): Última fichada fue SALIDA.";
-        }
+    function toggleAudio() {
+      if (audio.paused || isUserPaused) {
+        playAudio();
       } else {
-        badgeEstado.classList.add('hidden');
+        pauseAudio();
       }
     }
 
-    async function capturarFoto() {
-      const video = document.getElementById('webcam');
-      const canvas = document.getElementById('canvas');
-      const preview = document.getElementById('preview');
-      const status = document.getElementById('foto-status');
-      const btn = document.getElementById('btnCapturar');
+    function forceReconnect() {
+      if (isUserPaused || isReconnecting) return;
+      isReconnecting = true;
+      playIcon.className = 'fa-solid fa-spinner fa-spin';
 
-      if (!video.srcObject && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-          video.srcObject = stream;
-        } catch(err) {
-          alert("No se pudo acceder a la cámara. Verifique los permisos del navegador.");
-          return;
-        }
-      }
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.load();
 
-      btn.disabled = true;
-      status.innerText = "🔍 Analizando rostro e identidad con IA...";
-      status.className = "text-xs text-amber-400 text-center font-semibold";
-
-      // Ejecución directa inmediata sin retardos artificiales innecesarios
-      try {
-        await realizarCapturaIA(video, canvas, preview, status);
-      } finally {
-        btn.disabled = false;
-      }
-    }
-
-    // INSPECCIÓN PRECISA DE TEXTURA PARA DETECTAR PANTALLAS HD
-    function analizarTexturaSuperficial(ctx, box) {
-      const margen = 15;
-      const x = Math.max(0, Math.floor(box.x - margen));
-      const y = Math.max(0, Math.floor(box.y - margen));
-      const w = Math.min(ctx.canvas.width - x, Math.floor(box.width + (margen * 2)));
-      const h = Math.min(ctx.canvas.height - y, Math.floor(box.height + (margen * 2)));
-
-      if (w <= 0 || h <= 0) return { esSospechoso: false, motivo: "" };
-
-      const imageData = ctx.getImageData(x, y, w, h);
-      const data = imageData.data;
-      
-      let sumaGris = 0;
-      let totalPixeles = data.length / 4;
-      let pixelesSaturadosBrillo = 0;
-
-      const valoresGris = new Uint8Array(totalPixeles);
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i];
-        const g = data[i+1];
-        const b = data[i+2];
-        
-        const gris = 0.299 * r + 0.587 * g + 0.114 * b;
-        valoresGris[i / 4] = gris;
-        sumaGris += gris;
-
-        if (r > 245 && g > 245 && b > 245) {
-          pixelesSaturadosBrillo++;
-        }
-      }
-
-      const promedio = sumaGris / totalPixeles;
-
-      let sumaDiferenciasCuadradas = 0;
-      for (let i = 0; i < totalPixeles; i++) {
-        sumaDiferenciasCuadradas += Math.pow(valoresGris[i] - promedio, 2);
-      }
-      
-      const desviacionEstandard = Math.sqrt(sumaDiferenciasCuadradas / totalPixeles);
-      const porcentajeBrillo = (pixelesSaturadosBrillo / totalPixeles) * 100;
-
-      if (desviacionEstandard < 8.0 && porcentajeBrillo > 12.0) {
-        return {
-          esSospechoso: true,
-          motivo: `Patrón liso detectado en segundo plano (Posible imagen en pantalla HD - Desv: ${desviacionEstandard.toFixed(1)}, Brillo: ${porcentajeBrillo.toFixed(1)}%)`
-        };
-      }
-
-      return { esSospechoso: false, motivo: "" };
-    }
-
-    async function realizarCapturaIA(video, canvas, preview, status) {
-      sospechaFraudeGlobal = false;
-      motivoSospechaGlobal = "";
-
-      const MAX_WIDTH = 320;
-      const originalWidth = video.videoWidth || 640;
-      const originalHeight = video.videoHeight || 480;
-
-      let targetWidth = MAX_WIDTH;
-      let targetHeight = Math.round((originalHeight * MAX_WIDTH) / originalWidth);
-
-      canvas.width = targetWidth;
-      canvas.height = targetHeight;
-      
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
-
-      if (!modelosCargados) {
-        fotoBase64Global = canvas.toDataURL('image/jpeg', 0.35);
-        preview.src = fotoBase64Global;
-        preview.classList.remove('hidden');
-        resultadoSimilitudGlobal = "IA_NO_DISPONIBLE";
-        status.innerText = "⚠️ Foto capturada sin análisis facial de IA.";
-        status.className = "text-xs text-amber-400 text-center font-semibold";
-        return;
-      }
-
-      // 1. DETECTAR ROSTRO Y EXTRAER VECTOR MATEMÁTICO DE LA SELFIE
-      const deteccionSelfie = await faceapi.detectSingleFace(canvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.25 }))
-                                          .withFaceLandmarks()
-                                          .withFaceDescriptor();
-
-      if (!deteccionSelfie) {
-        status.innerText = "❌ Rechazado: No se detecta un rostro humano claro.";
-        status.className = "text-xs text-rose-400 text-center font-semibold";
-        preview.classList.add('hidden');
-        fotoBase64Global = "";
-        return;
-      }
-
-      const box = deteccionSelfie.detection.box;
-
-      // 2. FILTRO DE TAMAÑO RELATIVO (Evita fotos lejanas/papeles en miniatura)
-      const altoRelativo = box.height / canvas.height;
-      if (altoRelativo < 0.25) {
-        status.innerText = "❌ Rechazado: Acerque la cara a la cámara (rostro muy pequeño).";
-        status.className = "text-xs text-rose-400 text-center font-semibold";
-        preview.classList.add('hidden');
-        fotoBase64Global = "";
-        return;
-      }
-
-      // 3. FILTRO ANÁLISIS BORDES DE PAPEL/HOJA SATURADA
-      const startX = Math.max(0, box.x - 20);
-      const startY = Math.max(0, box.y - 20);
-      const width = Math.min(canvas.width - startX, box.width + 40);
-      const height = Math.min(canvas.height - startY, box.height + 40);
-      
-      const imgData = ctx.getImageData(startX, startY, width, height);
-      let pixelesSaturados = 0;
-      for (let i = 0; i < imgData.data.length; i += 4) {
-        if (imgData.data[i] > 240 && imgData.data[i+1] > 240 && imgData.data[i+2] > 240) {
-          pixelesSaturados++;
-        }
-      }
-      if ((pixelesSaturados / (imgData.data.length / 4)) > 0.20) {
-        status.innerText = "❌ Rechazado: Se identificaron bordes de marco o papel alrededor del rostro.";
-        status.className = "text-xs text-rose-400 text-center font-semibold";
-        preview.classList.add('hidden');
-        fotoBase64Global = "";
-        return;
-      }
-
-      // 4. COMPARAR CON FOTO MASTER CON UMBRAL MÍNIMO DEL 55% (Usando Caché en Memoria)
-      if (fotoMasterGuardada) {
-        try {
-          let imgMaster = imagenMasterCacheDecodificada;
-          
-          // Si por alguna razón la caché no está cargada, la creamos al vuelo
-          if (!imgMaster) {
-            imgMaster = new Image();
-            imgMaster.crossOrigin = "anonymous";
-            imgMaster.src = fotoMasterGuardada;
-            await imgMaster.decode();
-            imagenMasterCacheDecodificada = imgMaster;
-          }
-
-          const deteccionMaster = await faceapi.detectSingleFace(imgMaster, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.25 }))
-                                               .withFaceLandmarks()
-                                               .withFaceDescriptor();
-
-          if (deteccionMaster) {
-            const distancia = faceapi.euclideanDistance(deteccionSelfie.descriptor, deteccionMaster.descriptor);
-            const porcentajeSimilitud = Math.round((1 - distancia) * 100);
-
-            // UMBRAL DEL 55% COINCIDENCIA MÍNIMA (Distancia > 0.45 rechaza)
-            if (distancia > 0.45) {
-              status.innerText = `❌ Rechazado: Coincidencia insuficiente (${porcentajeSimilitud}%). Requerido: 55%.`;
-              status.className = "text-xs text-rose-400 text-center font-semibold";
-              preview.classList.add('hidden');
-              fotoBase64Global = "";
-              return;
-            }
-
-            // ANÁLISIS EN SEGUNDO PLANO DE TEXTURA PIEL VS PANTALLAS
-            const analisisTextura = analizarTexturaSuperficial(ctx, box);
-            if (analisisTextura.esSospechoso) {
-              sospechaFraudeGlobal = true;
-              motivoSospechaGlobal = analisisTextura.motivo;
-            }
-
-            resultadoSimilitudGlobal = `${porcentajeSimilitud}% COINCIDENCIA`;
-            status.innerText = `✓ Rostro Validado (${porcentajeSimilitud}% Coincidencia)`;
-            status.className = "text-xs text-emerald-400 text-center font-semibold";
-          } else {
-            resultadoSimilitudGlobal = "MASTER_SIN_ROSTRO";
-            status.innerText = "✓ Rostro Humano OK (Master ilegible)";
-            status.className = "text-xs text-emerald-400 text-center font-semibold";
-          }
-        } catch (e) {
-          console.warn("Error evaluando Foto Master:", e);
-          resultadoSimilitudGlobal = "ERROR_EVALUACION";
-        }
-      } else {
-        resultadoSimilitudGlobal = "SIN_MASTER";
-        status.innerText = "✓ Rostro Humano Detectado (Sin foto master de cotejo)";
-        status.className = "text-xs text-emerald-400 text-center font-semibold";
-      }
-
-      fotoBase64Global = canvas.toDataURL('image/jpeg', 0.35);
-      preview.src = fotoBase64Global;
-      preview.classList.remove('hidden');
-    }
-
-    async function procesarEnvio(tipoRecibido) {
-      const tipo = String(tipoRecibido).trim().toUpperCase();
-      const legajo = document.getElementById('legajo').value.trim();
-      const pin = document.getElementById('pin').value.trim();
-      let nombre = document.getElementById('nombre').value.trim();
-      const objetivo = document.getElementById('objetivo').value;
-
-      if (!legajo || !pin || !objetivo) {
-        alert("Por favor complete su N° de Legajo, PIN de Seguridad y seleccione un Objetivo.");
-        return;
-      }
-
-      // 🛡️ CORRECCIÓN: Si el nombre está vacío o trae formato erróneo, lo buscamos de inmediato en Firebase
-      if (!nombre || nombre.startsWith("Legajo")) {
-        try {
-          const res = await fetch(`${URL_FIREBASE}/personal.json`);
-          const dataPersonal = await res.json();
-          if (dataPersonal) {
-            Object.values(dataPersonal).forEach(p => {
-              if (String(p.legajo).trim() === String(legajo)) {
-                nombre = p.nombre;
-              }
-            });
-          }
-        } catch (e) {
-          console.warn("No se pudo revalidar el nombre online", e);
-        }
-      }
-
-      // Si aún sigue sin encontrarse un nombre real, bloqueamos el envío
-      if (!nombre || nombre.startsWith("Legajo")) {
-        alert("⚠️ Error: El N° de legajo ingresado no tiene un Nombre asociado válido en el sistema. Verifique el legajo.");
-        return;
-      }
-
-      document.getElementById('nombre').value = nombre; // Refleja el nombre real en pantalla
-
-      if (ultimoTipoFichadaGlobal === "ENTRADA" && tipo === "ENTRADA") {
-        alert("⚠️ Acción bloqueada: Ya registraste una ENTRADA previa. No puedes volver a fichar entrada hasta registrar tu SALIDA.");
-        const divRes = document.getElementById('resultado');
-        divRes.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
-        divRes.innerText = "❌ Bloqueado: Ya registraste una entrada anterior.";
-        divRes.classList.remove('hidden');
-        return;
-      }
-
-      localStorage.setItem('demo_ultimo_objetivo', objetivo);
-
-      if (!fotoBase64Global) {
-        alert("Primero capture una selfie válida haciendo clic en 'CAPTURAR Y VALIDAR ROSTRO'.");
-        return;
-      }
-
-      const divResultado = document.getElementById('resultado');
-      divResultado.className = "p-3 rounded-xl text-xs text-center bg-slate-700 text-white";
-      divResultado.innerText = "Obteniendo ubicación GPS...";
-      divResultado.classList.remove('hidden');
-
-      if (!navigator.geolocation) {
-        divResultado.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
-        divResultado.innerText = "❌ El dispositivo/navegador no soporta localización GPS.";
-        return;
-      }
-
-      navigator.geolocation.getCurrentPosition(
-        pos => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-
-          if (!lat || !lng || lat === 0 || lng === 0) {
-            divResultado.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
-            divResultado.innerText = "❌ No se obtuvo una coordenada GPS válida. Activa la ubicación para fichar.";
-            return;
-          }
-
-          ejecutarPeticionFichada(tipo, lat, lng, legajo, pin, nombre, objetivo);
-        },
-        err => {
-          divResultado.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
-          divResultado.innerText = "❌ Permiso de GPS denegado o no disponible. Activa la ubicación en tu dispositivo.";
-        },
-        { timeout: 5000, enableHighAccuracy: true }
-      );
-    }
-
-    function ejecutarPeticionFichada(tipo, lat, lng, legajo, pin, nombre, objetivo) {
-      const datos = {
-        legajo: legajo,
-        pin: pin,
-        nombre: nombre, // 👈 Garantiza que se envíe estrictamente el nombre completo real y no el legajo
-        objetivo: objetivo,
-        tipo: tipo,  
-        latitud: lat,
-        longitud: lng,
-        mapa: `https://www.google.com/maps?q=${lat},${lng}`,
-        fotoBase64: fotoBase64Global,
-        validacionFacial: resultadoSimilitudGlobal,
-        alertaFraude: sospechaFraudeGlobal,
-        motivoFraude: motivoSospechaGlobal,
-        fechaHoraDispositivo: new Date().toISOString()
-      };
-
-      const divResultado = document.getElementById('resultado');
-
-      if (!navigator.onLine) {
-        guardarFichadaOffline(datos, tipo, legajo);
-        return;
-      }
-
-      divResultado.className = "p-3 rounded-xl text-xs text-center bg-slate-700 text-white";
-      divResultado.innerText = "Registrando fichada...";
-      divResultado.classList.remove('hidden');
-
-      fetch(`${URL_FIREBASE}/fichadas.json`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(datos)
-      })
-      .then(res => {
-        if (!res.ok) throw new Error("Error en la respuesta de Firebase");
-        return res.json();
-      })
-      .then(respuesta => {
-        if (respuesta && respuesta.name) {
-          divResultado.className = "p-3 rounded-xl text-xs text-center bg-emerald-950 text-emerald-200 border border-emerald-500";
-          divResultado.innerText = `✓ ¡Fichada de ${tipo} registrada con éxito!`;
-          
-          ultimoTipoFichadaGlobal = tipo;
-          limpiarFormularioExitoso();
+      setTimeout(() => {
+        if (!isUserPaused) {
+          audio.src = streamUrl + "?t=" + new Date().getTime();
+          audio.play().then(() => {
+            playBtn.classList.add('playing');
+            playIcon.className = 'fa-solid fa-pause';
+            updateMediaSessionState('playing');
+          }).catch(() => {
+            if (!isUserPaused) setTimeout(forceReconnect, 2000);
+          }).finally(() => {
+            isReconnecting = false;
+          });
         } else {
-          throw new Error("No se pudo confirmar el guardado en Firebase.");
+          isReconnecting = false;
         }
-      })
-      .catch(err => {
-        console.warn("Fallo al conectar con Firebase. Guardando offline automáticamente...", err);
-        guardarFichadaOffline(datos, tipo, legajo);
-      });
+      }, 300);
     }
 
-    function guardarFichadaOffline(datos, tipo, legajo) {
-      let pendientes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
+    /* MANEJADORES DE RECUPERACIÓN AUTOMÁTICA EN SEGUNDO PLANO */
+    audio.addEventListener('pause', () => {
+      if (!isUserPaused && !isReconnecting) {
+        updateMediaSessionState('paused');
+        setTimeout(() => {
+          if (!isUserPaused) forceReconnect();
+        }, 1000);
+      }
+    });
 
-      if (pendientes.length > 0) {
-        let ultimaPendiente = pendientes[pendientes.length - 1];
-        if (ultimaPendiente.legajo === legajo && ultimaPendiente.tipo === tipo) {
-          const divResultado = document.getElementById('resultado');
-          divResultado.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
-          divResultado.innerText = `❌ Ya tienes una fichada de ${tipo} pendiente de sincronización. No puedes repetirla dos veces seguidas.`;
-          return; 
+    audio.addEventListener('stalled', () => { if (!isUserPaused) forceReconnect(); });
+    audio.addEventListener('error', () => { if (!isUserPaused) forceReconnect(); });
+
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && !isUserPaused) {
+        if (audio.paused || audio.readyState < 2) {
+          forceReconnect();
         }
       }
+    });
 
-      if (resultadoSimilitudGlobal === "SIN_MASTER" || resultadoSimilitudGlobal === "IA_NO_DISPONIBLE" || resultadoSimilitudGlobal === "NO_EVALUADO") {
-        datos.alertaFraude = true;
-        datos.motivoFraude = "⚠️ Fichada Offline: Requiere revisión manual (Rostro no cotejado en servidor)";
-        datos.validacionFacial = "OFFLINE_AUDITORIA_REQUERIDA";
+    window.addEventListener('online', () => {
+      if (!isUserPaused) forceReconnect();
+    });
+
+    /* Funciones para Prédicas y Modales */
+    function toggleModal(modalId, show) {
+      document.getElementById(modalId).style.display = show ? 'flex' : 'none';
+    }
+
+    function closePodcastsModal() {
+      closeVideoEmbedded();
+      toggleModal('podcastsModal', false);
+    }
+
+    function closeVideoEmbedded() {
+      const box = document.getElementById('videoBox');
+      const player = document.getElementById('ytPlayer');
+      if (box && player) {
+        player.src = '';
+        box.style.display = 'none';
       }
-
-      pendientes.push(datos);
-      localStorage.setItem('fichadas_pendientes', JSON.stringify(pendientes));
-
-      ultimoTipoFichadaGlobal = tipo;
-      const divResultado = document.getElementById('resultado');
-      divResultado.className = "p-3 rounded-xl text-xs text-center bg-amber-950 text-amber-200 border border-amber-500";
-      divResultado.innerText = `⚠️ Registrada Offline. Al no haber conexión para verificar tu identidad, esta fichada requerirá REVISIÓN MANUAL por RRHH.`;
-
-      limpiarFormularioExitoso();
     }
 
-    function limpiarFormularioExitoso() {
-      document.getElementById('pin').value = "";
-      document.getElementById('legajo').value = "";
-      document.getElementById('nombre').value = "";
-      document.getElementById('legajo-status').className = "text-xs mt-1 hidden";
-      document.getElementById('legajo-status').innerText = "";
-      document.getElementById('ultimo-estado-badge').classList.add('hidden');
-      
-      fotoBase64Global = "";
-      fotoMasterGuardada = null;
-      imagenMasterCacheDecodificada = null;
-      resultadoSimilitudGlobal = "NO_EVALUADO";
-      sospechaFraudeGlobal = false;
-      motivoSospechaGlobal = "";
-      
-      const preview = document.getElementById('preview');
-      preview.src = "";
-      preview.classList.add('hidden');
-      
-      const statusFoto = document.getElementById('foto-status');
-      statusFoto.innerText = "⚠️ Foto no capturada";
-      statusFoto.className = "text-xs text-rose-400 text-center font-semibold";
+    /* Temporizador de apagado */
+    function cycleTimer() {
+      if (timerMinutes === 0) timerMinutes = 15;
+      else if (timerMinutes === 15) timerMinutes = 30;
+      else if (timerMinutes === 30) timerMinutes = 60;
+      else timerMinutes = 0;
 
-      iniciarCamaraSegura();
+      clearTimeout(timerTimeout);
+      const label = document.getElementById('timerLabel');
+
+      if (timerMinutes > 0) {
+        label.innerText = timerMinutes + 'm';
+        timerTimeout = setTimeout(() => {
+          if (!isUserPaused) pauseAudio();
+          timerMinutes = 0;
+          label.innerText = 'Off';
+        }, timerMinutes * 60 * 1000);
+      } else {
+        label.innerText = 'Off';
+      }
     }
 
-    function sincronizarFichadasPendientes() {
-      if (estaSincronizando) return; 
-      let pendientes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
-      if (pendientes.length === 0) return;
+    /* Controles de volumen */
+    function setVolume(val) {
+      audio.volume = val;
+      volIcon.className = val == 0 ? 'fa-solid fa-volume-xmark' : (val < 0.5 ? 'fa-solid fa-volume-low' : 'fa-solid fa-volume-high');
+    }
 
-      if (!navigator.onLine) return;
+    function toggleMute() {
+      if (audio.volume > 0) {
+        volSlider.value = 0;
+        setVolume(0);
+      } else {
+        volSlider.value = 1;
+        setVolume(1);
+      }
+    }
 
-      estaSincronizando = true;
-      let datos = pendientes.shift(); 
-      localStorage.setItem('fichadas_pendientes', JSON.stringify(pendientes));
-
-      fetch(`${URL_FIREBASE}/fichadas.json`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(datos)
-      })
-      .then(res => res.json())
-      .then(respuesta => {
-        estaSincronizando = false;
-        console.log("🔄 Fichada pendiente sincronizada con Firebase.");
-        
-        if (pendientes.length > 0) {
-          sincronizarFichadasPendientes();
-        }
-      })
-      .catch(err => {
-        console.error("Error al sincronizar fichada pendiente, devolviéndola a la cola...", err);
-        let actualizadas = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
-        actualizadas.unshift(datos);
-        localStorage.setItem('fichadas_pendientes', JSON.stringify(actualizadas));
-        estaSincronizando = false;
-      });
+    function shareWebsite() {
+      if (navigator.share) {
+        navigator.share({ title: 'Radio 88.1 FM', text: '¡Escuchá la radio en vivo!', url: shareUrl });
+      } else {
+        navigator.clipboard.writeText(shareUrl);
+        alert('¡Enlace copiado!');
+      }
     }
   </script>
 </body>
