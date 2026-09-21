@@ -107,6 +107,10 @@
       <button id="tabBtnMarcaciones" onclick="cambiarTab('marcaciones')" class="px-5 py-3 font-semibold text-sm border-b-2 border-emerald-500 text-emerald-400 flex items-center gap-2 transition">
         <i class="fa-solid fa-clipboard-user"></i> Marcaciones
       </button>
+      <button id="tabBtnAlertasUbicacion" onclick="cambiarTab('alertasUbicacion')" class="relative px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
+        <i class="fa-solid fa-location-crosshairs text-rose-400"></i> Alertas de ubicación
+        <span id="badgeAlertasTab" class="hidden min-w-[18px] h-5 px-1.5 rounded-full bg-rose-600 text-white text-[10px] font-black items-center justify-center">0</span>
+      </button>
       <button id="tabBtnNovedades" onclick="cambiarTab('novedades')" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
         <i class="fa-solid fa-triangle-exclamation"></i> Novedades / Incidencias
       </button>
@@ -249,6 +253,31 @@
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+
+    <!-- TAB: HISTORIAL DE ALERTAS DE UBICACIÓN -->
+    <div id="tabAlertasUbicacion" class="hidden space-y-4">
+      <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-xl">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div>
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+              <i class="fa-solid fa-location-crosshairs text-rose-400"></i> Historial de fichadas bloqueadas
+            </h3>
+            <p class="text-xs text-slate-400 mt-1">Acá quedan guardados los intentos realizados fuera del radio permitido, incluso después de cerrar la notificación.</p>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="cargarAlertasFichadas(false)" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-lg text-xs font-semibold transition">
+              <i class="fa-solid fa-rotate"></i> Actualizar
+            </button>
+            <button onclick="marcarTodasAlertasFichadasVistas()" class="bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 px-3 py-2 rounded-lg text-xs font-semibold transition">
+              <i class="fa-solid fa-check-double"></i> Marcar vistas
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="bg-slate-800 rounded-2xl border border-slate-700 shadow-xl p-4">
+        <div id="listaAlertasFichadasHistorial" class="space-y-2"></div>
       </div>
     </div>
 
@@ -826,6 +855,12 @@
       badge.innerText = pendientes > 99 ? '99+' : String(pendientes);
       badge.classList.toggle('hidden', pendientes === 0);
       badge.classList.toggle('flex', pendientes > 0);
+      const badgeTab = document.getElementById('badgeAlertasTab');
+      if (badgeTab) {
+        badgeTab.innerText = pendientes > 99 ? '99+' : String(pendientes);
+        badgeTab.classList.toggle('hidden', pendientes === 0);
+        badgeTab.classList.toggle('flex', pendientes > 0);
+      }
     }
 
     function formatearFechaAlerta(fecha) {
@@ -849,7 +884,7 @@
         return;
       }
 
-      cont.innerHTML = lista.slice(0, 50).map(a => {
+      const htmlAlertas = lista.slice(0, 100).map(a => {
         const vista = a.vistoAdmin === true;
         const mapa = (Number.isFinite(Number(a.latitud)) && Number.isFinite(Number(a.longitud)))
           ? `https://maps.google.com/?q=${a.latitud},${a.longitud}` : '';
@@ -874,6 +909,9 @@
           </div>
         </div>`;
       }).join('');
+      cont.innerHTML = htmlAlertas;
+      const historial = document.getElementById('listaAlertasFichadasHistorial');
+      if (historial) historial.innerHTML = htmlAlertas;
     }
 
     function abrirModalAlertasFichadas() {
@@ -980,11 +1018,13 @@
     function cambiarTab(tab) {
       document.getElementById('tabMarcaciones').classList.add('hidden');
       document.getElementById('tabNovedades').classList.add('hidden');
+      document.getElementById('tabAlertasUbicacion').classList.add('hidden');
       document.getElementById('tabPanicos').classList.add('hidden');
       document.getElementById('tabPersonal').classList.add('hidden');
       document.getElementById('tabObjetivos').classList.add('hidden');
 
       document.getElementById('tabBtnMarcaciones').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
+      document.getElementById('tabBtnAlertasUbicacion').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
       document.getElementById('tabBtnNovedades').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
       document.getElementById('tabBtnPanicos').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
       document.getElementById('tabBtnPersonal').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
@@ -993,6 +1033,10 @@
       if (tab === 'marcaciones') {
         document.getElementById('tabMarcaciones').classList.remove('hidden');
         document.getElementById('tabBtnMarcaciones').className = "px-5 py-3 font-semibold text-sm border-b-2 border-emerald-500 text-emerald-400 flex items-center gap-2 transition";
+      } else if (tab === 'alertasUbicacion') {
+        document.getElementById('tabAlertasUbicacion').classList.remove('hidden');
+        document.getElementById('tabBtnAlertasUbicacion').className = "px-5 py-3 font-semibold text-sm border-b-2 border-rose-500 text-rose-400 flex items-center gap-2 transition";
+        cargarAlertasFichadas(false);
       } else if (tab === 'novedades') {
         document.getElementById('tabNovedades').classList.remove('hidden');
         document.getElementById('tabBtnNovedades').className = "px-5 py-3 font-semibold text-sm border-b-2 border-amber-500 text-amber-400 flex items-center gap-2 transition";
