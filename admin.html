@@ -313,19 +313,19 @@
               <input type="text" id="newObjetivo" required placeholder="Ej: Edificio Central" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
             </div>
             
-            <!-- BUSCADOR DE DIRECCIÓN -->
+            <!-- BUSCADOR DE DIRECCIÓN EXACTA -->
             <div class="relative">
-              <label class="block text-xs uppercase text-slate-400 mb-1">Buscar Dirección (Sugerencia Mapa)</label>
+              <label class="block text-xs uppercase text-slate-400 mb-1">Buscar Dirección Exacta (Ej: Américo Vespucio 651)</label>
               <div class="relative">
                 <i class="fa-solid fa-map-pin absolute left-3 top-3 text-sky-400 text-sm"></i>
-                <input type="text" id="inputBuscadorDireccion" placeholder="Ej: Américo Vespucio, Santiago..." autocomplete="off" oninput="buscarDireccionesAutocomplete(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
+                <input type="text" id="inputBuscadorDireccion" placeholder="Escribe calle y altura exacta..." autocomplete="off" oninput="buscarDireccionesAutocomplete(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
               </div>
               <!-- Contenedor flotante de sugerencias -->
               <div id="listaSugerenciasDireccion" class="absolute left-0 right-0 mt-1 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 hidden max-h-48 overflow-y-auto divide-y divide-slate-800 text-xs"></div>
             </div>
           </div>
 
-          <!-- Campos editables y coordenadas -->
+          <!-- Campos editables y coordenadas exactas -->
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-900/50 p-4 rounded-xl border border-slate-700/60">
             <div>
               <label class="block text-[10px] uppercase text-slate-400 mb-1">Dirección Normalizada (Editable para altura exacta)</label>
@@ -387,8 +387,19 @@
           <label class="block text-xs uppercase text-slate-400 mb-1">Nombre del Objetivo</label>
           <input type="text" id="editObjNombre" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
         </div>
+        
+        <!-- BUSCADOR DENTRO DEL MODAL DE EDICIÓN -->
+        <div class="relative">
+          <label class="block text-xs uppercase text-slate-400 mb-1">Buscar / Modificar Dirección (Altura exacta)</label>
+          <div class="relative">
+            <i class="fa-solid fa-map-pin absolute left-3 top-3 text-sky-400 text-sm"></i>
+            <input type="text" id="editBuscadorDireccion" placeholder="Escribe calle y altura exacta..." autocomplete="off" oninput="buscarDireccionesAutocompleteEdicion(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
+          </div>
+          <div id="editListaSugerenciasDireccion" class="absolute left-0 right-0 mt-1 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 hidden max-h-48 overflow-y-auto divide-y divide-slate-800 text-xs"></div>
+        </div>
+
         <div>
-          <label class="block text-xs uppercase text-slate-400 mb-1">Dirección Normalizada (Con altura exacta)</label>
+          <label class="block text-xs uppercase text-slate-400 mb-1">Dirección Normalizada (Editable)</label>
           <input type="text" id="editObjDireccion" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
         </div>
         <div class="grid grid-cols-2 gap-4">
@@ -577,6 +588,7 @@
     let datosObjetivos = [];
     let registroFraudeSeleccionado = null;
     let timerAutocomplete = null;
+    let timerAutocompleteEdit = null;
 
     let audioCtxPanico = null;
     let osc1 = null;
@@ -777,6 +789,7 @@
       });
     }
 
+    // AUTOCOMPLETE DIRECCIÓN - NUEVO OBJETIVO
     function buscarDireccionesAutocomplete(query) {
       clearTimeout(timerAutocomplete);
       const contenedor = document.getElementById('listaSugerenciasDireccion');
@@ -815,6 +828,49 @@
           }
         } catch (e) {
           console.error("Error consultando geocodificación:", e);
+        }
+      }, 400);
+    }
+
+    // AUTOCOMPLETE DIRECCIÓN - EDICIÓN DE OBJETIVO
+    function buscarDireccionesAutocompleteEdicion(query) {
+      clearTimeout(timerAutocompleteEdit);
+      const contenedor = document.getElementById('editListaSugerenciasDireccion');
+      
+      if (!query || query.trim().length < 3) {
+        contenedor.classList.add('hidden');
+        contenedor.innerHTML = '';
+        return;
+      }
+
+      timerAutocompleteEdit = setTimeout(async () => {
+        try {
+          const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=5`;
+          const response = await fetch(url, { headers: { 'Accept-Language': 'es' } });
+          const resultados = await response.json();
+
+          contenedor.innerHTML = '';
+          if (resultados && resultados.length > 0) {
+            resultados.forEach(item => {
+              const div = document.createElement('div');
+              div.className = "p-2.5 hover:bg-slate-800 cursor-pointer text-slate-200 transition flex items-start gap-2";
+              div.innerHTML = `<i class="fa-solid fa-location-dot text-sky-400 mt-0.5"></i> <div><strong>${item.display_name}</strong></div>`;
+              
+              div.onclick = () => {
+                document.getElementById('editBuscadorDireccion').value = item.display_name;
+                document.getElementById('editObjDireccion').value = item.display_name;
+                document.getElementById('editObjLatitud').value = item.lat;
+                document.getElementById('editObjLongitud').value = item.lon;
+                contenedor.classList.add('hidden');
+              };
+              contenedor.appendChild(div);
+            });
+            contenedor.classList.remove('hidden');
+          } else {
+            contenedor.classList.add('hidden');
+          }
+        } catch (e) {
+          console.error("Error consultando geocodificación en edición:", e);
         }
       }, 400);
     }
@@ -1526,6 +1582,7 @@
     function abrirModalEditarObjetivo(id, nombre, direccion, lat, lon) {
       document.getElementById('editObjFirebaseId').value = id;
       document.getElementById('editObjNombre').value = nombre;
+      document.getElementById('editBuscadorDireccion').value = direccion;
       document.getElementById('editObjDireccion').value = direccion;
       document.getElementById('editObjLatitud').value = lat;
       document.getElementById('editObjLongitud').value = lon;
