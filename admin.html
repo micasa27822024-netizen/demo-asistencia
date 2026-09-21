@@ -304,59 +304,44 @@
     <div id="tabObjetivos" class="hidden space-y-6">
       <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
         <h3 class="text-lg font-bold text-white flex items-center gap-2">
-          <i class="fa-solid fa-building-circle-check text-sky-500"></i> Registrar Nuevo Objetivo / Puesto con Geocodificación
+          <i class="fa-solid fa-building-circle-check text-sky-500"></i> Registrar Nuevo Objetivo / Puesto
         </h3>
         <form onsubmit="guardarObjetivo(event)" class="space-y-4">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label class="block text-xs uppercase text-slate-400 mb-1">Nombre del Objetivo</label>
-              <input type="text" id="newObjetivo" required placeholder="Ej: Edificio Central - Turno 7 a 19" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
+              <input type="text" id="newObjetivo" required placeholder="Ej: Edificio Central" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
             </div>
-            <div>
-              <label class="block text-xs uppercase text-slate-400 mb-1">Calle y Altura</label>
-              <input type="text" id="newCalleAltura" required placeholder="Ej: Pardo 5225" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label class="block text-xs uppercase text-slate-400 mb-1">Localidad / Zona</label>
-              <select id="newLocalidad" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
-                <option value="Bella Vista">Bella Vista</option>
-                <option value="Hurlingham">Hurlingham</option>
-                <option value="Liniers">Liniers (CABA)</option>
-                <option value="Rosario">Rosario</option>
-                <option value="Chubut">Chubut</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-xs uppercase text-slate-400 mb-1">Provincia</label>
-              <select id="newProvincia" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
-                <option value="Buenos Aires">Buenos Aires</option>
-                <option value="Capital Federal">Capital Federal (CABA)</option>
-                <option value="Santa Fe">Santa Fe</option>
-                <option value="Chubut">Chubut</option>
-              </select>
-            </div>
-            <div class="flex items-end">
-              <button type="button" onclick="buscarCoordenadasGPS()" class="w-full bg-slate-700 hover:bg-slate-600 text-sky-400 border border-slate-600 font-semibold py-2 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2">
-                <i class="fa-solid fa-map-pin"></i> Autocompletar GPS
-              </button>
+            
+            <!-- CAMPO CON AUTOCOMPLETADO DE DIRECCIONES EN TIEMPO REAL -->
+            <div class="relative">
+              <label class="block text-xs uppercase text-slate-400 mb-1">Buscar Dirección (Geocodificación)</label>
+              <div class="relative">
+                <i class="fa-solid fa-map-pin absolute left-3 top-3 text-sky-400 text-sm"></i>
+                <input type="text" id="inputBuscadorDireccion" placeholder="Ej: Américo Vespucio, Santiago..." autocomplete="off" oninput="buscarDireccionesAutocomplete(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
+              </div>
+              <!-- Contenedor flotante de sugerencias -->
+              <div id="listaSugerenciasDireccion" class="absolute left-0 right-0 mt-1 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 hidden max-h-48 overflow-y-auto divide-y divide-slate-800 text-xs"></div>
             </div>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Campos autocompletados o ajustables -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-900/50 p-4 rounded-xl border border-slate-700/60">
             <div>
-              <label class="block text-xs uppercase text-slate-400 mb-1">Latitud GPS</label>
-              <input type="text" id="newLatitud" required placeholder="Ej: -34.6037" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm text-amber-300 font-mono focus:outline-none">
+              <label class="block text-[10px] uppercase text-slate-400 mb-1">Dirección Normalizada</label>
+              <input type="text" id="objDireccionNormalizada" readonly placeholder="Se autocompleta al elegir..." class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-300">
             </div>
             <div>
-              <label class="block text-xs uppercase text-slate-400 mb-1">Longitud GPS</label>
-              <input type="text" id="newLongitud" required placeholder="Ej: -58.3816" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm text-amber-300 font-mono focus:outline-none">
+              <label class="block text-[10px] uppercase text-slate-400 mb-1">Latitud GPS</label>
+              <input type="text" id="objLatitud" readonly placeholder="Ej: -34.6037" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs font-mono text-emerald-400">
+            </div>
+            <div>
+              <label class="block text-[10px] uppercase text-slate-400 mb-1">Longitud GPS</label>
+              <input type="text" id="objLongitud" readonly placeholder="Ej: -58.3816" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs font-mono text-emerald-400">
             </div>
           </div>
 
-          <div class="flex justify-end pt-2">
+          <div class="flex justify-end">
             <button type="submit" id="btnGuardarObj" class="bg-sky-600 hover:bg-sky-500 text-white font-bold py-2.5 px-6 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
               <i class="fa-solid fa-plus"></i> Añadir Objetivo
             </button>
@@ -369,9 +354,9 @@
           <table class="w-full text-left text-sm text-slate-300">
             <thead class="bg-slate-950 text-slate-400 uppercase text-xs border-b border-slate-700">
               <tr>
+                <th class="p-4">ID</th>
                 <th class="p-4">Nombre del Objetivo</th>
-                <th class="p-4">Dirección Desambiguada</th>
-                <th class="p-4 text-center">Coordenadas GPS</th>
+                <th class="p-4">Dirección Normalizada / Ubicación</th>
                 <th class="p-4 text-center">Estado</th>
                 <th class="p-4 text-center">Acciones</th>
               </tr>
@@ -554,6 +539,7 @@
     let datosPersonal = [];
     let datosObjetivos = [];
     let registroFraudeSeleccionado = null;
+    let timerAutocomplete = null;
 
     // --- MÓDULO DE SONIDO Y ESCUCHA DE PÁNICO EN TIEMPO REAL ---
     let audioCtxPanico = null;
@@ -624,6 +610,7 @@
           let keys = Object.keys(panicosObj);
           for (let id of keys) {
             let p = panicosObj[id];
+            // Si hay un pánico pendiente o activo
             if (p && (p.estado === 'PENDIENTE' || p.estado === 'ACTIVO')) {
               if (panicoActivoActualId !== id) {
                 activarModalPanico(id, p);
@@ -759,12 +746,56 @@
       });
     }
 
+    // --- MÓDULO DE GEOCODIFICACIÓN Y AUTOCOMPLETADO DE DIRECCIONES ---
+    function buscarDireccionesAutocomplete(query) {
+      clearTimeout(timerAutocomplete);
+      const contenedor = document.getElementById('listaSugerenciasDireccion');
+      
+      if (!query || query.trim().length < 3) {
+        contenedor.classList.add('hidden');
+        contenedor.innerHTML = '';
+        return;
+      }
+
+      timerAutocomplete = setTimeout(async () => {
+        try {
+          const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=5`;
+          const response = await fetch(url, { headers: { 'Accept-Language': 'es' } });
+          const resultados = await response.json();
+
+          contenedor.innerHTML = '';
+          if (resultados && resultados.length > 0) {
+            resultados.forEach(item => {
+              const div = document.createElement('div');
+              div.className = "p-2.5 hover:bg-slate-800 cursor-pointer text-slate-200 transition flex items-start gap-2";
+              div.innerHTML = `<i class="fa-solid fa-location-dot text-sky-400 mt-0.5"></i> <div><strong>${item.display_name}</strong></div>`;
+              
+              div.onclick = () => {
+                document.getElementById('inputBuscadorDireccion').value = item.display_name;
+                document.getElementById('objDireccionNormalizada').value = item.display_name;
+                document.getElementById('objLatitud').value = item.lat;
+                document.getElementById('objLongitud').value = item.lon;
+                contenedor.classList.add('hidden');
+              };
+              contenedor.appendChild(div);
+            });
+            contenedor.classList.remove('hidden');
+          } else {
+            contenedor.classList.add('hidden');
+          }
+        } catch (e) {
+          console.error("Error consultando geocodificación:", e);
+        }
+      }, 400);
+    }
+
     // CARGA DE DATOS DESDE FIREBASE REALTIME DATABASE
     async function recargarDatosEfectivo() {
       const icono = document.getElementById('icono-reload');
       if (icono) icono.classList.add('fa-spin');
 
       try {
+        // 1. Cargar Personal primero
         const resPersonal = await fetch(`${URL_FIREBASE}/personal.json`);
         const dataPersonal = await resPersonal.json();
         datosPersonal = [];
@@ -784,6 +815,7 @@
         }
         renderizarTablaPersonal(datosPersonal);
 
+        // 2. Cargar Marcaciones
         const resMarcaciones = await fetch(`${URL_FIREBASE}/fichadas.json`);
         const dataMarcaciones = await resMarcaciones.json();
         datosMarcaciones = [];
@@ -819,6 +851,7 @@
         }
         filtrarTablaMarcaciones();
 
+        // 3. Cargar Novedades
         const resNovedades = await fetch(`${URL_FIREBASE}/novedades.json`);
         const dataNovedades = await resNovedades.json();
         datosNovedades = [];
@@ -834,6 +867,7 @@
         }
         filtrarTablaNovedades();
 
+        // 4. Cargar Pánicos
         const resPanicos = await fetch(`${URL_FIREBASE}/panicos.json`);
         const dataPanicos = await resPanicos.json();
         datosPanicos = [];
@@ -858,6 +892,7 @@
         }
         renderizarTablaPanicos(datosPanicos);
 
+        // 5. Cargar Objetivos
         const resObjetivos = await fetch(`${URL_FIREBASE}/objetivos.json`);
         const dataObjetivos = await resObjetivos.json();
         datosObjetivos = [];
@@ -866,10 +901,10 @@
             const d = dataObjetivos[id];
             if (d) {
               const nombreObj = typeof d === 'string' ? d : (d.nombre || id);
-              const direccionCompleta = d.direccionCompleta || (d.calleAltura ? `${d.calleAltura}, ${d.localidad || ''}, ${d.provincia || ''}` : 'Dirección no especificada');
-              const lat = d.latitud || '-';
-              const lon = d.longitud || '-';
-              datosObjetivos.push([id, nombreObj, direccionCompleta, lat, lon, 'ACTIVO']);
+              const dirObj = d.direccion || 'Sin dirección registrada';
+              const latObj = d.latitud || '';
+              const lonObj = d.longitud || '';
+              datosObjetivos.push([id, nombreObj, dirObj, latObj, lonObj, 'ACTIVO']);
             }
           });
         }
@@ -1399,20 +1434,21 @@
       registros.forEach(fila => {
         const firebaseId = fila[0];
         const nombreObj = fila[1];
-        const direccion = fila[2];
-        const lat = fila[3];
-        const lon = fila[4];
+        const dirObj = fila[2];
+        const latObj = fila[3];
+        const lonObj = fila[4];
 
-        const linkGps = (lat !== '-' && lon !== '-') 
-          ? `<a href="https://maps.google.com/?q=${lat},${lon}" target="_blank" class="text-sky-400 hover:underline font-mono text-xs">${lat}, ${lon}</a>`
-          : '<span class="text-slate-500">Sin GPS</span>';
+        let linkMapaObj = dirObj;
+        if (latObj && lonObj) {
+          linkMapaObj = `<a href="https://maps.google.com/?q=${latObj},${lonObj}" target="_blank" class="text-sky-400 hover:underline"><i class="fa-solid fa-map-location-dot"></i> ${dirObj}</a>`;
+        }
 
         const tr = document.createElement('tr');
         tr.className = "hover:bg-slate-700/30 transition";
         tr.innerHTML = `
+          <td class="p-4 font-mono text-xs text-slate-400">${firebaseId}</td>
           <td class="p-4 font-medium text-white">${nombreObj}</td>
-          <td class="p-4 text-slate-300 text-xs">${direccion}</td>
-          <td class="p-4 text-center">${linkGps}</td>
+          <td class="p-4 text-xs text-slate-300">${linkMapaObj}</td>
           <td class="p-4 text-center"><span class="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded text-xs">ACTIVO</span></td>
           <td class="p-4 text-center">
             <button onclick="eliminarObjetivo('${firebaseId}')" class="bg-rose-600/20 text-rose-400 hover:bg-rose-600/40 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1">
@@ -1424,43 +1460,6 @@
       });
     }
 
-    // --- NUEVA FUNCIÓN DE GEOCODIFICACIÓN AUTOMÁTICA ---
-    async function buscarCoordenadasGPS() {
-      const calleAltura = document.getElementById('newCalleAltura').value.trim();
-      const localidad = document.getElementById('newLocalidad').value;
-      const provincia = document.getElementById('newProvincia').value;
-
-      if (!calleAltura) {
-        alert("Por favor, ingresa la calle y altura primero.");
-        return;
-      }
-
-      const queryQuery = `${calleAltura}, ${localidad}, ${provincia}, Argentina`;
-      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryQuery)}&limit=1`;
-
-      try {
-        const btn = event.target;
-        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Buscando...`;
-        
-        const response = await fetch(url);
-        const data = await response.json();
-
-        if (data && data.length > 0) {
-          document.getElementById('newLatitud').value = data[0].lat;
-          document.getElementById('newLongitud').value = data[0].lon;
-          alert("¡Coordenadas encontradas y configuradas con éxito!");
-        } else {
-          alert("No se hallaron coordenadas exactas para esa combinación. Intenta ajustar el nombre de la calle o ingresarlas de forma manual.");
-        }
-      } catch (e) {
-        console.error("Error geocodificando:", e);
-        alert("Ocurrió un error al conectar con el servicio de mapas.");
-      } finally {
-        const btn = document.querySelector('button[onclick="buscarCoordenadasGPS()"]');
-        if (btn) btn.innerHTML = `<i class="fa-solid fa-map-pin"></i> Autocompletar GPS`;
-      }
-    }
-
     async function guardarObjetivo(e) {
       e.preventDefault();
       const btn = document.getElementById('btnGuardarObj');
@@ -1468,13 +1467,9 @@
       btn.innerText = "Guardando...";
 
       const nombreObj = document.getElementById('newObjetivo').value.trim();
-      const calleAltura = document.getElementById('newCalleAltura').value.trim();
-      const localidad = document.getElementById('newLocalidad').value;
-      const provincia = document.getElementById('newProvincia').value;
-      const latitud = document.getElementById('newLatitud').value.trim();
-      const longitud = document.getElementById('newLongitud').value.trim();
-
-      const direccionCompleta = `${calleAltura}, ${localidad}, ${provincia}`;
+      const direccionObj = document.getElementById('objDireccionNormalizada').value.trim();
+      const latObj = document.getElementById('objLatitud').value.trim();
+      const lonObj = document.getElementById('objLongitud').value.trim();
 
       try {
         const res = await fetch(`${URL_FIREBASE}/objetivos.json`, {
@@ -1482,12 +1477,9 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
             nombre: nombreObj, 
-            calleAltura: calleAltura,
-            localidad: localidad,
-            provincia: provincia,
-            direccionCompleta: direccionCompleta,
-            latitud: latitud,
-            longitud: longitud,
+            direccion: direccionObj || 'Sin dirección', 
+            latitud: latObj || '', 
+            longitud: lonObj || '', 
             estado: 'ACTIVO', 
             timestamp: new Date().toISOString() 
           })
@@ -1495,11 +1487,12 @@
 
         if (!res.ok) throw new Error("Error al guardar en Firebase");
 
-        alert("Objetivo y geolocalización registrados con éxito.");
+        alert("Objetivo registrado con éxito.");
         document.getElementById('newObjetivo').value = "";
-        document.getElementById('newCalleAltura').value = "";
-        document.getElementById('newLatitud').value = "";
-        document.getElementById('newLongitud').value = "";
+        document.getElementById('inputBuscadorDireccion').value = "";
+        document.getElementById('objDireccionNormalizada').value = "";
+        document.getElementById('objLatitud').value = "";
+        document.getElementById('objLongitud').value = "";
         recargarDatosEfectivo();
       } catch (err) {
         alert("Ocurrió un error al guardar el objetivo: " + err.toString());
