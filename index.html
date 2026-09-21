@@ -197,12 +197,36 @@
       }
     }
 
+    // RADIO DE SEGURIDAD POR DEFECTO: 100 METROS.
+    // Si el objetivo tiene radioPermitido, radio o radioMetros, se usa ese valor.
+    const RADIO_OBJETIVO_DEFAULT_METROS = 100;
+    let objetivosDetalleGlobal = [];
+
+    function obtenerDatosObjetivoSeleccionado(nombreObjetivo) {
+      return objetivosDetalleGlobal.find(o =>
+        String(o.nombre || o.codigo || '').trim() === String(nombreObjetivo || '').trim()
+      ) || null;
+    }
+
+    function normalizarRadioObjetivo(objetivo) {
+      const radio = Number(
+        objetivo?.radioPermitido ??
+        objetivo?.radio ??
+        objetivo?.radioMetros ??
+        RADIO_OBJETIVO_DEFAULT_METROS
+      );
+      return Number.isFinite(radio) && radio > 0 ? radio : RADIO_OBJETIVO_DEFAULT_METROS;
+    }
+
     function cargarObjetivos() {
       const selectObj = document.getElementById('objetivo');
       let objetivosGuardados = JSON.parse(localStorage.getItem('demo_lista_objetivos') || '[]');
 
       if (objetivosGuardados.length > 0) {
-        poblarSelectObjetivos(objetivosGuardados);
+        objetivosDetalleGlobal = objetivosGuardados.map(item =>
+          typeof item === 'string' ? { nombre: item } : item
+        );
+        poblarSelectObjetivos(objetivosDetalleGlobal);
       }
 
       if (navigator.onLine) {
@@ -210,20 +234,30 @@
           .then(res => res.json())
           .then(data => {
             if (data) {
-              let listaNuevos = [];
-              Object.values(data).forEach(item => {
-                const nombreObj = item.nombre || item.codigo;
-                if (nombreObj) listaNuevos.push(nombreObj);
-              });
-              
+              const listaNuevos = Object.values(data)
+                .filter(item => item && (item.nombre || item.codigo))
+                .map(item => ({
+                  nombre: item.nombre || item.codigo,
+                  codigo: item.codigo || '',
+                  latitud: item.latitud ?? item.lat ?? item.latitude ?? null,
+                  longitud: item.longitud ?? item.lng ?? item.lon ?? item.longitude ?? null,
+                  radioPermitido: normalizarRadioObjetivo(item)
+                }));
+
               if (listaNuevos.length > 0) {
                 localStorage.setItem('demo_lista_objetivos', JSON.stringify(listaNuevos));
+                objetivosDetalleGlobal = listaNuevos;
                 poblarSelectObjetivos(listaNuevos);
               }
             }
           })
           .catch(err => console.warn("No se pudieron actualizar los objetivos desde Firebase:", err));
       } else if (objetivosGuardados.length === 0) {
+        const offline = [
+          { nombre: "Objetivo Principal", radioPermitido: RADIO_OBJETIVO_DEFAULT_METROS },
+          { nombre: "Puesto General", radioPermitido: RADIO_OBJETIVO_DEFAULT_METROS }
+        ];
+        objetivosDetalleGlobal = offline;
         selectObj.innerHTML = '<option value="Objetivo Principal">Objetivo Principal (Modo Offline)</option><option value="Puesto General">Puesto General</option>';
       }
     }
@@ -231,10 +265,13 @@
     function poblarSelectObjetivos(lista) {
       const selectObj = document.getElementById('objetivo');
       let ultimoElegido = localStorage.getItem('demo_ultimo_objetivo') || '';
-      
+
       selectObj.innerHTML = '<option value="">Seleccione un Objetivo</option>';
-      
-      lista.forEach(nombreObj => {
+
+      lista.forEach(item => {
+        const nombreObj = typeof item === 'string' ? item : (item.nombre || item.codigo);
+        if (!nombreObj) return;
+
         const opt = document.createElement('option');
         opt.value = nombreObj;
         opt.textContent = nombreObj;
@@ -243,6 +280,56 @@
         }
         selectObj.appendChild(opt);
       });
+    }
+
+    function calcularDistanciaMetros(lat1, lon1, lat2, lon2) {
+      const R = 6371000;
+      const toRad = grados => grados * Math.PI / 180;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(a));
+    }
+
+    function mostrarErrorUbicacion(mensaje) {
+      const divResultado = document.getElementById('resultado');
+      divResultado.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
+      divResultado.innerText = mensaje;
+      divResultado.classList.remove('hidden');
+    }
+
+    function validarUbicacionObjetivo(lat, lng, objetivo) {
+      const detalle = obtenerDatosObjetivoSeleccionado(objetivo);
+      const latObjetivo = Number(detalle?.latitud);
+      const lngObjetivo = Number(detalle?.longitud);
+      const radioPermitido = normalizarRadioObjetivo(detalle);
+
+      if (!Number.isFinite(latObjetivo) || !Number.isFinite(lngObjetivo) ||
+          (latObjetivo === 0 && lngObjetivo === 0)) {
+        mostrarErrorUbicacion(
+          `❌ No se puede validar la ubicación de "${objetivo}". El objetivo no tiene coordenadas GPS configuradas.`
+        );
+        return null;
+      }
+
+      const distancia = calcularDistanciaMetros(lat, lng, latObjetivo, lngObjetivo);
+
+      if (distancia > radioPermitido) {
+        mostrarErrorUbicacion(
+          `❌ FICHADA BLOQUEADA. Estás a ${Math.round(distancia)} m del objetivo y el radio permitido es de ${Math.round(radioPermitido)} m. Debes encontrarte dentro del radio del objetivo.`
+        );
+        return null;
+      }
+
+      return {
+        distanciaMetros: Math.round(distancia),
+        radioPermitido: Math.round(radioPermitido),
+        latObjetivo,
+        lngObjetivo
+      };
     }
 
     function validarLegajo() {
@@ -613,12 +700,11 @@
 
       const divResultado = document.getElementById('resultado');
       divResultado.className = "p-3 rounded-xl text-xs text-center bg-slate-700 text-white";
-      divResultado.innerText = "Obteniendo ubicación GPS...";
+      divResultado.innerText = "📍 Verificando ubicación GPS y distancia al objetivo...";
       divResultado.classList.remove('hidden');
 
       if (!navigator.geolocation) {
-        divResultado.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
-        divResultado.innerText = "❌ El dispositivo/navegador no soporta localización GPS.";
+        mostrarErrorUbicacion("❌ El dispositivo/navegador no soporta localización GPS.");
         return;
       }
 
@@ -626,24 +712,36 @@
         pos => {
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
+          const precisionGPS = Number(pos.coords.accuracy);
 
-          if (!lat || !lng || lat === 0 || lng === 0) {
-            divResultado.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
-            divResultado.innerText = "❌ No se obtuvo una coordenada GPS válida. Activa la ubicación para fichar.";
+          if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat === 0 || lng === 0) {
+            mostrarErrorUbicacion("❌ No se obtuvo una coordenada GPS válida. Activa la ubicación para fichar.");
             return;
           }
 
-          ejecutarPeticionFichada(tipo, lat, lng, legajo, pin, nombre, objetivo);
+          // La validación ocurre ANTES de enviar/guardar la fichada.
+          const validacionUbicacion = validarUbicacionObjetivo(lat, lng, objetivo);
+          if (!validacionUbicacion) return;
+
+          divResultado.className = "p-3 rounded-xl text-xs text-center bg-emerald-950 text-emerald-200 border border-emerald-500";
+          divResultado.innerText =
+            `✅ Ubicación verificada. Distancia al objetivo: ${validacionUbicacion.distanciaMetros} m. ` +
+            `Radio permitido: ${validacionUbicacion.radioPermitido} m. ` +
+            `Precisión GPS: ${Number.isFinite(precisionGPS) ? Math.round(precisionGPS) + ' m' : 'no disponible'}.`;
+
+          ejecutarPeticionFichada(
+            tipo, lat, lng, legajo, pin, nombre, objetivo,
+            validacionUbicacion, precisionGPS
+          );
         },
         err => {
-          divResultado.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
-          divResultado.innerText = "❌ Permiso de GPS denegado o no disponible. Activa la ubicación en tu dispositivo.";
+          mostrarErrorUbicacion("❌ Permiso de GPS denegado o no disponible. Activa la ubicación en tu dispositivo.");
         },
-        { timeout: 5000, enableHighAccuracy: true }
+        { timeout: 15000, enableHighAccuracy: true, maximumAge: 0 }
       );
     }
 
-    function ejecutarPeticionFichada(tipo, lat, lng, legajo, pin, nombre, objetivo) {
+    function ejecutarPeticionFichada(tipo, lat, lng, legajo, pin, nombre, objetivo, validacionUbicacion, precisionGPS) {
       const datos = {
         legajo: legajo,
         pin: pin,
@@ -657,7 +755,15 @@
         validacionFacial: resultadoSimilitudGlobal,
         alertaFraude: sospechaFraudeGlobal,
         motivoFraude: motivoSospechaGlobal,
-        fechaHoraDispositivo: new Date().toISOString()
+        fechaHoraDispositivo: new Date().toISOString(),
+
+        // Auditoría de geolocalización: solo se llega aquí si pasó el radio.
+        ubicacionValidada: true,
+        distanciaAlObjetivoMetros: validacionUbicacion ? validacionUbicacion.distanciaMetros : null,
+        radioPermitidoMetros: validacionUbicacion ? validacionUbicacion.radioPermitido : RADIO_OBJETIVO_DEFAULT_METROS,
+        precisionGPSMetros: Number.isFinite(precisionGPS) ? Math.round(precisionGPS) : null,
+        latitudObjetivo: validacionUbicacion ? validacionUbicacion.latObjetivo : null,
+        longitudObjetivo: validacionUbicacion ? validacionUbicacion.lngObjetivo : null
       };
 
       const divResultado = document.getElementById('resultado');
