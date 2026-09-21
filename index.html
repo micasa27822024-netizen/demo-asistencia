@@ -301,8 +301,65 @@
       divResultado.classList.remove('hidden');
     }
 
-    function validarUbicacionObjetivo(lat, lng, objetivo) {
-      const detalle = obtenerDatosObjetivoSeleccionado(objetivo);
+    function formatearDistanciaObjetivo(distanciaMetros) {
+      const metros = Math.max(0, Number(distanciaMetros) || 0);
+      if (metros < 1000) {
+        return `${Math.round(metros)} m`;
+      }
+      return `${(metros / 1000).toFixed(2).replace('.', ',')} km (${Math.round(metros).toLocaleString('es-AR')} m)`;
+    }
+
+    async function obtenerDatosObjetivoParaFichada(nombreObjetivo) {
+      let detalle = obtenerDatosObjetivoSeleccionado(nombreObjetivo);
+      const tieneCoordenadas = detalle &&
+        Number.isFinite(Number(detalle.latitud)) &&
+        Number.isFinite(Number(detalle.longitud)) &&
+        !(Number(detalle.latitud) === 0 && Number(detalle.longitud) === 0);
+
+      if (tieneCoordenadas) return detalle;
+
+      // Refresco puntual: evita depender de que la carga inicial haya terminado.
+      if (!navigator.onLine) return detalle;
+
+      try {
+        const res = await fetch(`${URL_FIREBASE}/objetivos.json?ts=${Date.now()}`, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`Firebase respondió ${res.status}`);
+        const data = await res.json();
+        const buscado = String(nombreObjetivo || '').trim().toLowerCase();
+        const encontrado = Object.entries(data || {}).find(([id, item]) => {
+          const nombre = String(item?.nombre || item?.codigo || id || '').trim().toLowerCase();
+          return nombre === buscado;
+        });
+
+        if (encontrado) {
+          const [id, item] = encontrado;
+          detalle = {
+            id,
+            ...item,
+            nombre: item?.nombre || item?.codigo || id,
+            latitud: item?.latitud ?? item?.lat ?? item?.latitude ?? null,
+            longitud: item?.longitud ?? item?.lng ?? item?.lon ?? item?.longitude ?? null,
+            radioPermitido: normalizarRadioObjetivo(item)
+          };
+
+          // Actualizamos la caché para las siguientes fichadas.
+          const indice = objetivosDetalleGlobal.findIndex(o =>
+            String(o.nombre || o.codigo || '').trim().toLowerCase() === buscado
+          );
+          if (indice >= 0) objetivosDetalleGlobal[indice] = detalle;
+          else objetivosDetalleGlobal.push(detalle);
+          localStorage.setItem('demo_lista_objetivos', JSON.stringify(objetivosDetalleGlobal));
+          return detalle;
+        }
+      } catch (err) {
+        console.warn('No se pudieron recuperar las coordenadas del objetivo desde Firebase:', err);
+      }
+
+      return detalle;
+    }
+
+    async function validarUbicacionObjetivo(lat, lng, objetivo) {
+      const detalle = await obtenerDatosObjetivoParaFichada(objetivo);
       const latObjetivo = Number(detalle?.latitud);
       const lngObjetivo = Number(detalle?.longitud);
       const radioPermitido = normalizarRadioObjetivo(detalle);
@@ -310,22 +367,24 @@
       if (!Number.isFinite(latObjetivo) || !Number.isFinite(lngObjetivo) ||
           (latObjetivo === 0 && lngObjetivo === 0)) {
         mostrarErrorUbicacion(
-          `❌ No se puede validar la ubicación de "${objetivo}". El objetivo no tiene coordenadas GPS configuradas.`
+          `❌ No se puede validar la ubicación de "${objetivo}". No se pudieron obtener sus coordenadas GPS desde Firebase.`
         );
         return null;
       }
 
       const distancia = calcularDistanciaMetros(lat, lng, latObjetivo, lngObjetivo);
+      const distanciaTexto = formatearDistanciaObjetivo(distancia);
 
       if (distancia > radioPermitido) {
         mostrarErrorUbicacion(
-          `❌ FICHADA BLOQUEADA. Estás a ${Math.round(distancia)} m del objetivo y el radio permitido es de ${Math.round(radioPermitido)} m. Debes encontrarte dentro del radio del objetivo.`
+          `❌ FICHADA BLOQUEADA. Estás a ${distanciaTexto} del objetivo. Radio permitido: ${Math.round(radioPermitido)} m. Debes encontrarte dentro del radio del objetivo.`
         );
         return null;
       }
 
       return {
         distanciaMetros: Math.round(distancia),
+        distanciaTexto,
         radioPermitido: Math.round(radioPermitido),
         latObjetivo,
         lngObjetivo
@@ -720,14 +779,24 @@
           }
 
           // La validación ocurre ANTES de enviar/guardar la fichada.
-          const validacionUbicacion = validarUbicacionObjetivo(lat, lng, objetivo);
-          if (!validacionUbicacion) return;
+          validarUbicacionObjetivo(lat, lng, objetivo).then(validacionUbicacion => {
+            if (!validacionUbicacion) return;
 
-          divResultado.className = "p-3 rounded-xl text-xs text-center bg-emerald-950 text-emerald-200 border border-emerald-500";
-          divResultado.innerText =
-            `✅ Ubicación verificada. Distancia al objetivo: ${validacionUbicacion.distanciaMetros} m. ` +
-            `Radio permitido: ${validacionUbicacion.radioPermitido} m. ` +
-            `Precisión GPS: ${Number.isFinite(precisionGPS) ? Math.round(precisionGPS) + ' m' : 'no disponible'}.`;
+            divResultado.className = "p-3 rounded-xl text-xs text-center bg-emerald-950 text-emerald-200 border border-emerald-500";
+            divResultado.innerText =
+              `✅ Ubicación verificada. Distancia al objetivo: ${validacionUbicacion.distanciaTexto}. ` +
+              `Radio permitido: ${validacionUbicacion.radioPermitido} m. ` +
+              `Precisión GPS: ${Number.isFinite(precisionGPS) ? Math.round(precisionGPS) + ' m' : 'no disponible'}.`;
+
+            ejecutarPeticionFichada(
+              tipo, lat, lng, legajo, pin, nombre, objetivo,
+              validacionUbicacion, precisionGPS
+            );
+          }).catch(err => {
+            console.error('Error validando geocerca:', err);
+            mostrarErrorUbicacion('❌ No se pudo verificar la distancia al objetivo. La fichada fue bloqueada.');
+          });
+          return;
 
           ejecutarPeticionFichada(
             tipo, lat, lng, legajo, pin, nombre, objetivo,
