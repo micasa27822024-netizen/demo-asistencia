@@ -92,6 +92,10 @@
         <button onclick="recargarDatosEfectivo()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
           <i class="fa-solid fa-rotate-right" id="icono-reload"></i> Actualizar Datos
         </button>
+        <button onclick="abrirModalAlertasFichadas()" id="btnAlertasFichadas" class="relative bg-rose-600/15 hover:bg-rose-600/30 text-rose-300 font-bold px-3 py-2 rounded-xl text-sm transition border border-rose-500/30" title="Alertas de fichadas bloqueadas">
+          <i class="fa-solid fa-bell"></i>
+          <span id="badgeAlertasFichadas" class="hidden absolute -top-2 -right-2 min-w-[20px] h-5 px-1.5 rounded-full bg-rose-600 text-white text-[10px] font-black items-center justify-center border-2 border-slate-900">0</span>
+        </button>
         <button onclick="cerrarSesionAdmin()" class="bg-slate-700 hover:bg-rose-600 text-slate-300 hover:text-white font-semibold px-3 py-2 rounded-xl text-sm transition border border-slate-600" title="Cerrar Sesión">
           <i class="fa-solid fa-right-from-bracket"></i>
         </button>
@@ -607,6 +611,33 @@
     </div>
   </div>
 
+  <!-- MODAL DE ALERTAS DE FICHADAS BLOQUEADAS -->
+  <div id="modalAlertasFichadas" class="fixed inset-0 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-[60]">
+    <div class="bg-slate-900 border border-rose-500/40 rounded-2xl p-5 md:p-6 max-w-2xl w-full relative shadow-2xl space-y-4 max-h-[85vh] overflow-hidden flex flex-col">
+      <button onclick="cerrarModalAlertasFichadas()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <div class="flex items-center gap-3 border-b border-slate-700 pb-3 pr-8">
+        <div class="w-11 h-11 bg-rose-500/15 border border-rose-500/30 rounded-xl flex items-center justify-center text-rose-400 text-lg">
+          <i class="fa-solid fa-bell"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-white text-lg">Alertas de fichadas</h3>
+          <p class="text-xs text-slate-400">Intentos bloqueados por encontrarse fuera del radio del objetivo</p>
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button onclick="solicitarNotificacionesNavegador()" class="bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 px-3 py-2 rounded-lg text-xs font-semibold transition">
+          <i class="fa-solid fa-desktop"></i> Activar avisos del navegador
+        </button>
+        <button onclick="marcarTodasAlertasFichadasVistas()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-lg text-xs font-semibold transition">
+          <i class="fa-solid fa-check-double"></i> Marcar todas como vistas
+        </button>
+      </div>
+      <div id="listaAlertasFichadas" class="overflow-y-auto space-y-2 pr-1"></div>
+    </div>
+  </div>
+
   <script>
     const PASSWORD_ADMIN = "admin123"; 
     const URL_FIREBASE = "https://fir-asistencia-fad12-default-rtdb.firebaseio.com";
@@ -627,6 +658,10 @@
     let panicoInterval = null;
     let panicoActivoActualId = null;
     let intervaloPanicoPoll = null;
+    let intervaloAlertasFichadas = null;
+    let alertasFichadasCache = [];
+    let alertasFichadasConocidas = new Set();
+    let alertasFichadasInicializadas = false;
 
     function iniciarSonidoSirena() {
       if (audioCtxPanico) return; 
@@ -742,6 +777,162 @@
       }
     }
 
+    // --- ALERTAS DE FICHADAS BLOQUEADAS POR GEO-CERCA ---
+    function iniciarEscuchaAlertasFichadas() {
+      if (intervaloAlertasFichadas) clearInterval(intervaloAlertasFichadas);
+      cargarAlertasFichadas(true);
+      intervaloAlertasFichadas = setInterval(() => cargarAlertasFichadas(false), 5000);
+    }
+
+    async function cargarAlertasFichadas(esCargaInicial = false) {
+      try {
+        const res = await fetch(`${URL_FIREBASE}/alertasFichadas.json?ts=${Date.now()}`, { cache: 'no-store' });
+        if (!res.ok) throw new Error('No se pudieron consultar las alertas.');
+        const data = await res.json();
+        const lista = [];
+
+        if (data) {
+          Object.keys(data).forEach(id => {
+            const a = data[id];
+            if (a) lista.push({ id, ...a });
+          });
+        }
+
+        lista.sort((a, b) => new Date(b.fechaHora || 0) - new Date(a.fechaHora || 0));
+        alertasFichadasCache = lista;
+        actualizarBadgeAlertasFichadas();
+        renderizarAlertasFichadas(lista);
+
+        if (!alertasFichadasInicializadas || esCargaInicial) {
+          lista.forEach(a => alertasFichadasConocidas.add(a.id));
+          alertasFichadasInicializadas = true;
+          return;
+        }
+
+        const nuevas = lista.filter(a => !alertasFichadasConocidas.has(a.id));
+        nuevas.forEach(a => {
+          alertasFichadasConocidas.add(a.id);
+          notificarNuevaAlertaFichada(a);
+        });
+      } catch (err) {
+        console.warn('Error consultando alertas de fichadas:', err);
+      }
+    }
+
+    function actualizarBadgeAlertasFichadas() {
+      const badge = document.getElementById('badgeAlertasFichadas');
+      if (!badge) return;
+      const pendientes = alertasFichadasCache.filter(a => a.vistoAdmin !== true && a.estado !== 'ATENDIDA').length;
+      badge.innerText = pendientes > 99 ? '99+' : String(pendientes);
+      badge.classList.toggle('hidden', pendientes === 0);
+      badge.classList.toggle('flex', pendientes > 0);
+    }
+
+    function formatearFechaAlerta(fecha) {
+      if (!fecha) return '-';
+      const d = new Date(fecha);
+      return isNaN(d.getTime()) ? '-' : d.toLocaleString('es-AR', { hour12: false });
+    }
+
+    function formatearDistanciaAlerta(metros) {
+      const n = Number(metros);
+      if (!Number.isFinite(n)) return '-';
+      if (n < 1000) return `${Math.round(n)} m`;
+      return `${(n / 1000).toFixed(2).replace('.', ',')} km (${Math.round(n).toLocaleString('es-AR')} m)`;
+    }
+
+    function renderizarAlertasFichadas(lista) {
+      const cont = document.getElementById('listaAlertasFichadas');
+      if (!cont) return;
+      if (!lista.length) {
+        cont.innerHTML = `<div class="p-6 text-center text-slate-400 text-sm">No hay alertas de fichadas bloqueadas.</div>`;
+        return;
+      }
+
+      cont.innerHTML = lista.slice(0, 50).map(a => {
+        const vista = a.vistoAdmin === true;
+        const mapa = (Number.isFinite(Number(a.latitud)) && Number.isFinite(Number(a.longitud)))
+          ? `https://maps.google.com/?q=${a.latitud},${a.longitud}` : '';
+        return `<div class="p-3 rounded-xl border ${vista ? 'border-slate-700 bg-slate-800/60' : 'border-rose-500/40 bg-rose-950/20'}">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-2">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-bold text-white">${a.nombre || 'Sin nombre'}</span>
+                ${vista ? '<span class="text-[10px] text-slate-500 uppercase">Vista</span>' : '<span class="text-[10px] font-black text-rose-400 uppercase">Nueva</span>'}
+              </div>
+              <p class="text-xs text-slate-400 mt-1">Legajo: ${a.legajo || '-'} · ${a.tipoFichada || '-'} · ${formatearFechaAlerta(a.fechaHora)}</p>
+              <p class="text-xs text-slate-300 mt-1">Objetivo: <strong>${a.objetivo || '-'}</strong></p>
+            </div>
+            <div class="text-left md:text-right">
+              <p class="text-sm font-black text-rose-300">${formatearDistanciaAlerta(a.distanciaMetros)}</p>
+              <p class="text-[11px] text-slate-400">Radio permitido: ${Math.round(Number(a.radioPermitidoMetros) || 100)} m</p>
+            </div>
+          </div>
+          <div class="mt-2 flex flex-wrap gap-2">
+            ${mapa ? `<a href="${mapa}" target="_blank" class="text-xs text-sky-400 hover:underline"><i class="fa-solid fa-map-location-dot"></i> Ver ubicación</a>` : ''}
+            <span class="text-xs text-slate-500">${a.mensaje || 'Fichada bloqueada por ubicación'}</span>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function abrirModalAlertasFichadas() {
+      document.getElementById('modalAlertasFichadas').classList.remove('hidden');
+      cargarAlertasFichadas(false);
+    }
+
+    function cerrarModalAlertasFichadas() {
+      document.getElementById('modalAlertasFichadas').classList.add('hidden');
+    }
+
+    async function marcarTodasAlertasFichadasVistas() {
+      const pendientes = alertasFichadasCache.filter(a => a.vistoAdmin !== true && a.estado !== 'ATENDIDA');
+      if (!pendientes.length) return;
+      try {
+        await Promise.all(pendientes.map(a => fetch(`${URL_FIREBASE}/alertasFichadas/${a.id}.json`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ vistoAdmin: true, vistoEn: new Date().toISOString() })
+        })));
+        await cargarAlertasFichadas(false);
+      } catch (err) {
+        alert('No se pudieron actualizar todas las alertas.');
+      }
+    }
+
+    async function solicitarNotificacionesNavegador() {
+      if (!('Notification' in window)) {
+        alert('Este navegador no admite notificaciones de escritorio.');
+        return;
+      }
+      const permiso = await Notification.requestPermission();
+      if (permiso === 'granted') {
+        alert('Avisos del navegador activados.');
+      } else {
+        alert('El navegador no concedió permiso para mostrar avisos.');
+      }
+    }
+
+    function notificarNuevaAlertaFichada(alerta) {
+      const titulo = '🚨 Alerta de fichada';
+      const cuerpo = `${alerta.nombre || 'Empleado'} está a ${formatearDistanciaAlerta(alerta.distanciaMetros)} de ${alerta.objetivo || 'su objetivo'}. Fichada bloqueada.`;
+
+      const modal = document.getElementById('modalAlertasFichadas');
+      if (modal && modal.classList.contains('hidden')) {
+        const btn = document.getElementById('btnAlertasFichadas');
+        if (btn) {
+          btn.classList.add('animate-pulse');
+          setTimeout(() => btn.classList.remove('animate-pulse'), 5000);
+        }
+      }
+
+      if ('Notification' in window && Notification.permission === 'granted') {
+        try {
+          new Notification(titulo, { body: cuerpo, tag: `alerta-fichada-${alerta.id}` });
+        } catch (e) {}
+      }
+    }
+
     window.onload = function() {
       generarPinAleatorio();
       if (sessionStorage.getItem('auth_admin') === 'true') {
@@ -775,11 +966,13 @@
       document.getElementById('contenidoAdmin').classList.remove('hidden');
       recargarDatosEfectivo();
       escucharAlertasPanicoSSE();
+      iniciarEscuchaAlertasFichadas();
     }
 
     function cerrarSesionAdmin() {
       sessionStorage.removeItem('auth_admin');
       if (intervaloPanicoPoll) clearInterval(intervaloPanicoPoll);
+      if (intervaloAlertasFichadas) clearInterval(intervaloAlertasFichadas);
       detenerSonidoSirena();
       location.reload();
     }
