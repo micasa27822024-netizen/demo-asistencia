@@ -133,6 +133,7 @@
 
       if (navigator.onLine) {
         sincronizarFichadasPendientes();
+        sincronizarAlertasFichadasPendientes();
       }
     };
 
@@ -164,6 +165,7 @@
     window.addEventListener('online', () => {
       actualizarEstadoRed();
       sincronizarFichadasPendientes();
+      sincronizarAlertasFichadasPendientes();
     });
     
     window.addEventListener('offline', actualizarEstadoRed);
@@ -358,7 +360,7 @@
       return detalle;
     }
 
-    async function validarUbicacionObjetivo(lat, lng, objetivo) {
+    async function validarUbicacionObjetivo(lat, lng, objetivo, contexto = {}) {
       const detalle = await obtenerDatosObjetivoParaFichada(objetivo);
       const latObjetivo = Number(detalle?.latitud);
       const lngObjetivo = Number(detalle?.longitud);
@@ -376,6 +378,27 @@
       const distanciaTexto = formatearDistanciaObjetivo(distancia);
 
       if (distancia > radioPermitido) {
+        const alerta = {
+          tipoAlerta: "FICHADA_BLOQUEADA_UBICACION",
+          estado: "NUEVA",
+          legajo: contexto.legajo || "",
+          nombre: contexto.nombre || (contexto.legajo ? `Legajo ${contexto.legajo}` : "Sin nombre"),
+          objetivo: objetivo || "Sin objetivo",
+          tipoFichada: contexto.tipo || "",
+          distanciaMetros: Math.round(distancia),
+          distanciaTexto,
+          radioPermitidoMetros: Math.round(radioPermitido),
+          precisionGPSMetros: Number.isFinite(contexto.precisionGPS) ? Math.round(contexto.precisionGPS) : null,
+          latitud: lat,
+          longitud: lng,
+          latitudObjetivo: latObjetivo,
+          longitudObjetivo: lngObjetivo,
+          fechaHora: new Date().toISOString(),
+          mensaje: `Intento de fichada bloqueado: distancia ${distanciaTexto} del objetivo.`
+        };
+
+        registrarAlertaFichadaBloqueada(alerta);
+
         mostrarErrorUbicacion(
           `❌ FICHADA BLOQUEADA. Estás a ${distanciaTexto} del objetivo. Radio permitido: ${Math.round(radioPermitido)} m. Debes encontrarte dentro del radio del objetivo.`
         );
@@ -389,6 +412,56 @@
         latObjetivo,
         lngObjetivo
       };
+    }
+
+
+    async function registrarAlertaFichadaBloqueada(alerta) {
+      if (!alerta) return;
+
+      if (!navigator.onLine) {
+        const pendientes = JSON.parse(localStorage.getItem('alertas_fichadas_pendientes') || '[]');
+        pendientes.push(alerta);
+        localStorage.setItem('alertas_fichadas_pendientes', JSON.stringify(pendientes));
+        return;
+      }
+
+      try {
+        const res = await fetch(`${URL_FIREBASE}/alertasFichadas.json`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(alerta)
+        });
+        if (!res.ok) throw new Error("No se pudo registrar la alerta de fichada.");
+      } catch (err) {
+        console.warn("No se pudo enviar la alerta de fichada. Se guardará para sincronizar luego.", err);
+        const pendientes = JSON.parse(localStorage.getItem('alertas_fichadas_pendientes') || '[]');
+        pendientes.push(alerta);
+        localStorage.setItem('alertas_fichadas_pendientes', JSON.stringify(pendientes));
+      }
+    }
+
+    function sincronizarAlertasFichadasPendientes() {
+      if (!navigator.onLine) return;
+      const pendientes = JSON.parse(localStorage.getItem('alertas_fichadas_pendientes') || '[]');
+      if (!pendientes.length) return;
+
+      const alerta = pendientes[0];
+      fetch(`${URL_FIREBASE}/alertasFichadas.json`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(alerta)
+      })
+      .then(res => {
+        if (!res.ok) throw new Error("Firebase rechazó la alerta pendiente.");
+        return res.json();
+      })
+      .then(() => {
+        const restantes = JSON.parse(localStorage.getItem('alertas_fichadas_pendientes') || '[]');
+        restantes.shift();
+        localStorage.setItem('alertas_fichadas_pendientes', JSON.stringify(restantes));
+        if (restantes.length) sincronizarAlertasFichadasPendientes();
+      })
+      .catch(err => console.warn("La alerta pendiente seguirá en cola:", err));
     }
 
     function validarLegajo() {
@@ -779,7 +852,7 @@
           }
 
           // La validación ocurre ANTES de enviar/guardar la fichada.
-          validarUbicacionObjetivo(lat, lng, objetivo).then(validacionUbicacion => {
+          validarUbicacionObjetivo(lat, lng, objetivo, { legajo, nombre, tipo, precisionGPS }).then(validacionUbicacion => {
             if (!validacionUbicacion) return;
 
             divResultado.className = "p-3 rounded-xl text-xs text-center bg-emerald-950 text-emerald-200 border border-emerald-500";
