@@ -11,10 +11,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
-
-  <!-- LEAFLET (MAPAS INTERACTIVOS GRATUITOS) -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
 
@@ -304,51 +300,24 @@
       </div>
     </div>
 
-    <!-- TAB 4: OBJETIVOS CON MAPA INTERACTIVO Y GEO-BÚSQUEDA -->
+    <!-- TAB 4: OBJETIVOS -->
     <div id="tabObjetivos" class="hidden space-y-6">
       <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
         <h3 class="text-lg font-bold text-white flex items-center gap-2">
-          <i class="fa-solid fa-building-circle-check text-sky-500"></i> Registrar Nuevo Objetivo / Puesto con Geocercing
+          <i class="fa-solid fa-building-circle-check text-sky-500"></i> Registrar Nuevo Objetivo / Puesto
         </h3>
-        <form onsubmit="guardarObjetivo(event)" class="space-y-4">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-xs uppercase text-slate-400 mb-1">Nombre del Objetivo</label>
-              <input type="text" id="newObjetivo" required placeholder="Ej: Edificio Central" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
-            </div>
-            <div>
-              <label class="block text-xs uppercase text-slate-400 mb-1">Dirección Exacta (Calle y Altura / Ciudad)</label>
-              <div class="flex gap-2">
-                <input type="text" id="newDireccion" placeholder="Ej: Av. Corrientes 1234, CABA" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
-                <button type="button" onclick="buscarDireccionMapa()" class="bg-sky-600 hover:bg-sky-500 text-white px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0">
-                  <i class="fa-solid fa-magnifying-glass-location"></i> Buscar Coordenadas
-                </button>
-              </div>
-            </div>
+        <form onsubmit="guardarObjetivo(event)" class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+          <div>
+            <label class="block text-xs uppercase text-slate-400 mb-1">Nombre del Objetivo</label>
+            <input type="text" id="newObjetivo" required placeholder="Ej: Edificio Central" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
           </div>
-
-          <!-- MAPA INTERACTIVO DE SELECCIÓN -->
-          <div class="space-y-2">
-            <label class="block text-xs uppercase text-slate-400">Ubicación exacta (Haga clic o arrastre el marcador sobre el edificio)</label>
-            <div id="mapaNuevoObjetivo" class="w-full h-72 rounded-xl border border-slate-700 z-10"></div>
+          <div>
+            <label class="block text-xs uppercase text-slate-400 mb-1">Dirección Exacta (Calle y Altura / Coordenadas)</label>
+            <input type="text" id="newDireccionObjetivo" required placeholder="Ej: Av. Corrientes 1234, CABA" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
           </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-xs uppercase text-slate-400 mb-1">Latitud GPS</label>
-              <input type="text" id="newLat" required placeholder="Ej: -34.603722" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm text-sky-400 font-mono">
-            </div>
-            <div>
-              <label class="block text-xs uppercase text-slate-400 mb-1">Longitud GPS</label>
-              <input type="text" id="newLng" required placeholder="Ej: -58.381592" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm text-sky-400 font-mono">
-            </div>
-          </div>
-
-          <div class="flex justify-end pt-2">
-            <button type="submit" id="btnGuardarObj" class="bg-sky-600 hover:bg-sky-500 text-white font-bold py-2.5 px-6 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
-              <i class="fa-solid fa-plus"></i> Añadir Objetivo
-            </button>
-          </div>
+          <button type="submit" id="btnGuardarObj" class="bg-sky-600 hover:bg-sky-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-plus"></i> Añadir Objetivo
+          </button>
         </form>
       </div>
 
@@ -360,13 +329,12 @@
                 <th class="p-4">ID</th>
                 <th class="p-4">Nombre del Objetivo</th>
                 <th class="p-4">Dirección Exacta</th>
-                <th class="p-4 text-center">Coordenadas GPS</th>
                 <th class="p-4 text-center">Estado</th>
                 <th class="p-4 text-center">Acciones</th>
               </tr>
             </thead>
             <tbody id="cuerpoTablaObjetivos" class="divide-y divide-slate-700/50">
-              <tr><td colspan="6" class="p-8 text-center text-slate-400">Cargando objetivos...</td></tr>
+              <tr><td colspan="5" class="p-8 text-center text-slate-400">Cargando objetivos...</td></tr>
             </tbody>
           </table>
         </div>
@@ -375,7 +343,7 @@
 
   </div>
 
-  <!-- MODAL DE ALERTA DE PÁNICO DE EMERGENCIA CRÍTICA -->
+  <!-- MODAL DE ALERTA DE PÁNICO DE EMERGENCIA CRÍTICA (ESTÁTICO PARA FACILITAR LECTURA Y CLICS) -->
   <div id="modalPanicoAdmin" class="fixed inset-0 bg-rose-950/90 backdrop-blur-md hidden flex items-center justify-center p-4 z-50">
     <div class="bg-slate-900 border-2 border-rose-500 rounded-2xl p-6 max-w-md w-full text-center space-y-5 shadow-2xl">
       <div class="w-20 h-20 bg-rose-600 text-white rounded-full flex items-center justify-center mx-auto text-3xl animate-pulse shadow-lg shadow-rose-600/50">
@@ -459,6 +427,7 @@
         <h3 class="font-bold text-white text-lg">Informe de Auditoría Facial / IA</h3>
       </div>
 
+      <!-- Resumen del Alerta -->
       <div id="boxAlertaAuditoria" class="p-4 rounded-xl border flex flex-col gap-2">
         <div class="flex justify-between items-center">
           <span id="lblTipoAlerta" class="font-extrabold text-sm uppercase"></span>
@@ -467,6 +436,7 @@
         <p id="lblMotivoFraude" class="text-xs text-slate-300 mt-1"></p>
       </div>
 
+      <!-- Comparador de Fotos -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="bg-slate-900 border border-slate-700 p-3 rounded-xl text-center space-y-2">
           <span class="text-xs font-semibold text-slate-400 block uppercase">Foto de Fichada</span>
@@ -529,52 +499,6 @@
     </div>
   </div>
 
-  <!-- MODAL EDITAR OBJETIVO -->
-  <div id="modalEditarObjetivo" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
-    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-xl w-full relative space-y-4">
-      <button onclick="cerrarModalEditarObjetivo()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-      <h3 class="font-bold text-white text-lg flex items-center gap-2">
-        <i class="fa-solid fa-building-pen text-sky-500"></i> Editar Objetivo / Puesto
-      </h3>
-      <input type="hidden" id="editObjFirebaseId">
-      
-      <div class="space-y-3">
-        <div>
-          <label class="block text-xs uppercase text-slate-400 mb-1">Nombre del Objetivo</label>
-          <input type="text" id="editObjNombre" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
-        </div>
-        <div>
-          <label class="block text-xs uppercase text-slate-400 mb-1">Dirección Exacta</label>
-          <div class="flex gap-2">
-            <input type="text" id="editObjDireccion" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
-            <button type="button" onclick="buscarDireccionMapaEdicion()" class="bg-sky-600 hover:bg-sky-500 text-white px-3 py-2 rounded-xl text-xs font-bold transition shrink-0">Buscar</button>
-          </div>
-        </div>
-        <div>
-          <label class="block text-xs uppercase text-slate-400 mb-1">Ajustar Ubicación en Mapa</label>
-          <div id="mapaEditarObjetivo" class="w-full h-56 rounded-xl border border-slate-700 z-10"></div>
-        </div>
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="block text-xs uppercase text-slate-400 mb-1">Latitud</label>
-            <input type="text" id="editObjLat" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-sky-400 font-mono">
-          </div>
-          <div>
-            <label class="block text-xs uppercase text-slate-400 mb-1">Longitud</label>
-            <input type="text" id="editObjLng" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-sky-400 font-mono">
-          </div>
-        </div>
-      </div>
-
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" onclick="cerrarModalEditarObjetivo()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2 rounded-xl text-sm font-semibold transition">Cancelar</button>
-        <button type="button" onclick="guardarEdicionObjetivo()" id="btnGuardarEdicionObj" class="bg-sky-600 hover:bg-sky-500 text-white px-4 py-2 rounded-xl text-sm font-bold transition">Guardar Cambios</button>
-      </div>
-    </div>
-  </div>
-
   <script>
     const PASSWORD_ADMIN = "admin123"; 
     const URL_FIREBASE = "https://fir-asistencia-fad12-default-rtdb.firebaseio.com";
@@ -587,92 +511,6 @@
     let datosPersonal = [];
     let datosObjetivos = [];
     let registroFraudeSeleccionado = null;
-
-    // --- MAPAS LEAFLET ---
-    let mapaNuevo = null;
-    let markerNuevo = null;
-    let mapaEditar = null;
-    let markerEditar = null;
-
-    function inicializarMapas() {
-      // Mapa principal de registro
-      if (!mapaNuevo && document.getElementById('mapaNuevoObjetivo')) {
-        mapaNuevo = L.map('mapaNuevoObjetivo').setView([-34.6037, -58.3816], 13); // Centro por defecto (CABA)
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          maxZoom: 19,
-          attribution: '© OpenStreetMap'
-        }).addTo(mapaNuevo);
-
-        markerNuevo = L.marker([-34.6037, -58.3816], { draggable: true }).addTo(mapaNuevo);
-
-        markerNuevo.on('dragend', function(e) {
-          const pos = markerNuevo.getLatLng();
-          document.getElementById('newLat').value = pos.lat.toFixed(6);
-          document.getElementById('newLng').value = pos.lng.toFixed(6);
-        });
-
-        mapaNuevo.on('click', function(e) {
-          markerNuevo.setLatLng(e.latlng);
-          document.getElementById('newLat').value = e.latlng.lat.toFixed(6);
-          document.getElementById('newLng').value = e.latlng.lng.toFixed(6);
-        });
-      }
-    }
-
-    async function buscarDireccionMapa() {
-      const direccion = document.getElementById('newDireccion').value;
-      if (!direccion) return alert("Por favor ingresa una dirección para buscar.");
-
-      try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(direccion)}`);
-        const data = await res.json();
-
-        if (data && data.length > 0) {
-          const lat = parseFloat(data[0].lat);
-          const lon = parseFloat(data[0].lon);
-
-          document.getElementById('newLat').value = lat.toFixed(6);
-          document.getElementById('newLng').value = lon.toFixed(6);
-
-          if (mapaNuevo && markerNuevo) {
-            mapaNuevo.setView([lat, lon], 17);
-            markerNuevo.setLatLng([lat, lon]);
-          }
-        } else {
-          alert("No se encontró la dirección exacta. Por favor ajusta el pin manualmente en el mapa.");
-        }
-      } catch (e) {
-        console.error("Error buscando dirección:", e);
-        alert("Error al conectar con el servicio de mapas.");
-      }
-    }
-
-    async function buscarDireccionMapaEdicion() {
-      const direccion = document.getElementById('editObjDireccion').value;
-      if (!direccion) return alert("Ingresa una dirección.");
-
-      try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(direccion)}`);
-        const data = await res.json();
-
-        if (data && data.length > 0) {
-          const lat = parseFloat(data[0].lat);
-          const lon = parseFloat(data[0].lon);
-
-          document.getElementById('editObjLat').value = lat.toFixed(6);
-          document.getElementById('editObjLng').value = lon.toFixed(6);
-
-          if (mapaEditar && markerEditar) {
-            mapaEditar.setView([lat, lon], 17);
-            markerEditar.setLatLng([lat, lon]);
-          }
-        } else {
-          alert("No se encontró la ubicación exacta.");
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
 
     // --- MÓDULO DE SONIDO Y ESCUCHA DE PÁNICO EN TIEMPO REAL ---
     let audioCtxPanico = null;
@@ -696,6 +534,7 @@
 
         osc1.frequency.setValueAtTime(800, audioCtxPanico.currentTime);
         osc2.frequency.setValueAtTime(600, audioCtxPanico.currentTime);
+
         gain.gain.setValueAtTime(0.3, audioCtxPanico.currentTime);
 
         osc1.connect(gain);
@@ -728,6 +567,7 @@
       panicoInterval = null;
     }
 
+    // Sistema de sondeo por intervalos optimizado para GitHub Pages
     function escucharAlertasPanicoSSE() {
       if (intervaloPanicoPoll) clearInterval(intervaloPanicoPoll);
       
@@ -741,6 +581,7 @@
           let keys = Object.keys(panicosObj);
           for (let id of keys) {
             let p = panicosObj[id];
+            // Si hay un pánico pendiente o activo
             if (p && (p.estado === 'PENDIENTE' || p.estado === 'ACTIVO')) {
               if (panicoActivoActualId !== id) {
                 activarModalPanico(id, p);
@@ -826,7 +667,6 @@
       document.getElementById('contenidoAdmin').classList.remove('hidden');
       recargarDatosEfectivo();
       escucharAlertasPanicoSSE();
-      setTimeout(() => inicializarMapas(), 300);
     }
 
     function cerrarSesionAdmin() {
@@ -864,7 +704,6 @@
       } else if (tab === 'objetivos') {
         document.getElementById('tabObjetivos').classList.remove('hidden');
         document.getElementById('tabBtnObjetivos').className = "px-5 py-3 font-semibold text-sm border-b-2 border-sky-500 text-sky-400 flex items-center gap-2 transition";
-        setTimeout(() => { if (mapaNuevo) mapaNuevo.invalidateSize(); }, 200);
       }
     }
 
@@ -884,6 +723,7 @@
       if (icono) icono.classList.add('fa-spin');
 
       try {
+        // 1. Cargar Personal primero
         const resPersonal = await fetch(`${URL_FIREBASE}/personal.json`);
         const dataPersonal = await resPersonal.json();
         datosPersonal = [];
@@ -895,12 +735,15 @@
             if (d) {
               const legajoStr = d.legajo ? String(d.legajo).trim() : '';
               datosPersonal.push([legajoStr, d.nombre || '', 'Personal', d.pin || '', d.estado || 'ACTIVO', id, d.fotoMaster || '']);
-              if (legajoStr && d.fotoMaster) mapaFotosMaster[legajoStr] = d.fotoMaster;
+              if (legajoStr && d.fotoMaster) {
+                mapaFotosMaster[legajoStr] = d.fotoMaster;
+              }
             }
           });
         }
         renderizarTablaPersonal(datosPersonal);
 
+        // 2. Cargar Marcaciones
         const resMarcaciones = await fetch(`${URL_FIREBASE}/fichadas.json`);
         const dataMarcaciones = await resMarcaciones.json();
         datosMarcaciones = [];
@@ -910,18 +753,33 @@
             if (d) {
               const fecha = d.fechaHoraDispositivo || d.timestamp || '';
               const mapaUrl = (d.latitud && d.longitud) ? `https://maps.google.com/?q=${d.latitud},${d.longitud}` : '';
-              const legajoStr = d.legajo ? String(d.legajo).trim() : '';
               
+              const legajoStr = d.legajo ? String(d.legajo).trim() : '';
+              const alertaFraude = d.alertaFraude || false;
+              const distanciaEuclidiana = (d.distanciaEuclidiana !== undefined && d.distanciaEuclidiana !== null) ? Number(d.distanciaEuclidiana) : null;
+              const motivoFraude = d.motivoFraude || '';
+              const fotoMaster = mapaFotosMaster[legajoStr] || '';
+
               datosMarcaciones.push([
-                fecha, legajoStr, d.nombre || '', d.objetivo || '', d.tipo || '', mapaUrl, d.fotoBase64 || '',
-                d.alertaFraude || false, d.distanciaEuclidiana !== undefined ? Number(d.distanciaEuclidiana) : null,
-                d.motivoFraude || '', mapaFotosMaster[legajoStr] || '', id
+                fecha, 
+                legajoStr, 
+                d.nombre || '', 
+                d.objetivo || '', 
+                d.tipo || '', 
+                mapaUrl, 
+                d.fotoBase64 || '',
+                alertaFraude,
+                distanciaEuclidiana,
+                motivoFraude,
+                fotoMaster,
+                id
               ]);
             }
           });
         }
         filtrarTablaMarcaciones();
 
+        // 3. Cargar Novedades
         const resNovedades = await fetch(`${URL_FIREBASE}/novedades.json`);
         const dataNovedades = await resNovedades.json();
         datosNovedades = [];
@@ -937,6 +795,7 @@
         }
         filtrarTablaNovedades();
 
+        // 4. Cargar Pánicos (dentro de recargarDatosEfectivo)
         const resPanicos = await fetch(`${URL_FIREBASE}/panicos.json`);
         const dataPanicos = await resPanicos.json();
         datosPanicos = [];
@@ -946,12 +805,22 @@
             if (d) {
               const rawFecha = d.fechaHora || d.timestamp || d.fecha || '';
               const mapaUrl = (d.latitud && d.longitud) ? `https://maps.google.com/?q=${d.latitud},${d.longitud}` : '';
-              datosPanicos.push([id, rawFecha, d.legajo ? String(d.legajo) : '-', d.nombre || 'Sin Nombre', d.objetivo || 'Sin Objetivo', d.estado || 'PENDIENTE', mapaUrl]);
+              
+              datosPanicos.push([
+                id,
+                rawFecha,
+                d.legajo ? String(d.legajo) : '-',
+                d.nombre || 'Sin Nombre',
+                d.objetivo || 'Sin Objetivo',
+                d.estado || 'PENDIENTE',
+                mapaUrl
+              ]);
             }
           });
         }
         renderizarTablaPanicos(datosPanicos);
 
+        // 5. Cargar Objetivos (con soporte para la dirección exacta)
         const resObjetivos = await fetch(`${URL_FIREBASE}/objetivos.json`);
         const dataObjetivos = await resObjetivos.json();
         datosObjetivos = [];
@@ -960,17 +829,15 @@
             const d = dataObjetivos[id];
             if (d) {
               const nombreObj = typeof d === 'string' ? d : (d.nombre || id);
-              const direccion = d.direccion || 'Sin dirección';
-              const lat = d.latitud || '';
-              const lng = d.longitud || '';
-              datosObjetivos.push([id, nombreObj, direccion, lat, lng, 'ACTIVO']);
+              const direccionObj = typeof d === 'object' && d.direccion ? d.direccion : 'No especificada';
+              datosObjetivos.push([id, nombreObj, direccionObj, 'ACTIVO']);
             }
           });
         }
         renderizarTablaObjetivos(datosObjetivos);
 
       } catch (err) {
-        console.error("Error sincronizando:", err);
+        console.error("Error al sincronizar con Firebase:", err);
       } finally {
         if (icono) icono.classList.remove('fa-spin');
       }
@@ -986,6 +853,7 @@
       }
 
       const ordenados = [...registros].reverse();
+
       ordenados.forEach(fila => {
         const fecha = fila[0] ? new Date(fila[0]).toLocaleString('es-AR', { hour12: false }) : '-';
         const legajo = fila[1] !== undefined ? String(fila[1]) : '-';
@@ -994,23 +862,45 @@
         const tipo = fila[4] || '-';
         const urlMapa = fila[5] || '';
         const urlFoto = fila[6] || '';
+        
         const alertaFraude = fila[7];
         const distanciaEuclidiana = fila[8];
         const firebaseId = fila[11];
 
-        const badgeTipo = tipo === 'ENTRADA' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+        const badgeTipo = tipo === 'ENTRADA' 
+          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+          : 'bg-rose-500/10 text-rose-400 border-rose-500/20';
 
         let badgeIA = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"><i class="fa-solid fa-circle-check"></i> OK</span>`;
+        
         if (alertaFraude) {
-          badgeIA = `<button onclick='abrirModalAuditoriaPorId("${firebaseId}")' class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-extrabold bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse hover:bg-rose-500/30 transition shadow-lg cursor-pointer"><i class="fa-solid fa-triangle-exclamation"></i> SOSPECHA DE FRAUDE</button>`;
+          badgeIA = `<button onclick='abrirModalAuditoriaPorId("${firebaseId}")' class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-extrabold bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse hover:bg-rose-500/30 transition shadow-lg cursor-pointer">
+                      <i class="fa-solid fa-triangle-exclamation"></i> SOSPECHA DE FRAUDE
+                     </button>`;
         } else if (distanciaEuclidiana !== null) {
-          badgeIA = `<button onclick='abrirModalAuditoriaPorId("${firebaseId}")' class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-700/60 text-slate-300 hover:bg-slate-700 border border-slate-600 transition"><i class="fa-solid fa-brain text-emerald-400"></i> Verificado (d: ${distanciaEuclidiana.toFixed(2)})</button>`;
+          badgeIA = `<button onclick='abrirModalAuditoriaPorId("${firebaseId}")' class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-700/60 text-slate-300 hover:bg-slate-700 border border-slate-600 transition">
+                      <i class="fa-solid fa-brain text-emerald-400"></i> Verificado (d: ${distanciaEuclidiana.toFixed(2)})
+                     </button>`;
         }
 
-        const btnMapa = (urlMapa && urlMapa.includes('http')) ? `<a href="${urlMapa}" target="_blank" class="inline-flex items-center gap-1 bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition"><i class="fa-solid fa-map-location-dot"></i> Mapa</a>` : `<span class="text-xs text-slate-500">Sin GPS</span>`;
-        const btnFoto = (urlFoto && urlFoto.length > 50) ? `<button onclick="abrirFoto('${urlFoto}')" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition"><i class="fa-solid fa-image"></i> Foto</button>` : `<span class="text-xs text-slate-500">Sin Foto</span>`;
+        const btnMapa = (urlMapa && urlMapa.includes('http'))
+          ? `<a href="${urlMapa}" target="_blank" class="inline-flex items-center gap-1 bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
+              <i class="fa-solid fa-map-location-dot"></i> Mapa
+             </a>`
+          : `<span class="text-xs text-slate-500">Sin GPS</span>`;
 
-        let btnAccionFraude = alertaFraude ? `<button onclick='abrirModalAccionFraudePorId("${firebaseId}")' class="inline-flex items-center gap-1 bg-rose-600 hover:bg-rose-500 text-white font-bold px-2.5 py-1 rounded-lg text-xs transition shadow-md"><i class="fa-solid fa-shield-cat"></i> 🚨 Resolver Fraude</button>` : '';
+        const btnFoto = (urlFoto && urlFoto.length > 50)
+          ? `<button onclick="abrirFoto('${urlFoto}')" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
+              <i class="fa-solid fa-image"></i> Foto
+             </button>`
+          : `<span class="text-xs text-slate-500">Sin Foto</span>`;
+
+        let btnAccionFraude = '';
+        if (alertaFraude) {
+          btnAccionFraude = `<button onclick='abrirModalAccionFraudePorId("${firebaseId}")' class="inline-flex items-center gap-1 bg-rose-600 hover:bg-rose-500 text-white font-bold px-2.5 py-1 rounded-lg text-xs transition shadow-md">
+                              <i class="fa-solid fa-shield-cat"></i> 🚨 Resolver Fraude
+                             </button>`;
+        }
 
         const tr = document.createElement('tr');
         tr.className = alertaFraude ? "bg-rose-950/20 hover:bg-rose-900/30 transition border-l-4 border-l-rose-500" : "hover:bg-slate-700/30 transition";
@@ -1019,7 +909,9 @@
           <td class="p-4 font-semibold text-white">${legajo}</td>
           <td class="p-4 font-medium text-slate-200">${nombre}</td>
           <td class="p-4 text-slate-400">${objetivo}</td>
-          <td class="p-4 text-center"><span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${badgeTipo}">${tipo}</span></td>
+          <td class="p-4 text-center">
+            <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${badgeTipo}">${tipo}</span>
+          </td>
           <td class="p-4 text-center">${badgeIA}</td>
           <td class="p-4 text-center">${btnMapa}</td>
           <td class="p-4 text-center flex items-center justify-center gap-2">${btnFoto} ${btnAccionFraude}</td>
@@ -1037,59 +929,90 @@
         const textoFila = `${fila[1]} ${fila[2]} ${fila[3]}`.toLowerCase();
         const coincideBusqueda = textoFila.includes(busqueda);
         const coincideTipo = (filtroTipo === 'TODOS') || (fila[4] === filtroTipo);
+        
         let coincideAuditoria = true;
         if (filtroAuditoria === 'FRAUDE') coincideAuditoria = fila[7] === true;
         if (filtroAuditoria === 'OK') coincideAuditoria = fila[7] === false;
+
         return coincideBusqueda && coincideTipo && coincideAuditoria;
       });
+
       renderizarTablaMarcaciones(datosFiltradosMarcaciones);
     }
 
-    function obtenerRegistroPorId(id) { return datosMarcaciones.find(f => f[11] === id); }
-    function abrirModalAccionFraudePorId(id) { const reg = obtenerRegistroPorId(id); if (reg) abrirModalAccionFraude(reg); }
-    function abrirModalAuditoriaPorId(id) { const reg = obtenerRegistroPorId(id); if (reg) abrirModalAuditoria(reg); }
+    function obtenerRegistroPorId(id) {
+      return datosMarcaciones.find(f => f[11] === id);
+    }
+
+    function abrirModalAccionFraudePorId(id) {
+      const registro = obtenerRegistroPorId(id);
+      if (registro) abrirModalAccionFraude(registro);
+    }
+
+    function abrirModalAuditoriaPorId(id) {
+      const registro = obtenerRegistroPorId(id);
+      if (registro) abrirModalAuditoria(registro);
+    }
 
     function abrirModalAccionFraude(registro) {
       registroFraudeSeleccionado = registro;
       document.getElementById('fraudeFirebaseId').value = registro[11];
+      
       const fecha = registro[0] ? new Date(registro[0]).toLocaleString('es-AR', { hour12: false }) : '-';
-      document.getElementById('fraudeDetalleFichada').innerHTML = `<p><strong>Empleado:</strong> ${registro[2]} (Legajo: ${registro[1]})</p><p><strong>Objetivo:</strong> ${registro[3]} - <strong>Tipo:</strong> ${registro[4]}</p><p><strong>Fecha/Hora:</strong> ${fecha}</p>`;
+      document.getElementById('fraudeDetalleFichada').innerHTML = `
+        <p><strong>Empleado:</strong> ${registro[2]} (Legajo: ${registro[1]})</p>
+        <p><strong>Objetivo:</strong> ${registro[3]} - <strong>Tipo:</strong> ${registro[4]}</p>
+        <p><strong>Fecha/Hora:</strong> ${fecha}</p>
+      `;
+
       document.getElementById('modalAccionFraude').classList.remove('hidden');
     }
 
-    function cerrarModalAccionFraude() { document.getElementById('modalAccionFraude').classList.add('hidden'); }
+    function cerrarModalAccionFraude() {
+      document.getElementById('modalAccionFraude').classList.add('hidden');
+    }
 
     async function aprobarFraudeManual() {
       const id = document.getElementById('fraudeFirebaseId').value;
       if (!id) return;
+
       try {
         await fetch(`${URL_FIREBASE}/fichadas/${id}.json`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ alertaFraude: false, motivoFraude: "Validado manualmente por administrador" })
         });
-        alert("Marcación aprobada.");
+        alert("Marcación aprobada y sospecha descartada exitosamente.");
         cerrarModalAccionFraude();
         recargarDatosEfectivo();
-      } catch (e) { alert("Error: " + e); }
+      } catch (e) {
+        alert("Error al actualizar la marcación: " + e.toString());
+      }
     }
 
     async function eliminarFraudeMarca() {
       const id = document.getElementById('fraudeFirebaseId').value;
-      if (!id || !confirm("¿Eliminar marcación permanente?")) return;
+      if (!id) return;
+
+      if (!confirm("¿Está seguro de que desea eliminar permanentemente esta marcación por considerar fraude de identidad?")) return;
+
       try {
         await fetch(`${URL_FIREBASE}/fichadas/${id}.json`, { method: "DELETE" });
-        alert("Eliminado.");
+        alert("Marcación eliminada.");
         cerrarModalAccionFraude();
         recargarDatosEfectivo();
-      } catch (e) { alert("Error: " + e); }
+      } catch (e) {
+        alert("Error al eliminar la marcación: " + e.toString());
+      }
     }
 
     function verAuditoriaDesdeAccion() {
       if (registroFraudeSeleccionado) {
-        const reg = [...registroFraudeSeleccionado];
+        const registroParaAuditoria = [...registroFraudeSeleccionado];
         cerrarModalAccionFraude();
-        abrirModalAuditoria(reg);
+        abrirModalAuditoria(registroParaAuditoria);
+      } else {
+        alert("No se pudo obtener la información de la evidencia para este registro.");
       }
     }
 
@@ -1108,31 +1031,39 @@
       if (alertaFraude) {
         box.className = "p-4 rounded-xl border flex flex-col gap-2 bg-rose-950/40 border-rose-500/50 text-rose-200";
         lblTipo.innerText = "🚨 ALERTA: Sospecha de Suplantación o Fraude";
-        lblMotivo.innerText = motivo || "No se alcanzó el umbral biométrico.";
+        lblMotivo.innerText = motivo || "La coincidencia facial no alcanzó el umbral de seguridad requerido o se detectó uso de foto estática/pantalla.";
       } else {
         box.className = "p-4 rounded-xl border flex flex-col gap-2 bg-emerald-950/40 border-emerald-500/50 text-emerald-200";
         lblTipo.innerText = "✅ Verificación Satisfactoria";
-        lblMotivo.innerText = "Rasgos biométricos validados correctamente.";
+        lblMotivo.innerText = "La coincidencia de rasgos biométricos se encuentra dentro del rango de tolerancia permitido.";
       }
+
       lblDist.innerText = (distancia !== null && !isNaN(distancia)) ? `Distancia Euclidiana: ${distancia.toFixed(4)}` : "Distancia N/A";
+
       document.getElementById('imgAuditoriaFichada').src = fotoFichada || '';
       document.getElementById('imgAuditoriaMaster').src = fotoMaster || fotoFichada || '';
+
       document.getElementById('modalAuditoriaIA').classList.remove('hidden');
     }
 
-    function cerrarModalAuditoria() { document.getElementById('modalAuditoriaIA').classList.add('hidden'); }
+    function cerrarModalAuditoria() {
+      document.getElementById('modalAuditoriaIA').classList.add('hidden');
+    }
 
     function renderizarTablaNovedades(registros) {
       const cuerpo = document.getElementById('cuerpoTablaNovedades');
       cuerpo.innerHTML = "";
+
       if (!registros || registros.length === 0) {
         cuerpo.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-400">No hay novedades registradas.</td></tr>`;
         return;
       }
+
       const ordenados = [...registros].reverse();
+
       ordenados.forEach(fila => {
         const fecha = fila[0] ? new Date(fila[0]).toLocaleString('es-AR', { hour12: false }) : '-';
-        const legajo = fila[1] || '-';
+        const legajo = fila[1] !== undefined ? String(fila[1]) : '-';
         const nombre = fila[2] || '-';
         const objetivo = fila[3] || '-';
         const tipoIncidencia = fila[4] || '-';
@@ -1140,8 +1071,17 @@
         const urlMapa = fila[6] || '';
         const urlFoto = fila[7] || '';
 
-        const btnMapa = (urlMapa && urlMapa.includes('http')) ? `<a href="${urlMapa}" target="_blank" class="inline-flex items-center gap-1 bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition"><i class="fa-solid fa-map-location-dot"></i> Mapa</a>` : `<span class="text-xs text-slate-500">Sin GPS</span>`;
-        const btnFoto = (urlFoto && urlFoto.length > 50) ? `<button onclick="abrirFoto('${urlFoto}')" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition"><i class="fa-solid fa-image"></i> Foto</button>` : `<span class="text-xs text-slate-500">Sin Foto</span>`;
+        const btnMapa = (urlMapa && urlMapa.includes('http'))
+          ? `<a href="${urlMapa}" target="_blank" class="inline-flex items-center gap-1 bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
+              <i class="fa-solid fa-map-location-dot"></i> Mapa
+             </a>`
+          : `<span class="text-xs text-slate-500">Sin GPS</span>`;
+
+        const btnFoto = (urlFoto && urlFoto.length > 50)
+          ? `<button onclick="abrirFoto('${urlFoto}')" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
+              <i class="fa-solid fa-image"></i> Foto
+             </button>`
+          : `<span class="text-xs text-slate-500">Sin Foto</span>`;
 
         const tr = document.createElement('tr');
         tr.className = "hover:bg-slate-700/30 transition";
@@ -1161,60 +1101,125 @@
     function renderizarTablaPanicos(registros) {
       const cuerpo = document.getElementById('cuerpoTablaPanicos');
       cuerpo.innerHTML = "";
+
       if (!registros || registros.length === 0) {
-        cuerpo.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-400">No hay alertas de pánico.</td></tr>`;
+        cuerpo.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-400">No hay alertas de pánico registradas.</td></tr>`;
         return;
       }
+
       const ordenados = [...registros].reverse();
+
       ordenados.forEach(fila => {
         const id = fila[0];
-        let fechaFormateada = fila[1] ? (isNaN(fila[1]) ? new Date(fila[1]).toLocaleString('es-AR', { hour12: false }) : new Date(Number(fila[1])).toLocaleString('es-AR', { hour12: false })) : '-';
+        const rawFecha = fila[1];
+        
+        let fechaFormateada = '-';
+        if (rawFecha) {
+          const fechaObj = !isNaN(rawFecha) ? new Date(Number(rawFecha)) : new Date(rawFecha);
+          if (!isNaN(fechaObj.getTime())) {
+            fechaFormateada = fechaObj.toLocaleString('es-AR', { hour12: false });
+          } else {
+            fechaFormateada = String(rawFecha);
+          }
+        }
+
+        const legajo = fila[2];
+        const nombre = fila[3];
+        const objetivo = fila[4];
+        const estado = fila[5];
+        const urlMapa = fila[6];
+
+        const badgeEstado = estado === 'ATENDIDO' 
+          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+          : 'bg-rose-500/10 text-rose-400 border-rose-500/20 animate-pulse';
+
+        const btnMapa = (urlMapa && urlMapa.includes('http'))
+          ? `<a href="${urlMapa}" target="_blank" class="inline-flex items-center gap-1 bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
+              <i class="fa-solid fa-map-location-dot"></i> Mapa
+             </a>`
+          : `<span class="text-xs text-slate-500">Sin GPS</span>`;
+
         const tr = document.createElement('tr');
         tr.className = "hover:bg-slate-700/30 transition";
         tr.innerHTML = `
           <td class="p-4 font-mono text-xs text-slate-300">${fechaFormateada}</td>
-          <td class="p-4 font-bold text-white">${fila[2]}</td>
-          <td class="p-4 font-medium text-slate-200">${fila[3]}</td>
-          <td class="p-4 text-slate-400">${fila[4]}</td>
-          <td class="p-4 text-center"><span class="inline-block px-2.5 py-1 rounded-full text-xs font-bold border ${fila[5] === 'ATENDIDO' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20 animate-pulse'}">${fila[5]}</span></td>
-          <td class="p-4 text-center">${fila[6] ? `<a href="${fila[6]}" target="_blank" class="text-sky-400 hover:underline">Mapa</a>` : '-'}</td>
-          <td class="p-4 text-center"><button onclick="eliminarPanico('${id}')" class="bg-rose-600/20 text-rose-400 px-3 py-1 rounded-lg text-xs">Borrar</button></td>
+          <td class="p-4 font-bold text-white">${legajo}</td>
+          <td class="p-4 font-medium text-slate-200">${nombre}</td>
+          <td class="p-4 text-slate-400">${objetivo}</td>
+          <td class="p-4 text-center">
+            <span class="inline-block px-2.5 py-1 rounded-full text-xs font-bold border ${badgeEstado}">${estado}</span>
+          </td>
+          <td class="p-4 text-center">${btnMapa}</td>
+          <td class="p-4 text-center">
+            <button onclick="eliminarPanico('${id}')" class="bg-rose-600/20 text-rose-400 hover:bg-rose-600/40 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1">
+              <i class="fa-solid fa-trash"></i> Borrar
+            </button>
+          </td>
         `;
         cuerpo.appendChild(tr);
       });
     }
 
     async function eliminarPanico(id) {
-      if (!confirm("¿Eliminar pánico?")) return;
-      await fetch(`${URL_FIREBASE}/panicos/${id}.json`, { method: "DELETE" });
-      recargarDatosEfectivo();
+      if (!confirm("¿Está seguro de que desea eliminar este registro de pánico?")) return;
+      try {
+        await fetch(`${URL_FIREBASE}/panicos/${id}.json`, { method: "DELETE" });
+        alert("Registro de pánico eliminado.");
+        recargarDatosEfectivo();
+      } catch (e) {
+        alert("Error al eliminar el registro: " + e.toString());
+      }
     }
 
     function filtrarTablaNovedades() {
       const busqueda = document.getElementById('inputBusquedaNovedades').value.toLowerCase();
-      datosFiltradosNovedades = datosNovedades.filter(f => `${f[1]} ${f[2]} ${f[3]} ${f[4]} ${f[5]}`.toLowerCase().includes(busqueda));
+
+      datosFiltradosNovedades = datosNovedades.filter(fila => {
+        const textoFila = `${fila[1]} ${fila[2]} ${fila[3]} ${fila[4]} ${fila[5]}`.toLowerCase();
+        return textoFila.includes(busqueda);
+      });
+
       renderizarTablaNovedades(datosFiltradosNovedades);
     }
 
     function renderizarTablaPersonal(registros) {
       const cuerpo = document.getElementById('cuerpoTablaPersonal');
       cuerpo.innerHTML = "";
+
       if (!registros || registros.length === 0) {
         cuerpo.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-slate-400">No hay personal registrado.</td></tr>`;
         return;
       }
+
       registros.forEach(fila => {
+        const legajoStr = String(fila[0]);
+        const nombreStr = fila[1] || '';
+        const pinStr = fila[3] || '****';
+        const estadoStr = fila[4] || 'ACTIVO';
+        const firebaseId = fila[5];
+        const fotoMaster = fila[6] || '';
+
+        const btnFotoMaster = (fotoMaster && fotoMaster.length > 50)
+          ? `<button onclick="abrirFoto('${fotoMaster}')" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
+              <i class="fa-solid fa-id-card"></i> Ver Foto
+             </button>`
+          : `<span class="text-xs text-slate-500">Sin Foto</span>`;
+
         const tr = document.createElement('tr');
         tr.className = "hover:bg-slate-700/30 transition";
         tr.innerHTML = `
-          <td class="p-4 font-bold text-amber-400">${fila[0]}</td>
-          <td class="p-4 font-medium text-white">${fila[1]}</td>
-          <td class="p-4 text-center font-mono text-slate-400">${fila[3]}</td>
-          <td class="p-4 text-center">${fila[6] ? `<button onclick="abrirFoto('${fila[6]}')" class="text-amber-400 hover:underline text-xs">Ver Foto</button>` : 'Sin Foto'}</td>
-          <td class="p-4 text-center"><span class="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded text-xs">${fila[4]}</span></td>
+          <td class="p-4 font-bold text-amber-400">${legajoStr}</td>
+          <td class="p-4 font-medium text-white">${nombreStr}</td>
+          <td class="p-4 text-center font-mono text-slate-400">${pinStr}</td>
+          <td class="p-4 text-center">${btnFotoMaster}</td>
+          <td class="p-4 text-center"><span class="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded text-xs">${estadoStr}</span></td>
           <td class="p-4 text-center flex justify-center gap-2">
-            <button onclick="abrirModalEditar('${fila[5]}', '${fila[0]}', '${fila[1].replace(/'/g, "\\'")}', '${fila[3]}', '${fila[6] ? fila[6].replace(/'/g, "\\'") : ''}')" class="bg-amber-600/20 text-amber-400 px-3 py-1 rounded-lg text-xs">Editar</button>
-            <button onclick="eliminarPersonal('${fila[5]}')" class="bg-rose-600/20 text-rose-400 px-3 py-1 rounded-lg text-xs">Eliminar</button>
+            <button onclick="abrirModalEditar('${firebaseId}', '${legajoStr}', '${nombreStr.replace(/'/g, "\\'")}', '${pinStr}', '${fotoMaster ? fotoMaster.replace(/'/g, "\\'") : ''}')" class="bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1">
+              <i class="fa-solid fa-pen"></i> Editar
+            </button>
+            <button onclick="eliminarPersonal('${firebaseId}')" class="bg-rose-600/20 text-rose-400 hover:bg-rose-600/40 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1">
+              <i class="fa-solid fa-trash"></i> Eliminar
+            </button>
           </td>
         `;
         cuerpo.appendChild(tr);
@@ -1223,20 +1228,50 @@
 
     async function guardarVigilador(e) {
       e.preventDefault();
+      const btn = document.getElementById('btnGuardarGuardia');
+      btn.disabled = true;
+      btn.innerText = "Guardando...";
+
+      const pinGenerado = document.getElementById('newPin').value;
+      const legajoIngresado = document.getElementById('newLegajo').value.trim();
+      const nombreIngresado = document.getElementById('newNombre').value.trim();
+      const inputFotoMaster = document.getElementById('newFotoMaster');
+
+      let fotoMasterBase64 = null;
+      if (inputFotoMaster.files && inputFotoMaster.files[0]) {
+        fotoMasterBase64 = await convertirImagenBase64(inputFotoMaster.files[0]);
+      }
+
       const nuevoPersonal = {
-        legajo: document.getElementById('newLegajo').value.trim(),
-        nombre: document.getElementById('newNombre').value.trim(),
-        pin: document.getElementById('newPin').value,
+        legajo: legajoIngresado,
+        nombre: nombreIngresado,
+        pin: pinGenerado,
         estado: 'ACTIVO',
-        fotoMaster: await convertirImagenBase64(document.getElementById('newFotoMaster').files[0]),
+        fotoMaster: fotoMasterBase64,
         timestamp: new Date().toISOString()
       };
-      await fetch(`${URL_FIREBASE}/personal.json`, { method: "POST", body: JSON.stringify(nuevoPersonal) });
-      alert("Personal registrado.");
-      document.getElementById('newLegajo').value = "";
-      document.getElementById('newNombre').value = "";
-      generarPinAleatorio();
-      recargarDatosEfectivo();
+
+      try {
+        const res = await fetch(`${URL_FIREBASE}/personal.json`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(nuevoPersonal)
+        });
+
+        if (!res.ok) throw new Error("No se pudo guardar en Firebase");
+
+        alert(`Personal registrado con éxito.\nPIN asignado: ${pinGenerado}`);
+        document.getElementById('newLegajo').value = "";
+        document.getElementById('newNombre').value = "";
+        document.getElementById('newFotoMaster').value = "";
+        generarPinAleatorio();
+        recargarDatosEfectivo();
+      } catch (err) {
+        alert("Ocurrió un error al guardar: " + err.toString());
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Guardar Personal`;
+      }
     }
 
     function abrirModalEditar(id, legajo, nombre, pin, fotoMaster) {
@@ -1244,51 +1279,99 @@
       document.getElementById('editLegajo').value = legajo;
       document.getElementById('editNombre').value = nombre;
       document.getElementById('editPin').value = pin;
+      document.getElementById('editFotoMaster').value = "";
+
+      const preview = document.getElementById('previewFotoActual');
+      if (fotoMaster && fotoMaster.length > 50) {
+        preview.innerHTML = `<span class="text-emerald-400"><i class="fa-solid fa-check"></i> Posee foto máster cargada</span>`;
+      } else {
+        preview.innerHTML = `<span class="text-rose-400"><i class="fa-solid fa-xmark"></i> Sin foto máster</span>`;
+      }
+
       document.getElementById('modalEditarPersonal').classList.remove('hidden');
     }
-    function cerrarModalEditar() { document.getElementById('modalEditarPersonal').classList.add('hidden'); }
+
+    function cerrarModalEditar() {
+      document.getElementById('modalEditarPersonal').classList.add('hidden');
+    }
 
     async function guardarEdicionPersonal() {
       const id = document.getElementById('editFirebaseId').value;
-      const datos = {
-        legajo: document.getElementById('editLegajo').value.trim(),
-        nombre: document.getElementById('editNombre').value.trim(),
-        pin: document.getElementById('editPin').value.trim()
-      };
-      const foto = document.getElementById('editFotoMaster').files[0];
-      if (foto) datos.fotoMaster = await convertirImagenBase64(foto);
+      const legajo = document.getElementById('editLegajo').value.trim();
+      const nombre = document.getElementById('editNombre').value.trim();
+      const pin = document.getElementById('editPin').value.trim();
+      const inputFoto = document.getElementById('editFotoMaster');
 
-      await fetch(`${URL_FIREBASE}/personal/${id}.json`, { method: "PATCH", body: JSON.stringify(datos) });
-      alert("Actualizado.");
-      cerrarModalEditar();
-      recargarDatosEfectivo();
+      const btn = document.getElementById('btnGuardarEdicion');
+      btn.disabled = true;
+      btn.innerText = "Guardando...";
+
+      const datosActualizados = {
+        legajo: legajo,
+        nombre: nombre,
+        pin: pin
+      };
+
+      if (inputFoto.files && inputFoto.files[0]) {
+        datosActualizados.fotoMaster = await convertirImagenBase64(inputFoto.files[0]);
+      }
+
+      try {
+        const res = await fetch(`${URL_FIREBASE}/personal/${id}.json`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(datosActualizados)
+        });
+
+        if (!res.ok) throw new Error("Error al actualizar en Firebase");
+
+        alert("Personal actualizado con éxito.");
+        cerrarModalEditar();
+        recargarDatosEfectivo();
+      } catch (err) {
+        alert("Ocurrió un error al editar: " + err.toString());
+      } finally {
+        btn.disabled = false;
+        btn.innerText = "Guardar Cambios";
+      }
     }
 
-    async function eliminarPersonal(id) {
-      if (!confirm("¿Eliminar personal?")) return;
-      await fetch(`${URL_FIREBASE}/personal/${id}.json`, { method: "DELETE" });
-      recargarDatosEfectivo();
+    async function eliminarPersonal(firebaseId) {
+      if (!confirm(`¿Estás seguro de que deseas eliminar este registro?`)) return;
+
+      try {
+        await fetch(`${URL_FIREBASE}/personal/${firebaseId}.json`, { method: "DELETE" });
+        alert("Registro eliminado con éxito.");
+        recargarDatosEfectivo();
+      } catch (err) {
+        alert("Ocurrió un error al eliminar: " + err.toString());
+      }
     }
 
     function renderizarTablaObjetivos(registros) {
       const cuerpo = document.getElementById('cuerpoTablaObjetivos');
       cuerpo.innerHTML = "";
+
       if (!registros || registros.length === 0) {
-        cuerpo.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-slate-400">No hay objetivos registrados.</td></tr>`;
+        cuerpo.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-slate-400">No hay objetivos registrados.</td></tr>`;
         return;
       }
+
       registros.forEach(fila => {
+        const firebaseId = fila[0];
+        const nombreObj = fila[1];
+        const direccionObj = fila[2] || 'No especificada';
         const tr = document.createElement('tr');
         tr.className = "hover:bg-slate-700/30 transition";
         tr.innerHTML = `
-          <td class="p-4 font-mono text-xs text-slate-400">${fila[0]}</td>
-          <td class="p-4 font-medium text-white">${fila[1]}</td>
-          <td class="p-4 text-slate-300 text-xs">${fila[2]}</td>
-          <td class="p-4 text-center font-mono text-xs text-sky-400">${fila[3]}, ${fila[4]}</td>
+          <td class="p-4 font-mono text-xs text-slate-400">${firebaseId}</td>
+          <td class="p-4 font-medium text-white">${nombreObj}</td>
+          <td class="p-4 text-slate-300 text-xs">${direccionObj}</td>
           <td class="p-4 text-center"><span class="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded text-xs">ACTIVO</span></td>
-          <td class="p-4 text-center flex justify-center gap-2">
-            <button onclick="abrirModalEditarObjetivo('${fila[0]}', '${fila[1].replace(/'/g, "\\'")}', '${fila[2].replace(/'/g, "\\'")}', '${fila[3]}', '${fila[4]}')" class="bg-sky-600/20 text-sky-400 px-3 py-1 rounded-lg text-xs">Editar</button>
-            <button onclick="eliminarObjetivo('${fila[0]}')" class="bg-rose-600/20 text-rose-400 px-3 py-1 rounded-lg text-xs">Eliminar</button>
+          <td class="p-4 text-center">
+            <button onclick="eliminarObjetivo('${firebaseId}')" class="bg-rose-600/20 text-rose-400 hover:bg-rose-600/40 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1">
+              <i class="fa-solid fa-trash"></i> Eliminar
+            </button>
           </td>
         `;
         cuerpo.appendChild(tr);
@@ -1297,119 +1380,174 @@
 
     async function guardarObjetivo(e) {
       e.preventDefault();
-      const nuevoObj = {
-        nombre: document.getElementById('newObjetivo').value.trim(),
-        direccion: document.getElementById('newDireccion').value.trim(),
-        latitud: document.getElementById('newLat').value.trim(),
-        longitud: document.getElementById('newLng').value.trim(),
-        estado: 'ACTIVO',
-        timestamp: new Date().toISOString()
-      };
-      await fetch(`${URL_FIREBASE}/objetivos.json`, { method: "POST", body: JSON.stringify(nuevoObj) });
-      alert("Objetivo guardado con coordenadas precisas.");
-      document.getElementById('newObjetivo').value = "";
-      document.getElementById('newDireccion').value = "";
-      document.getElementById('newLat').value = "";
-      document.getElementById('newLng').value = "";
-      recargarDatosEfectivo();
+      const btn = document.getElementById('btnGuardarObj');
+      btn.disabled = true;
+      btn.innerText = "Guardando...";
+
+      const nombreObj = document.getElementById('newObjetivo').value.trim();
+      const direccionObj = document.getElementById('newDireccionObjetivo').value.trim();
+
+      try {
+        const res = await fetch(`${URL_FIREBASE}/objetivos.json`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            nombre: nombreObj, 
+            direccion: direccionObj, 
+            estado: 'ACTIVO', 
+            timestamp: new Date().toISOString() 
+          })
+        });
+
+        if (!res.ok) throw new Error("Error al guardar en Firebase");
+
+        alert("Objetivo y dirección exacta registrados con éxito.");
+        document.getElementById('newObjetivo').value = "";
+        document.getElementById('newDireccionObjetivo').value = "";
+        recargarDatosEfectivo();
+      } catch (err) {
+        alert("Ocurrió un error al guardar el objetivo: " + err.toString());
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fa-solid fa-plus"></i> Añadir Objetivo`;
+      }
     }
 
-    function abrirModalEditarObjetivo(id, nombre, direccion, lat, lng) {
-      document.getElementById('editObjFirebaseId').value = id;
-      document.getElementById('editObjNombre').value = nombre;
-      document.getElementById('editObjDireccion').value = direccion;
-      document.getElementById('editObjLat').value = lat;
-      document.getElementById('editObjLng').value = lng;
-      document.getElementById('modalEditarObjetivo').classList.remove('hidden');
+    async function eliminarObjetivo(firebaseId) {
+      if (!confirm(`¿Estás seguro de que deseas eliminar este objetivo?`)) return;
 
-      setTimeout(() => {
-        if (!mapaEditar) {
-          mapaEditar = L.map('mapaEditarObjetivo').setView([lat || -34.6037, lng || -58.3816], 15);
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapaEditar);
-          markerEditar = L.marker([lat || -34.6037, lng || -58.3816], { draggable: true }).addTo(mapaEditar);
-          markerEditar.on('dragend', function(e) {
-            const p = markerEditar.getLatLng();
-            document.getElementById('editObjLat').value = p.lat.toFixed(6);
-            document.getElementById('editObjLng').value = p.lng.toFixed(6);
-          });
-        } else {
-          const lt = parseFloat(lat) || -34.6037;
-          const ln = parseFloat(lng) || -58.3816;
-          mapaEditar.setView([lt, ln], 15);
-          markerEditar.setLatLng([lt, ln]);
-          mapaEditar.invalidateSize();
-        }
-      }, 200);
-    }
-
-    function cerrarModalEditarObjetivo() { document.getElementById('modalEditarObjetivo').classList.add('hidden'); }
-
-    async function guardarEdicionObjetivo() {
-      const id = document.getElementById('editObjFirebaseId').value;
-      const datos = {
-        nombre: document.getElementById('editObjNombre').value.trim(),
-        direccion: document.getElementById('editObjDireccion').value.trim(),
-        latitud: document.getElementById('editObjLat').value.trim(),
-        longitud: document.getElementById('editObjLng').value.trim()
-      };
-      await fetch(`${URL_FIREBASE}/objetivos/${id}.json`, { method: "PATCH", body: JSON.stringify(datos) });
-      alert("Objetivo actualizado.");
-      cerrarModalEditarObjetivo();
-      recargarDatosEfectivo();
-    }
-
-    async function eliminarObjetivo(id) {
-      if (!confirm("¿Eliminar objetivo?")) return;
-      await fetch(`${URL_FIREBASE}/objetivos/${id}.json`, { method: "DELETE" });
-      recargarDatosEfectivo();
+      try {
+        await fetch(`${URL_FIREBASE}/objetivos/${firebaseId}.json`, { method: "DELETE" });
+        alert("Objetivo eliminado con éxito.");
+        recargarDatosEfectivo();
+      } catch (err) {
+        alert("Ocurrió un error al eliminar: " + err.toString());
+      }
     }
 
     function abrirFoto(base64) {
       document.getElementById('imgModal').src = base64;
       document.getElementById('modalFoto').classList.remove('hidden');
     }
-    function cerrarModal() { document.getElementById('modalFoto').classList.add('hidden'); }
+
+    function cerrarModal() {
+      document.getElementById('modalFoto').classList.add('hidden');
+      document.getElementById('imgModal').src = "";
+    }
 
     function exportarExcel() {
-      if (!datosFiltradosMarcaciones || datosFiltradosMarcaciones.length === 0) return alert("Sin datos.");
-      const cab = [["Fecha", "Legajo", "Nombre", "Objetivo", "Tipo", "IA", "Distancia"]];
-      const filas = datosFiltradosMarcaciones.map(f => [f[0], f[1], f[2], f[3], f[4], f[7] ? 'FRAUDE' : 'OK', f[8]]);
+      if (!datosFiltradosMarcaciones || datosFiltradosMarcaciones.length === 0) {
+        return alert("No hay datos visibles para exportar.");
+      }
+
+      const cabeceras = [["Fecha y Hora", "Legajo", "Nombre", "Objetivo", "Tipo", "Auditoría IA", "Distancia Euclidiana", "Motivo Fraude"]];
+      const filas = datosFiltradosMarcaciones.map(f => [
+        f[0] ? new Date(f[0]).toLocaleString('es-AR', { hour12: false }) : '',
+        f[1] !== undefined ? String(f[1]) : '',
+        f[2] || '',
+        f[3] || '',
+        f[4] || '',
+        f[7] ? 'SOSPECHA DE FRAUDE' : 'VERIFICADO',
+        f[8] !== null ? f[8] : '',
+        f[9] || ''
+      ]);
+
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([...cab, ...filas]), "Marcaciones");
-      XLSX.writeFile(wb, `Reporte_Marcaciones.xlsx`);
+      const ws = XLSX.utils.aoa_to_sheet([...cabeceras, ...filas]);
+      XLSX.utils.book_append_sheet(wb, ws, "Marcaciones");
+      XLSX.writeFile(wb, `Reporte_Marcaciones_${new Date().toISOString().slice(0,10)}.xlsx`);
     }
 
     function exportarPDF() {
-      if (!datosFiltradosMarcaciones || datosFiltradosMarcaciones.length === 0) return alert("Sin datos.");
+      if (!datosFiltradosMarcaciones || datosFiltradosMarcaciones.length === 0) {
+        return alert("No hay datos visibles para exportar.");
+      }
+
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
-      doc.text("Reporte de Marcaciones", 14, 15);
+
+      doc.setFontSize(16);
+      doc.text("Reporte de Marcaciones y Auditoría IA", 14, 15);
+      doc.setFontSize(10);
+      doc.text(`Generado el: ${new Date().toLocaleString('es-AR', { hour12: false })}`, 14, 22);
+
+      const columnas = ["Fecha y Hora", "Legajo", "Nombre", "Objetivo", "Tipo", "Auditoría IA"];
+      const filas = datosFiltradosMarcaciones.map(f => [
+        f[0] ? new Date(f[0]).toLocaleString('es-AR', { hour12: false }) : '',
+        f[1] !== undefined ? String(f[1]) : '',
+        f[2] || '',
+        f[3] || '',
+        f[4] || '',
+        f[7] ? 'SOSPECHA FRAUDE' : 'VERIFICADO'
+      ]);
+
       doc.autoTable({
-        head: [["Fecha", "Legajo", "Nombre", "Objetivo", "Tipo", "IA"]],
-        body: datosFiltradosMarcaciones.map(f => [f[0], f[1], f[2], f[3], f[4], f[7] ? 'FRAUDE' : 'OK']),
-        startY: 20
+        head: [columnas],
+        body: filas,
+        startY: 28,
+        theme: 'grid',
+        headStyles: { fillColor: [15, 23, 42] },
+        styles: { fontSize: 8 }
       });
-      doc.save(`Reporte_Marcaciones.pdf`);
+
+      doc.save(`Reporte_Marcaciones_${new Date().toISOString().slice(0,10)}.pdf`);
     }
 
     function exportarExcelNovedades() {
-      const reg = datosFiltradosNovedades.length > 0 ? datosFiltradosNovedades : datosNovedades;
+      const registrosAExportar = (datosFiltradosNovedades && datosFiltradosNovedades.length > 0) ? datosFiltradosNovedades : datosNovedades;
+      if (!registrosAExportar || registrosAExportar.length === 0) {
+        return alert("No hay datos visibles para exportar.");
+      }
+
+      const cabeceras = [["Fecha y Hora", "Legajo", "Nombre", "Objetivo", "Tipo Incidencia", "Descripción"]];
+      const filas = registrosAExportar.map(f => [
+        f[0] ? new Date(f[0]).toLocaleString('es-AR', { hour12: false }) : '',
+        f[1] !== undefined ? String(f[1]) : '',
+        f[2] || '',
+        f[3] || '',
+        f[4] || '',
+        f[5] || ''
+      ]);
+
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Fecha", "Legajo", "Nombre", "Objetivo", "Tipo", "Descripción"], ...reg]), "Novedades");
-      XLSX.writeFile(wb, `Reporte_Novedades.xlsx`);
+      const ws = XLSX.utils.aoa_to_sheet([...cabeceras, ...filas]);
+      XLSX.utils.book_append_sheet(wb, ws, "Novedades");
+      XLSX.writeFile(wb, `Reporte_Novedades_${new Date().toISOString().slice(0,10)}.xlsx`);
     }
 
     function exportarPDFNovedades() {
-      const reg = datosFiltradosNovedades.length > 0 ? datosFiltradosNovedades : datosNovedades;
+      const registrosAExportar = (datosFiltradosNovedades && datosFiltradosNovedades.length > 0) ? datosFiltradosNovedades : datosNovedades;
+      if (!registrosAExportar || registrosAExportar.length === 0) {
+        return alert("No hay datos visibles para exportar.");
+      }
+
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
-      doc.text("Reporte de Novedades", 14, 15);
+
+      doc.setFontSize(16);
+      doc.text("Reporte de Novedades e Incidencias", 14, 15);
+      doc.setFontSize(10);
+      doc.text(`Generado el: ${new Date().toLocaleString('es-AR', { hour12: false })}`, 14, 22);
+
+      const columnas = ["Fecha y Hora", "Legajo / Nombre", "Objetivo", "Tipo", "Descripción"];
+      const filas = registrosAExportar.map(f => [
+        f[0] ? new Date(f[0]).toLocaleString('es-AR', { hour12: false }) : '',
+        `${f[2] || ''} (Leg: ${f[1] || ''})`,
+        f[3] || '',
+        f[4] || '',
+        f[5] || ''
+      ]);
+
       doc.autoTable({
-        head: [["Fecha", "Leg./Nombre", "Objetivo", "Tipo", "Descripción"]],
-        body: reg.map(f => [f[0], `${f[2]} (${f[1]})`, f[3], f[4], f[5]]),
-        startY: 20
+        head: [columnas],
+        body: filas,
+        startY: 28,
+        theme: 'grid',
+        headStyles: { fillColor: [15, 23, 42] },
+        styles: { fontSize: 8 }
       });
-      doc.save(`Reporte_Novedades.pdf`);
+
+      doc.save(`Reporte_Novedades_${new Date().toISOString().slice(0,10)}.pdf`);
     }
   </script>
 </body>
