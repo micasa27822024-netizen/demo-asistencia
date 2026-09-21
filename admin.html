@@ -304,7 +304,7 @@
     <div id="tabObjetivos" class="hidden space-y-6">
       <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
         <h3 class="text-lg font-bold text-white flex items-center gap-2">
-          <i class="fa-solid fa-building-circle-check text-sky-500"></i> Registrar Nuevo Objetivo / Puesto
+          <i class="fa-solid fa-building-circle-check text-sky-500"></i> Registrar Nuevo Objetivo / Puesto con Geofencing
         </h3>
         <form onsubmit="guardarObjetivo(event)" class="space-y-4">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -312,37 +312,27 @@
               <label class="block text-xs uppercase text-slate-400 mb-1">Nombre del Objetivo</label>
               <input type="text" id="newObjetivo" required placeholder="Ej: Edificio Central" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
             </div>
-            
-            <!-- BUSCADOR DE DIRECCIÓN -->
-            <div class="relative">
-              <label class="block text-xs uppercase text-slate-400 mb-1">Buscar Dirección (Sugerencia Mapa)</label>
-              <div class="relative">
-                <i class="fa-solid fa-map-pin absolute left-3 top-3 text-sky-400 text-sm"></i>
-                <input type="text" id="inputBuscadorDireccion" placeholder="Ej: Américo Vespucio, Santiago..." autocomplete="off" oninput="buscarDireccionesAutocomplete(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
+            <div>
+              <label class="block text-xs uppercase text-slate-400 mb-1">Dirección Exacta (Calle y Altura / Ciudad)</label>
+              <div class="flex gap-2">
+                <input type="text" id="newDireccion" placeholder="Ej: Av. Corrientes 1234, CABA" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
+                <button type="button" onclick="buscarCoordenadasNuevoObj()" class="bg-sky-600/30 hover:bg-sky-600/50 text-sky-300 border border-sky-500/40 px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap">
+                  <i class="fa-solid fa-magnifying-glass-location"></i> Buscar Coordenadas
+                </button>
               </div>
-              <!-- Contenedor flotante de sugerencias -->
-              <div id="listaSugerenciasDireccion" class="absolute left-0 right-0 mt-1 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 hidden max-h-48 overflow-y-auto divide-y divide-slate-800 text-xs"></div>
             </div>
           </div>
 
-          <!-- Campos editables y coordenadas -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-900/50 p-4 rounded-xl border border-slate-700/60">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end bg-slate-900/60 p-4 rounded-xl border border-slate-700/60">
             <div>
-              <label class="block text-[10px] uppercase text-slate-400 mb-1">Dirección Normalizada (Editable para altura exacta)</label>
-              <input type="text" id="objDireccionNormalizada" placeholder="Escribe o ajusta la altura aquí..." class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-sky-500">
+              <label class="block text-xs uppercase text-slate-400 mb-1">Latitud GPS</label>
+              <input type="text" id="newLatitud" placeholder="Ej: -34.603722" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-xs font-mono text-emerald-400 focus:outline-none focus:border-sky-500">
             </div>
             <div>
-              <label class="block text-[10px] uppercase text-slate-400 mb-1">Latitud GPS</label>
-              <input type="text" id="objLatitud" placeholder="Ej: -34.6037" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-mono text-emerald-400 focus:outline-none focus:border-sky-500">
+              <label class="block text-xs uppercase text-slate-400 mb-1">Longitud GPS</label>
+              <input type="text" id="newLongitud" placeholder="Ej: -58.381592" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-xs font-mono text-emerald-400 focus:outline-none focus:border-sky-500">
             </div>
-            <div>
-              <label class="block text-[10px] uppercase text-slate-400 mb-1">Longitud GPS</label>
-              <input type="text" id="objLongitud" placeholder="Ej: -58.3816" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-mono text-emerald-400 focus:outline-none focus:border-sky-500">
-            </div>
-          </div>
-
-          <div class="flex justify-end">
-            <button type="submit" id="btnGuardarObj" class="bg-sky-600 hover:bg-sky-500 text-white font-bold py-2.5 px-6 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
+            <button type="submit" id="btnGuardarObj" class="bg-sky-600 hover:bg-sky-500 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-md">
               <i class="fa-solid fa-plus"></i> Añadir Objetivo
             </button>
           </div>
@@ -356,58 +346,20 @@
               <tr>
                 <th class="p-4">ID</th>
                 <th class="p-4">Nombre del Objetivo</th>
-                <th class="p-4">Dirección Normalizada / Ubicación</th>
+                <th class="p-4">Dirección Exacta</th>
+                <th class="p-4 text-center">Coordenadas GPS</th>
                 <th class="p-4 text-center">Estado</th>
                 <th class="p-4 text-center">Acciones</th>
               </tr>
             </thead>
             <tbody id="cuerpoTablaObjetivos" class="divide-y divide-slate-700/50">
-              <tr><td colspan="5" class="p-8 text-center text-slate-400">Cargando objetivos...</td></tr>
+              <tr><td colspan="6" class="p-8 text-center text-slate-400">Cargando objetivos...</td></tr>
             </tbody>
           </table>
         </div>
       </div>
     </div>
 
-  </div>
-
-  <!-- MODAL EDITAR OBJETIVO / PUESTO -->
-  <div id="modalEditarObjetivo" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
-    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-lg w-full relative space-y-4">
-      <button onclick="cerrarModalEditarObjetivo()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-      <h3 class="font-bold text-white text-lg flex items-center gap-2">
-        <i class="fa-solid fa-building-pen text-sky-500"></i> Editar Objetivo / Puesto
-      </h3>
-      <input type="hidden" id="editObjFirebaseId">
-      
-      <div class="space-y-3">
-        <div>
-          <label class="block text-xs uppercase text-slate-400 mb-1">Nombre del Objetivo</label>
-          <input type="text" id="editObjNombre" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
-        </div>
-        <div>
-          <label class="block text-xs uppercase text-slate-400 mb-1">Dirección Normalizada (Con altura exacta)</label>
-          <input type="text" id="editObjDireccion" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
-        </div>
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="block text-xs uppercase text-slate-400 mb-1">Latitud GPS</label>
-            <input type="text" id="editObjLatitud" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm font-mono text-emerald-400 focus:outline-none focus:border-sky-500">
-          </div>
-          <div>
-            <label class="block text-xs uppercase text-slate-400 mb-1">Longitud GPS</label>
-            <input type="text" id="editObjLongitud" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm font-mono text-emerald-400 focus:outline-none focus:border-sky-500">
-          </div>
-        </div>
-      </div>
-
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" onclick="cerrarModalEditarObjetivo()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2 rounded-xl text-sm font-semibold transition">Cancelar</button>
-        <button type="button" onclick="guardarEdicionObjetivo()" id="btnGuardarEdicionObj" class="bg-sky-600 hover:bg-sky-500 text-white px-4 py-2 rounded-xl text-sm font-bold transition">Guardar Cambios</button>
-      </div>
-    </div>
   </div>
 
   <!-- MODAL DE ALERTA DE PÁNICO DE EMERGENCIA CRÍTICA -->
@@ -564,6 +516,50 @@
     </div>
   </div>
 
+  <!-- MODAL EDITAR OBJETIVO / PUESTO -->
+  <div id="modalEditarObjetivo" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-lg w-full relative space-y-4">
+      <button onclick="cerrarModalEditarObjetivo()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <h3 class="font-bold text-white text-lg flex items-center gap-2">
+        <i class="fa-solid fa-building-pen text-sky-500"></i> Editar Objetivo / Puesto
+      </h3>
+      <input type="hidden" id="editObjFirebaseId">
+      
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs uppercase text-slate-400 mb-1">Nombre del Objetivo</label>
+          <input type="text" id="editObjNombre" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
+        </div>
+        <div>
+          <label class="block text-xs uppercase text-slate-400 mb-1">Dirección Exacta</label>
+          <div class="flex gap-2">
+            <input type="text" id="editObjDireccion" placeholder="Ej: Av. Rivadavia 5000, CABA" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
+            <button type="button" onclick="buscarCoordenadasEditObj()" class="bg-sky-600/30 hover:bg-sky-600/50 text-sky-300 border border-sky-500/40 px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1 whitespace-nowrap">
+              <i class="fa-solid fa-magnifying-glass-location"></i> Buscar
+            </button>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs uppercase text-slate-400 mb-1">Latitud GPS</label>
+            <input type="text" id="editObjLatitud" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-emerald-400 focus:outline-none focus:border-sky-500">
+          </div>
+          <div>
+            <label class="block text-xs uppercase text-slate-400 mb-1">Longitud GPS</label>
+            <input type="text" id="editObjLongitud" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-emerald-400 focus:outline-none focus:border-sky-500">
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" onclick="cerrarModalEditarObjetivo()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2 rounded-xl text-sm font-semibold transition">Cancelar</button>
+        <button type="button" onclick="guardarEdicionObjetivo()" id="btnGuardarEdicionObj" class="bg-sky-600 hover:bg-sky-500 text-white px-4 py-2 rounded-xl text-sm font-bold transition">Guardar Cambios</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const PASSWORD_ADMIN = "admin123"; 
     const URL_FIREBASE = "https://fir-asistencia-fad12-default-rtdb.firebaseio.com";
@@ -576,8 +572,54 @@
     let datosPersonal = [];
     let datosObjetivos = [];
     let registroFraudeSeleccionado = null;
-    let timerAutocomplete = null;
 
+    // --- GEOCODIFICADOR AUTOMÁTICO (NOMINATIM / OPENSTREETMAP) ---
+    async function obtenerCoordenadasPorDireccion(direccionStr) {
+      if (!direccionStr || direccionStr.trim() === "") {
+        alert("Por favor, ingresa una dirección válida.");
+        return null;
+      }
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(direccionStr)}&limit=1`;
+        const res = await fetch(url, { headers: { 'User-Agent': 'VigixAsistenciaApp/1.0' } });
+        const data = await res.json();
+        
+        if (data && data.length > 0) {
+          return {
+            lat: parseFloat(data[0].lat),
+            lon: parseFloat(data[0].lon),
+            display_name: data[0].display_name
+          };
+        } else {
+          alert("No se encontró la dirección exacta. Intenta ser más específico (ej: incluir localidad o número de calle).");
+          return null;
+        }
+      } catch (err) {
+        console.error("Error al consultar el servicio de geocodificación:", err);
+        alert("Error de red al buscar la dirección.");
+        return null;
+      }
+    }
+
+    async function buscarCoordenadasNuevoObj() {
+      const dir = document.getElementById('newDireccion').value;
+      const resultado = await obtenerCoordenadasPorDireccion(dir);
+      if (resultado) {
+        document.getElementById('newLatitud').value = resultado.lat;
+        document.getElementById('newLongitud').value = resultado.lon;
+      }
+    }
+
+    async function buscarCoordenadasEditObj() {
+      const dir = document.getElementById('editObjDireccion').value;
+      const resultado = await obtenerCoordenadasPorDireccion(dir);
+      if (resultado) {
+        document.getElementById('editObjLatitud').value = resultado.lat;
+        document.getElementById('editObjLongitud').value = resultado.lon;
+      }
+    }
+
+    // --- MÓDULO DE SONIDO Y ESCUCHA DE PÁNICO EN TIEMPO REAL ---
     let audioCtxPanico = null;
     let osc1 = null;
     let osc2 = null;
@@ -589,6 +631,7 @@
       if (audioCtxPanico) return; 
       try {
         audioCtxPanico = new (window.AudioContext || window.webkitAudioContext)();
+        
         osc1 = audioCtxPanico.createOscillator();
         osc2 = audioCtxPanico.createOscillator();
         const gain = audioCtxPanico.createGain();
@@ -598,6 +641,7 @@
 
         osc1.frequency.setValueAtTime(800, audioCtxPanico.currentTime);
         osc2.frequency.setValueAtTime(600, audioCtxPanico.currentTime);
+
         gain.gain.setValueAtTime(0.3, audioCtxPanico.currentTime);
 
         osc1.connect(gain);
@@ -637,6 +681,7 @@
         try {
           const res = await fetch(`${URL_FIREBASE}/panicos.json`);
           const panicosObj = await res.json();
+          
           if (!panicosObj) return;
 
           let keys = Object.keys(panicosObj);
@@ -777,48 +822,6 @@
       });
     }
 
-    function buscarDireccionesAutocomplete(query) {
-      clearTimeout(timerAutocomplete);
-      const contenedor = document.getElementById('listaSugerenciasDireccion');
-      
-      if (!query || query.trim().length < 3) {
-        contenedor.classList.add('hidden');
-        contenedor.innerHTML = '';
-        return;
-      }
-
-      timerAutocomplete = setTimeout(async () => {
-        try {
-          const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=5`;
-          const response = await fetch(url, { headers: { 'Accept-Language': 'es' } });
-          const resultados = await response.json();
-
-          contenedor.innerHTML = '';
-          if (resultados && resultados.length > 0) {
-            resultados.forEach(item => {
-              const div = document.createElement('div');
-              div.className = "p-2.5 hover:bg-slate-800 cursor-pointer text-slate-200 transition flex items-start gap-2";
-              div.innerHTML = `<i class="fa-solid fa-location-dot text-sky-400 mt-0.5"></i> <div><strong>${item.display_name}</strong></div>`;
-              
-              div.onclick = () => {
-                document.getElementById('inputBuscadorDireccion').value = item.display_name;
-                document.getElementById('objDireccionNormalizada').value = item.display_name;
-                document.getElementById('objLatitud').value = item.lat;
-                document.getElementById('objLongitud').value = item.lon;
-                contenedor.classList.add('hidden');
-              };
-              contenedor.appendChild(div);
-            });
-            contenedor.classList.remove('hidden');
-          } else {
-            contenedor.classList.add('hidden');
-          }
-        } catch (e) {
-          console.error("Error consultando geocodificación:", e);
-        }
-      }, 400);
-    }
-
     async function recargarDatosEfectivo() {
       const icono = document.getElementById('icono-reload');
       if (icono) icono.classList.add('fa-spin');
@@ -925,10 +928,10 @@
             const d = dataObjetivos[id];
             if (d) {
               const nombreObj = typeof d === 'string' ? d : (d.nombre || id);
-              const dirObj = d.direccion || 'Sin dirección registrada';
-              const latObj = d.latitud || '';
-              const lonObj = d.longitud || '';
-              datosObjetivos.push([id, nombreObj, dirObj, latObj, lonObj, 'ACTIVO']);
+              const direccionObj = d.direccion || '-';
+              const latObj = d.latitud !== undefined ? d.latitud : '';
+              const lonObj = d.longitud !== undefined ? d.longitud : '';
+              datosObjetivos.push([id, nombreObj, direccionObj, latObj, lonObj, 'ACTIVO']);
             }
           });
         }
@@ -1271,10 +1274,12 @@
 
     function filtrarTablaNovedades() {
       const busqueda = document.getElementById('inputBusquedaNovedades').value.toLowerCase();
+
       datosFiltradosNovedades = datosNovedades.filter(fila => {
         const textoFila = `${fila[1]} ${fila[2]} ${fila[3]} ${fila[4]} ${fila[5]}`.toLowerCase();
         return textoFila.includes(busqueda);
       });
+
       renderizarTablaNovedades(datosFiltradosNovedades);
     }
 
@@ -1402,7 +1407,11 @@
       btn.disabled = true;
       btn.innerText = "Guardando...";
 
-      const datosActualizados = { legajo, nombre, pin };
+      const datosActualizados = {
+        legajo: legajo,
+        nombre: nombre,
+        pin: pin
+      };
 
       if (inputFoto.files && inputFoto.files[0]) {
         datosActualizados.fotoMaster = await convertirImagenBase64(inputFoto.files[0]);
@@ -1440,36 +1449,38 @@
       }
     }
 
+    // --- MANEJO DE OBJETIVOS Y PUESTOS ---
     function renderizarTablaObjetivos(registros) {
       const cuerpo = document.getElementById('cuerpoTablaObjetivos');
       cuerpo.innerHTML = "";
 
       if (!registros || registros.length === 0) {
-        cuerpo.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-slate-400">No hay objetivos registrados.</td></tr>`;
+        cuerpo.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-slate-400">No hay objetivos registrados.</td></tr>`;
         return;
       }
 
       registros.forEach(fila => {
         const firebaseId = fila[0];
         const nombreObj = fila[1];
-        const dirObj = fila[2];
+        const direccionObj = fila[2] || '-';
         const latObj = fila[3];
         const lonObj = fila[4];
 
-        let linkMapaObj = dirObj;
-        if (latObj && lonObj) {
-          linkMapaObj = `<a href="https://maps.google.com/?q=${latObj},${lonObj}" target="_blank" class="text-sky-400 hover:underline"><i class="fa-solid fa-map-location-dot"></i> ${dirObj}</a>`;
+        let gpsStr = `<span class="text-xs text-rose-400">Sin Coordenadas</span>`;
+        if (latObj !== '' && lonObj !== '') {
+          gpsStr = `<a href="https://maps.google.com/?q=${latObj},${lonObj}" target="_blank" class="text-xs font-mono text-emerald-400 hover:underline"><i class="fa-solid fa-location-dot"></i> ${Number(latObj).toFixed(4)}, ${Number(lonObj).toFixed(4)}</a>`;
         }
 
         const tr = document.createElement('tr');
         tr.className = "hover:bg-slate-700/30 transition";
         tr.innerHTML = `
-          <td class="p-4 font-mono text-xs text-slate-400">${firebaseId}</td>
+          <td class="p-4 font-mono text-xs text-slate-400">${firebaseId.slice(0, 6)}...</td>
           <td class="p-4 font-medium text-white">${nombreObj}</td>
-          <td class="p-4 text-xs text-slate-300">${linkMapaObj}</td>
+          <td class="p-4 text-slate-300 text-xs">${direccionObj}</td>
+          <td class="p-4 text-center">${gpsStr}</td>
           <td class="p-4 text-center"><span class="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded text-xs">ACTIVO</span></td>
           <td class="p-4 text-center flex justify-center gap-2">
-            <button onclick="abrirModalEditarObjetivo('${firebaseId}', '${nombreObj.replace(/'/g, "\\'")}', '${dirObj.replace(/'/g, "\\'")}', '${latObj}', '${lonObj}')" class="bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1">
+            <button onclick="abrirModalEditarObjetivo('${firebaseId}', '${nombreObj.replace(/'/g, "\\'")}', '${direccionObj !== '-' ? direccionObj.replace(/'/g, "\\'") : ''}', '${latObj}', '${lonObj}')" class="bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1">
               <i class="fa-solid fa-pen"></i> Editar
             </button>
             <button onclick="eliminarObjetivo('${firebaseId}')" class="bg-rose-600/20 text-rose-400 hover:bg-rose-600/40 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1">
@@ -1488,32 +1499,33 @@
       btn.innerText = "Guardando...";
 
       const nombreObj = document.getElementById('newObjetivo').value.trim();
-      const direccionObj = document.getElementById('objDireccionNormalizada').value.trim();
-      const latObj = document.getElementById('objLatitud').value.trim();
-      const lonObj = document.getElementById('objLongitud').value.trim();
+      const direccionObj = document.getElementById('newDireccion').value.trim();
+      const latObj = document.getElementById('newLatitud').value.trim();
+      const lonObj = document.getElementById('newLongitud').value.trim();
+
+      const nuevoObj = {
+        nombre: nombreObj,
+        direccion: direccionObj || '',
+        latitud: latObj ? parseFloat(latObj) : null,
+        longitud: lonObj ? parseFloat(lonObj) : null,
+        estado: 'ACTIVO',
+        timestamp: new Date().toISOString()
+      };
 
       try {
         const res = await fetch(`${URL_FIREBASE}/objetivos.json`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            nombre: nombreObj, 
-            direccion: direccionObj || 'Sin dirección', 
-            latitud: latObj || '', 
-            longitud: lonObj || '', 
-            estado: 'ACTIVO', 
-            timestamp: new Date().toISOString() 
-          })
+          body: JSON.stringify(nuevoObj)
         });
 
         if (!res.ok) throw new Error("Error al guardar en Firebase");
 
-        alert("Objetivo registrado con éxito.");
+        alert("Objetivo y geofencing registrados con éxito.");
         document.getElementById('newObjetivo').value = "";
-        document.getElementById('inputBuscadorDireccion').value = "";
-        document.getElementById('objDireccionNormalizada').value = "";
-        document.getElementById('objLatitud').value = "";
-        document.getElementById('objLongitud').value = "";
+        document.getElementById('newDireccion').value = "";
+        document.getElementById('newLatitud').value = "";
+        document.getElementById('newLongitud').value = "";
         recargarDatosEfectivo();
       } catch (err) {
         alert("Ocurrió un error al guardar el objetivo: " + err.toString());
@@ -1529,6 +1541,7 @@
       document.getElementById('editObjDireccion').value = direccion;
       document.getElementById('editObjLatitud').value = lat;
       document.getElementById('editObjLongitud').value = lon;
+
       document.getElementById('modalEditarObjetivo').classList.remove('hidden');
     }
 
@@ -1540,27 +1553,34 @@
       const id = document.getElementById('editObjFirebaseId').value;
       const nombre = document.getElementById('editObjNombre').value.trim();
       const direccion = document.getElementById('editObjDireccion').value.trim();
-      const latitud = document.getElementById('editObjLatitud').value.trim();
-      const longitud = document.getElementById('editObjLongitud').value.trim();
+      const lat = document.getElementById('editObjLatitud').value.trim();
+      const lon = document.getElementById('editObjLongitud').value.trim();
 
       const btn = document.getElementById('btnGuardarEdicionObj');
       btn.disabled = true;
       btn.innerText = "Guardando...";
 
+      const datosActualizados = {
+        nombre: nombre,
+        direccion: direccion,
+        latitud: lat ? parseFloat(lat) : null,
+        longitud: lon ? parseFloat(lon) : null
+      };
+
       try {
         const res = await fetch(`${URL_FIREBASE}/objetivos/${id}.json`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ nombre, direccion, latitud, longitud })
+          body: JSON.stringify(datosActualizados)
         });
 
-        if (!res.ok) throw new Error("Error al actualizar objetivo");
+        if (!res.ok) throw new Error("Error al actualizar objetivo en Firebase");
 
-        alert("Objetivo actualizado con éxito.");
+        alert("Objetivo actualizado exitosamente.");
         cerrarModalEditarObjetivo();
         recargarDatosEfectivo();
       } catch (err) {
-        alert("Error al actualizar: " + err.toString());
+        alert("Ocurrió un error al editar el objetivo: " + err.toString());
       } finally {
         btn.disabled = false;
         btn.innerText = "Guardar Cambios";
