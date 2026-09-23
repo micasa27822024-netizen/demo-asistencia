@@ -1112,9 +1112,18 @@
       return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')} hs`;
     }
 
+    function normalizarLegajoSupervisor(valor) {
+      const texto = String(valor ?? '').trim();
+      if (!texto) return '';
+      // Permite consultar 0286 aunque en algún registro se encuentre 286.
+      if (/^\d+$/.test(texto)) return texto.replace(/^0+(?=\d)/, '');
+      return texto.toUpperCase();
+    }
+
     function consultarHorasSupervisor() {
-      const legajo = document.getElementById('legajoSupervisorInput').value.trim();
-      if (!legajo) {
+      const legajoIngresado = document.getElementById('legajoSupervisorInput').value.trim();
+      const legajoClave = normalizarLegajoSupervisor(legajoIngresado);
+      if (!legajoClave) {
         return alert("Por favor ingresa un número de legajo para consultar.");
       }
 
@@ -1122,16 +1131,18 @@
         return alert("Los datos aún se están cargando o no hay registros disponibles.");
       }
 
-      const marcacionesVigilador = datosLocales.filter(f => String(f[1]).trim() === legajo);
+      const marcacionesVigilador = datosLocales.filter(f =>
+        normalizarLegajoSupervisor(f[1]) === legajoClave
+      );
       
       if (marcacionesVigilador.length === 0) {
-        alert("No se encontraron registros para el legajo especificado.");
+        alert(`No se encontraron registros para el legajo ${legajoIngresado}.`);
         document.getElementById('resultadoSupervisor').classList.add('hidden');
         document.getElementById('controlesSupervisor').classList.add('hidden');
         return;
       }
 
-      datosSupervisorGlobal = marcacionesVigilador;
+      datosSupervisorGlobal = marcacionesVigilador.sort((a, b) => new Date(a[0]) - new Date(b[0]));
       poblarSelectMesesSupervisor(datosSupervisorGlobal);
       aplicarFiltrosSupervisor();
 
@@ -1227,47 +1238,13 @@
       const valDesde = document.getElementById('supFechaDesde').value;
       const valHasta = document.getElementById('supFechaHasta').value;
 
-      let filtrados = [...datosSupervisorGlobal];
+      // Trabajamos con SERVICIOS completos (Entrada + Salida), no con fichadas sueltas.
+      // Esto permite que una entrada de ayer se empareje con la salida de hoy.
+      const serviciosGlobales = obtenerServiciosSupervisor(datosSupervisorGlobal);
+      let filtrados = serviciosGlobales.filter(servicio =>
+        servicioCoincideFiltrosSupervisor(servicio, mesFiltro, valDesde, valHasta)
+      );
 
-      if (mesFiltro !== 'todos') {
-        filtrados = filtrados.filter(f => {
-          const d = new Date(f[0]);
-          if (isNaN(d.getTime())) return false;
-          const anio = d.getFullYear();
-          const mes = String(d.getMonth() + 1).padStart(2, '0');
-          return `${anio}-${mes}` === mesFiltro;
-        });
-      }
-
-      if (valDesde || valHasta) {
-        filtrados = filtrados.filter(f => {
-          if (!f[0]) return false;
-          const fechaIsoFila = obtenerFechaLocalClave(new Date(f[0]));
-          if (valDesde && fechaIsoFila < valDesde) return false;
-          if (valHasta && fechaIsoFila > valHasta) return false;
-          return true;
-        });
-      }
-
-      // IMPORTANTE: si una ENTRADA y su SALIDA forman un servicio continuo que
-      // cruza medianoche, mes o año, incluimos ambos extremos del par aunque uno
-      // quede fuera del filtro. Así un 31/08 19:00 -> 01/09 07:00 sigue siendo un servicio.
-      const ordenGlobal = [...datosSupervisorGlobal].sort((a, b) => new Date(a[0]) - new Date(b[0]));
-      const incluir = new Set(filtrados);
-
-      ordenGlobal.forEach((fila, i) => {
-        if (fila[4] === 'ENTRADA') {
-          const siguiente = ordenGlobal[i + 1];
-          if (siguiente && siguiente[4] === 'SALIDA') {
-            if (incluir.has(fila) || incluir.has(siguiente)) {
-              incluir.add(fila);
-              incluir.add(siguiente);
-            }
-          }
-        }
-      });
-
-      filtrados = Array.from(incluir).sort((a, b) => new Date(a[0]) - new Date(b[0]));
       procesarYRenderizarSupervisor(filtrados);
     }
 
