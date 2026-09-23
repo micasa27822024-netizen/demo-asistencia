@@ -93,6 +93,7 @@
   <!-- CONTENIDO PRINCIPAL DEL DASHBOARD (OCULTO) -->
   <!-- ========================================== -->
   <div id="contenidoPanel" class="max-w-7xl mx-auto space-y-6 p-4 md:p-8 flex-grow hidden w-full">
+    <div id="contenedorAlertasTardanza" class="hidden space-y-2"></div>
     
     <!-- ENCABEZADO INTERNO -->
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
@@ -384,6 +385,14 @@
       document.getElementById('pantallaLogin').classList.add('hidden');
       document.getElementById('contenidoPanel').classList.remove('hidden');
       cargarDatos();
+      cargarAlertasTardanzaFirebase();
+      if (intervaloActualizacionPanel) clearInterval(intervaloActualizacionPanel);
+      // Revisa nuevas fichadas automáticamente para que una llegada tardía
+      // pueda avisar al supervisor sin depender del botón Actualizar.
+      intervaloActualizacionPanel = setInterval(() => {
+        cargarDatos();
+        cargarAlertasTardanzaFirebase();
+      }, 15000);
     }
 
     function cerrarSesion() {
@@ -398,6 +407,7 @@
     const URL_FIREBASE = `${URL_BASE_FIREBASE}/fichadas.json`;
     const URL_PERSONAL = `${URL_BASE_FIREBASE}/personal.json`;
     const URL_TURNOS = `${URL_BASE_FIREBASE}/asignacionesTurnos.json`;
+    const URL_ALERTAS_TARDANZA = `${URL_BASE_FIREBASE}/alertasLlegadasTarde.json`;
     
     let datosLocales = [];
     let datosFiltradosActuales = [];
@@ -405,6 +415,8 @@
     let firebaseKeysMap = {}; // Guarda la relación de los elementos con sus IDs de Firebase
     let mapaConfiguracionPersonalPanel = {};
     let asignacionesTurnosPanel = [];
+    const alertasTardiasMostradas = new Set();
+    let intervaloActualizacionPanel = null;
 
     let instChartDona = null;
     let instChartBarras = null;
@@ -470,6 +482,100 @@
       }
     }
 
+    async function cargarAlertasTardanzaFirebase() {
+      try {
+        const res = await fetch(`${URL_ALERTAS_TARDANZA}?ts=${Date.now()}`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data) return;
+
+        Object.entries(data).forEach(([firebaseId, alerta]) => {
+          if (!alerta || String(alerta.tipoAlerta || '') !== 'LLEGADA_TARDE') return;
+          const entrada = [
+            alerta.fechaHora || alerta.fechaHoraDispositivo,
+            alerta.legajo,
+            alerta.nombre,
+            alerta.objetivo,
+            'ENTRADA'
+          ];
+          mostrarAlertaTardanza(entrada, {
+            estado: 'TARDE',
+            minutosTarde: Number(alerta.minutosTarde) || 0,
+            horario: alerta.horario ? {
+              inicio: alerta.horario.inicio || alerta.horarioInicio || '',
+              fin: alerta.horario.fin || alerta.horarioFin || '',
+              origen: alerta.horario.origen || alerta.horarioOrigen || 'Turno'
+            } : null
+          }, firebaseId);
+        });
+      } catch (err) {
+        console.warn('No se pudieron cargar las alertas de llegada tardía:', err);
+      }
+    }
+
+    function evaluarEstadoEntrada(fechaEntrada, legajo, objetivoNombre) {
+      const fecha = new Date(fechaEntrada);
+      if (isNaN(fecha)) return { estado: 'NORMAL', minutosTarde: 0, horario: null };
+
+      const horario = obtenerHorarioProgramado(fechaEntrada, legajo, objetivoNombre);
+      if (!horario?.inicio) return { estado: 'NORMAL', minutosTarde: 0, horario };
+
+      const minutosTurno = minutosDesdeMedianoche(horario.inicio);
+      if (minutosTurno === null) return { estado: 'NORMAL', minutosTarde: 0, horario };
+
+      const inicioTurno = new Date(fecha.getTime());
+      inicioTurno.setHours(Math.floor(minutosTurno / 60), minutosTurno % 60, 0, 0);
+
+      const diferenciaMin = Math.floor((fecha - inicioTurno) / 60000);
+
+      // Antes del turno: se mantiene NORMAL/verde.
+      if (diferenciaMin < 0) return { estado: 'NORMAL', minutosTarde: 0, horario };
+
+      // Desde el comienzo hasta el minuto 15 inclusive: tolerancia naranja.
+      if (diferenciaMin <= 15) return { estado: 'TOLERANCIA', minutosTarde: diferenciaMin, horario };
+
+      // Desde el minuto 16: llegada tardía roja.
+      return { estado: 'TARDE', minutosTarde: diferenciaMin, horario };
+    }
+
+    function mostrarAlertaTardanza(entrada, estadoInfo, firebaseId = '') {
+      if (!entrada || estadoInfo.estado !== 'TARDE') return;
+      const fechaKey = String(entrada[0] || '');
+      const clave = firebaseId ? `FIREBASE|${firebaseId}` : `${entrada[1] || ''}|${fechaKey}|${entrada[3] || ''}`;
+      if (alertasTardiasMostradas.has(clave)) return;
+      alertasTardiasMostradas.add(clave);
+
+      const contenedor = document.getElementById('contenedorAlertasTardanza');
+      if (!contenedor) return;
+      const hora = new Date(entrada[0]).toLocaleString('es-AR', { hour12: false });
+      const nombre = entrada[2] || `Legajo ${entrada[1] || '-'}`;
+      const objetivo = entrada[3] || '-';
+      contenedor.classList.remove('hidden');
+      const alerta = document.createElement('div');
+      alerta.className = 'bg-rose-950/70 border border-rose-500/60 text-rose-100 rounded-xl p-4 shadow-lg flex flex-col md:flex-row md:items-center md:justify-between gap-3';
+      alerta.innerHTML = `
+        <div>
+          <div class="font-bold flex items-center gap-2"><i class="fa-solid fa-triangle-exclamation text-rose-400"></i> ALERTA DE LLEGADA TARDÍA</div>
+          <div class="text-xs mt-1">${nombre} · Legajo ${entrada[1] || '-'} · Objetivo: ${objetivo}</div>
+          <div class="text-xs text-rose-200/80">Fichada: ${hora} · ${estadoInfo.minutosTarde} min después del comienzo del turno</div>
+        </div>
+        <button type="button" class="text-xs font-bold bg-rose-600 hover:bg-rose-500 px-3 py-2 rounded-lg" onclick="this.closest('div.bg-rose-950\\/70').remove();">Cerrar</button>`;
+      contenedor.prepend(alerta);
+    }
+
+    function obtenerClasesFichada(tipo, estadoEntrada) {
+      if (tipo !== 'ENTRADA') {
+        return 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+      }
+      if (estadoEntrada === 'TOLERANCIA') {
+        return 'bg-orange-500/15 text-orange-300 border-orange-500/40';
+      }
+      if (estadoEntrada === 'TARDE') {
+        return 'bg-red-500/15 text-red-300 border-red-500/50';
+      }
+      return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+    }
+
     function renderizarTabla(registros) {
       const cuerpo = document.getElementById('cuerpoTabla');
       cuerpo.innerHTML = "";
@@ -493,9 +599,20 @@
         const urlMapa = fila[5] || '';
         const urlFoto = fila[6] || '';
 
-        const badgeColor = tipo === 'ENTRADA' 
-          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-          : 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+        const estadoEntrada = tipo === 'ENTRADA'
+          ? evaluarEstadoEntrada(fila[0], legajo, objetivo)
+          : { estado: 'NORMAL', minutosTarde: 0, horario: null };
+        const badgeColor = obtenerClasesFichada(tipo, estadoEntrada.estado);
+        if (tipo === 'ENTRADA' && estadoEntrada.estado === 'TARDE') {
+          mostrarAlertaTardanza(fila, estadoEntrada);
+        }
+        const etiquetaEntrada = tipo === 'ENTRADA'
+          ? (estadoEntrada.estado === 'TARDE'
+              ? `ENTRADA · TARDE ${estadoEntrada.minutosTarde} MIN`
+              : estadoEntrada.estado === 'TOLERANCIA'
+                ? `ENTRADA · TOLERANCIA${estadoEntrada.minutosTarde ? ` ${estadoEntrada.minutosTarde} MIN` : ''}`
+                : 'ENTRADA')
+          : tipo;
 
         const btnMapa = (urlMapa && urlMapa.includes('http'))
           ? `<a href="${urlMapa}" target="_blank" class="inline-flex items-center gap-1 bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
@@ -524,7 +641,7 @@
           <td class="p-4 font-medium text-slate-200">${nombre}</td>
           <td class="p-4 text-slate-400">${objetivo}</td>
           <td class="p-4 text-center">
-            <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${badgeColor}">${tipo}</span>
+            <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${badgeColor}">${etiquetaEntrada}</span>
           </td>
           <td class="p-4 text-center">${btnMapa}</td>
           <td class="p-4 text-center">${btnFoto}</td>
@@ -645,7 +762,7 @@
     function calcularHoras(fechaInicioStr, fechaFinStr, horarioProgramado = null) {
       let inicio = new Date(fechaInicioStr);
       const fin = new Date(fechaFinStr);
-      if (isNaN(inicio) || isNaN(fin) || fin <= inicio) return { d: 0, n: 0, t: 0, entradaComputable: inicio, ajusteMinutos: 0 };
+      if (isNaN(inicio) || isNaN(fin) || fin <= inicio) return { d: 0, n: 0, t: 0, entradaComputable: inicio, ajusteMinutos: 0, minutosExtra: 0 };
 
       let entradaComputable = new Date(inicio.getTime());
       let ajusteMinutos = 0;
@@ -668,19 +785,50 @@
         }
       }
 
+      // Tolerancia de salida: los primeros 30 minutos posteriores al fin del turno
+      // no se consideran extra. Si la salida supera el minuto 30, se habilita todo
+      // el tiempo transcurrido desde la finalización programada del turno.
+      let finComputable = new Date(fin.getTime());
+      let minutosExtra = 0;
+      if (horarioProgramado?.fin) {
+        const minutosFinTurno = minutosDesdeMedianoche(horarioProgramado.fin);
+        if (minutosFinTurno !== null) {
+          const finTurno = new Date(inicio.getTime());
+          finTurno.setHours(Math.floor(minutosFinTurno / 60), minutosFinTurno % 60, 0, 0);
+
+          // Turno nocturno: si el fin configurado es menor/igual al inicio,
+          // el fin pertenece al día siguiente.
+          if (horarioProgramado.inicio) {
+            const minutosInicioTurno = minutosDesdeMedianoche(horarioProgramado.inicio);
+            if (minutosInicioTurno !== null && minutosFinTurno <= minutosInicioTurno) {
+              finTurno.setDate(finTurno.getDate() + 1);
+            }
+          }
+
+          const limiteTolerancia = new Date(finTurno.getTime() + 30 * 60000);
+          if (fin > limiteTolerancia) {
+            minutosExtra = Math.max(0, Math.round((fin - finTurno) / 60000));
+            finComputable = fin;
+          } else if (fin > finTurno) {
+            // Salida dentro de los 30 minutos de tolerancia: se computa hasta el fin del turno.
+            finComputable = finTurno;
+          }
+        }
+      }
+
       // Si por alguna configuración extraña el horario programado cae después de la salida,
       // no se computan horas de ese período.
-      if (entradaComputable >= fin) {
-        return { d: 0, n: 0, t: 0, entradaComputable, ajusteMinutos };
+      if (entradaComputable >= finComputable) {
+        return { d: 0, n: 0, t: 0, entradaComputable, ajusteMinutos, minutosExtra: 0 };
       }
 
       let horasDiurnas = 0;
       let horasNocturnas = 0;
       let actual = new Date(entradaComputable.getTime());
 
-      while (actual < fin) {
+      while (actual < finComputable) {
         let siguiente = new Date(actual.getTime() + 60000);
-        if (siguiente > fin) siguiente = new Date(fin.getTime());
+        if (siguiente > finComputable) siguiente = new Date(finComputable.getTime());
 
         let hora = actual.getHours();
         if (hora >= 21 || hora < 6) {
@@ -696,7 +844,8 @@
         n: horasNocturnas,
         t: horasDiurnas + horasNocturnas,
         entradaComputable,
-        ajusteMinutos
+        ajusteMinutos,
+        minutosExtra
       };
     }
 
@@ -817,12 +966,18 @@
           totalN += horas.n;
           totalT += horas.t;
 
+          const estadoEntradaSupervisor = evaluarEstadoEntrada(entrada[0], entrada[1], objetivoNombre);
+          if (estadoEntradaSupervisor.estado === 'TARDE') mostrarAlertaTardanza(entrada, estadoEntradaSupervisor);
           const tr = document.createElement('tr');
-          tr.className = "hover:bg-slate-800/50 transition";
+          tr.className = estadoEntradaSupervisor.estado === 'TARDE'
+            ? "hover:bg-slate-800/50 transition bg-red-950/20"
+            : estadoEntradaSupervisor.estado === 'TOLERANCIA'
+              ? "hover:bg-slate-800/50 transition bg-orange-950/10"
+              : "hover:bg-slate-800/50 transition";
           tr.innerHTML = `
             <td class="p-3 text-xs font-mono">${new Date(entrada[0]).toLocaleString('es-AR', { hour12: false })}</td>
             <td class="p-3 text-xs font-mono">${salida ? new Date(salida[0]).toLocaleString('es-AR', { hour12: false }) : '<span class="text-amber-400">En Turno</span>'}</td>
-            <td class="p-3 text-xs text-slate-300 font-medium">${objetivoNombre}<div class="text-[10px] text-slate-500 mt-1">${horarioProgramado ? `Turno ${horarioProgramado.inicio || '--:--'} - ${horarioProgramado.fin || '--:--'} · ${horarioProgramado.origen}` : 'Sin horario configurado'}${horas.ajusteMinutos > 0 ? ` · ${horas.ajusteMinutos} min anticipados no computados` : ''}</div></td>
+            <td class="p-3 text-xs text-slate-300 font-medium">${objetivoNombre}<div class="text-[10px] text-slate-500 mt-1">${horarioProgramado ? `Turno ${horarioProgramado.inicio || '--:--'} - ${horarioProgramado.fin || '--:--'} · ${horarioProgramado.origen}` : 'Sin horario configurado'}${horas.ajusteMinutos > 0 ? ` · ${horas.ajusteMinutos} min anticipados no computados` : ''}${horas.minutosExtra > 0 ? ` · ${horas.minutosExtra} min extra` : ''}</div></td>
             <td class="p-3 text-center text-xs font-semibold text-amber-400">${formatearAHorasReloj(horas.d)}</td>
             <td class="p-3 text-center text-xs font-semibold text-indigo-400">${formatearAHorasReloj(horas.n)}</td>
             <td class="p-3 text-center text-xs font-bold text-emerald-400">${formatearAHorasReloj(horas.t)}</td>
