@@ -559,7 +559,7 @@
           <div class="text-xs mt-1">${nombre} · Legajo ${entrada[1] || '-'} · Objetivo: ${objetivo}</div>
           <div class="text-xs text-rose-200/80">Fichada: ${hora} · ${estadoInfo.minutosTarde} min después del comienzo del turno</div>
         </div>
-        <button type="button" class="text-xs font-bold bg-rose-600 hover:bg-rose-500 px-3 py-2 rounded-lg" onclick="this.closest('div.bg-rose-950\\/70').remove();">Cerrar</button>`;
+        <button type="button" class="text-xs font-bold bg-rose-600 hover:bg-rose-500 px-3 py-2 rounded-lg" onclick="this.parentElement.remove();">Cerrar</button>`;
       contenedor.prepend(alerta);
     }
 
