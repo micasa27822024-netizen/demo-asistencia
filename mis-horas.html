@@ -7,6 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
   <style>
+    /* Desactivar selección de texto en el botón de pánico para evitar interferencias al mantener presionado */
     .no-select {
       -webkit-touch-callout: none;
       -webkit-user-select: none;
@@ -106,13 +107,14 @@
           <span id="textoPanico">MANTÉN PRESIONADO (3s)</span>
         </button>
 
+        <!-- Barra de Progreso de la Presión -->
         <div class="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden border border-rose-900/50">
           <div id="barraProgresoPanico" class="bg-rose-500 h-full w-0 transition-all duration-75"></div>
         </div>
       </div>
     </div>
 
-    <!-- FILTROS DE FECHA -->
+    <!-- FILTROS DE FECHA (MES Y DÍA) -->
     <div id="seccionFiltros" class="hidden bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-wrap items-center justify-between gap-4">
       <div class="flex items-center gap-3 flex-wrap">
         <div class="flex items-center gap-2">
@@ -168,7 +170,7 @@
       </div>
     </div>
 
-    <!-- MÓDULO DE NOVEDADES -->
+    <!-- MÓDULO DE NOVEDADES E INCIDENCIAS -->
     <div id="seccionNovedades" class="hidden bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
       <h3 class="text-lg font-bold text-white flex items-center gap-2">
         <i class="fa-solid fa-triangle-exclamation text-amber-400"></i> Reportar Novedad o Incidencia
@@ -409,15 +411,13 @@
         asignacionesTurnosVigilador = turnosData
           ? Object.entries(turnosData).map(([id, d]) => ({ ...d, id }))
           : [];
-
         let empleadoEncontrado = null;
         let nombreEmpleado = `Legajo ${legajoIngresado}`;
 
         if (personalData) {
           Object.values(personalData).forEach(p => {
             const pLegajo = String(p.legajo || "").trim();
-            const coincideLegajo = (pLegajo === legajoIngresado || parseInt(pLegajo, 10) === parseInt(legajoIngresado, 10));
-            if (coincideLegajo) {
+            if (pLegajo === legajoIngresado || parseInt(pLegajo, 10) === parseInt(legajoIngresado, 10)) {
               const pPin = String(p.pin || p.clave || "").trim();
               if (!pPin || pPin === pinIngresado) {
                 empleadoEncontrado = p;
