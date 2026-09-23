@@ -86,7 +86,7 @@
         <h2 class="text-2xl font-bold text-white flex items-center gap-2">
           <i class="fa-solid fa-shield-halved text-emerald-500"></i> Panel de Control Operativo
         </h2>
-        <p class="text-xs text-slate-400 mt-1">Gestión de asistencia, auditoría de IA en segundo plano, puestos y personal</p>
+        <p class="text-xs text-slate-400 mt-1">Gestión de asistencia, auditoría de IA en segundo plano y puestos</p>
       </div>
       <div class="flex items-center gap-3">
         <button onclick="recargarDatosEfectivo()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
@@ -287,6 +287,7 @@
         <h3 class="text-lg font-bold text-white flex items-center gap-2">
           <i class="fa-solid fa-user-plus text-amber-500"></i> Registrar Nuevo Personal
         </h3>
+        <p class="text-xs text-slate-400">El horario habitual y los objetivos autorizados se administran desde <strong class="text-slate-200">Configurar</strong>. Los cambios de un día puntual se gestionan desde <strong class="text-slate-200">Turnos</strong>.</p>
         <form onsubmit="guardarVigilador(event)" class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
           <div>
             <label class="block text-xs uppercase text-slate-400 mb-1">N° Legajo</label>
@@ -355,7 +356,7 @@
             <div class="md:col-span-2">
               <label class="block text-xs uppercase text-slate-400 mb-1">Dirección exacta</label>
               <div class="flex flex-col sm:flex-row gap-2">
-                <input type="text" id="newDireccionObjetivo" required placeholder="Ej: Americo Vespucio 825, Bella Vista, San Miguel, Buenos Aires" class="flex-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500">
+                <input type="text" id="newDireccionObjetivo" required placeholder="Ej: Americo Vespucio 651, Bella Vista, San Miguel, Buenos Aires" class="flex-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500">
                 <button type="button" onclick="buscarDireccionObjetivo('nuevo')" id="btnBuscarDireccionNuevo" class="bg-sky-600 hover:bg-sky-500 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 whitespace-nowrap">
                   <i class="fa-solid fa-magnifying-glass"></i> Buscar dirección
                 </button>
@@ -572,11 +573,51 @@
           <input type="file" id="editFotoMaster" accept="image/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-700 file:text-amber-400 hover:file:bg-slate-600 cursor-pointer">
           <div id="previewFotoActual" class="mt-2 text-xs font-semibold"></div>
         </div>
+        <div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-700">
+          <div>
+            <label class="block text-xs uppercase text-slate-400 mb-1">Horario habitual - Inicio</label>
+            <input type="time" id="editHorarioInicio" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
+          </div>
+          <div>
+            <label class="block text-xs uppercase text-slate-400 mb-1">Horario habitual - Fin</label>
+            <input type="time" id="editHorarioFin" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs uppercase text-slate-400 mb-2">Objetivos autorizados para este vigilador</label>
+          <div id="editObjetivosAsignados" class="max-h-40 overflow-y-auto bg-slate-950 border border-slate-700 rounded-xl p-3 space-y-2 text-xs">
+            <span class="text-slate-500">Cargando objetivos...</span>
+          </div>
+          <p class="text-[11px] text-slate-500 mt-1">Solo los objetivos marcados podrán aparecer en la pantalla de fichada de este vigilador.</p>
+        </div>
       </div>
 
       <div class="flex justify-end gap-2 pt-2">
         <button type="button" onclick="cerrarModalEditar()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2 rounded-xl text-sm font-semibold transition">Cancelar</button>
         <button type="button" onclick="guardarEdicionPersonal()" id="btnGuardarEdicion" class="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-xl text-sm font-bold transition">Guardar Cambios</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL GESTIONAR TURNOS POR FECHA -->
+  <div id="modalTurnosPersonal" class="fixed inset-0 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-[70] overflow-y-auto">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-4xl w-full relative space-y-5 my-6 shadow-2xl">
+      <button type="button" onclick="cerrarModalTurnosPersonal()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+      <div class="pr-8">
+        <h3 class="font-bold text-white text-lg flex items-center gap-2"><i class="fa-solid fa-calendar-days text-sky-400"></i> Turnos y cambios por fecha</h3>
+        <p id="turnosPersonalSubtitulo" class="text-xs text-slate-400 mt-1"></p>
+      </div>
+      <form onsubmit="guardarAsignacionTurno(event)" class="grid grid-cols-1 md:grid-cols-5 gap-3 items-end bg-slate-900/60 border border-slate-700 rounded-xl p-4">
+        <input type="hidden" id="turnoFirebaseId">
+        <div><label class="block text-xs uppercase text-slate-400 mb-1">Fecha</label><input type="date" id="turnoFecha" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"></div>
+        <div><label class="block text-xs uppercase text-slate-400 mb-1">Objetivo</label><select id="turnoObjetivo" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"><option value="">Cargando...</option></select></div>
+        <div><label class="block text-xs uppercase text-slate-400 mb-1">Inicio</label><input type="time" id="turnoHoraInicio" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"></div>
+        <div><label class="block text-xs uppercase text-slate-400 mb-1">Fin</label><input type="time" id="turnoHoraFin" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"></div>
+        <button type="submit" id="btnGuardarTurno" class="bg-sky-600 hover:bg-sky-500 text-white font-bold py-2 rounded-xl text-sm"><i class="fa-solid fa-save"></i> Guardar</button>
+        <div class="md:col-span-5"><label class="block text-xs uppercase text-slate-400 mb-1">Observación (opcional)</label><input type="text" id="turnoObservacion" placeholder="Ej: Cobertura de franco / cambio de objetivo" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"></div>
+      </form>
+      <div class="bg-slate-900 border border-slate-700 rounded-xl overflow-hidden">
+        <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="bg-slate-950 text-slate-400 uppercase text-xs"><tr><th class="p-3">Fecha</th><th class="p-3">Objetivo</th><th class="p-3">Horario</th><th class="p-3">Observación</th><th class="p-3 text-center">Acciones</th></tr></thead><tbody id="cuerpoTurnosPersonal"><tr><td colspan="5" class="p-6 text-center text-slate-500">Cargando turnos...</td></tr></tbody></table></div>
       </div>
     </div>
   </div>
@@ -678,6 +719,9 @@
     let datosFiltradosMarcaciones = [];
     let datosPersonal = [];
     let datosObjetivos = [];
+    let mapaConfiguracionPersonal = {};
+    let asignacionesTurnosAdmin = [];
+    let personalConfigurandoId = null;
     let registroFraudeSeleccionado = null;
 
     // --- MÓDULO DE SONIDO Y ESCUCHA DE PÁNICO EN TIEMPO REAL ---
@@ -1079,6 +1123,7 @@
             const d = dataPersonal[id];
             if (d) {
               const legajoStr = d.legajo ? String(d.legajo).trim() : '';
+              mapaConfiguracionPersonal[id] = d;
               datosPersonal.push([legajoStr, d.nombre || '', 'Personal', d.pin || '', d.estado || 'ACTIVO', id, d.fotoMaster || '']);
               if (legajoStr && d.fotoMaster) {
                 mapaFotosMaster[legajoStr] = d.fotoMaster;
@@ -1536,12 +1581,10 @@
     function renderizarTablaPersonal(registros) {
       const cuerpo = document.getElementById('cuerpoTablaPersonal');
       cuerpo.innerHTML = "";
-
       if (!registros || registros.length === 0) {
         cuerpo.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-slate-400">No hay personal registrado.</td></tr>`;
         return;
       }
-
       registros.forEach(fila => {
         const legajoStr = String(fila[0]);
         const nombreStr = fila[1] || '';
@@ -1549,30 +1592,27 @@
         const estadoStr = fila[4] || 'ACTIVO';
         const firebaseId = fila[5];
         const fotoMaster = fila[6] || '';
-
+        const cfg = mapaConfiguracionPersonal[firebaseId] || {};
+        const h = cfg.horarioHabitual || {};
+        const objetivos = Array.isArray(cfg.objetivosAsignados) ? cfg.objetivosAsignados : [];
+        const horarioTexto = h.inicio && h.fin ? `${h.inicio} - ${h.fin}` : 'Sin horario habitual';
+        const objetivosTexto = objetivos.length ? `${objetivos.length} autorizado(s)` : 'Sin objetivos asignados';
         const btnFotoMaster = (fotoMaster && fotoMaster.length > 50)
-          ? `<button onclick="abrirFoto('${fotoMaster}')" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
-              <i class="fa-solid fa-id-card"></i> Ver Foto
-             </button>`
+          ? `<button onclick="abrirFoto('${fotoMaster}')" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition"><i class="fa-solid fa-id-card"></i> Ver Foto</button>`
           : `<span class="text-xs text-slate-500">Sin Foto</span>`;
-
         const tr = document.createElement('tr');
         tr.className = "hover:bg-slate-700/30 transition";
         tr.innerHTML = `
-          <td class="p-4 font-bold text-amber-400">${legajoStr}</td>
-          <td class="p-4 font-medium text-white">${nombreStr}</td>
-          <td class="p-4 text-center font-mono text-slate-400">${pinStr}</td>
+          <td class="p-4 font-bold text-amber-400">${escaparHtml(legajoStr)}</td>
+          <td class="p-4 font-medium text-white">${escaparHtml(nombreStr)}<div class="text-[11px] text-slate-500 mt-1">${escaparHtml(horarioTexto)} · ${escaparHtml(objetivosTexto)}</div></td>
+          <td class="p-4 text-center font-mono text-slate-400">${escaparHtml(pinStr)}</td>
           <td class="p-4 text-center">${btnFotoMaster}</td>
-          <td class="p-4 text-center"><span class="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded text-xs">${estadoStr}</span></td>
-          <td class="p-4 text-center flex justify-center gap-2">
-            <button onclick="abrirModalEditar('${firebaseId}', '${legajoStr}', '${nombreStr.replace(/'/g, "\\'")}', '${pinStr}', '${fotoMaster ? fotoMaster.replace(/'/g, "\\'") : ''}')" class="bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1">
-              <i class="fa-solid fa-pen"></i> Editar
-            </button>
-            <button onclick="eliminarPersonal('${firebaseId}')" class="bg-rose-600/20 text-rose-400 hover:bg-rose-600/40 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1">
-              <i class="fa-solid fa-trash"></i> Eliminar
-            </button>
-          </td>
-        `;
+          <td class="p-4 text-center"><span class="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded text-xs">${escaparHtml(estadoStr)}</span></td>
+          <td class="p-4 text-center"><div class="flex flex-wrap justify-center gap-2">
+            <button onclick="abrirModalEditar('${escaparHtml(firebaseId)}')" class="bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1"><i class="fa-solid fa-sliders"></i> Configurar</button>
+            <button onclick="abrirModalTurnosPersonal('${escaparHtml(firebaseId)}')" class="bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1"><i class="fa-solid fa-calendar-days"></i> Turnos</button>
+            <button onclick="eliminarPersonal('${escaparHtml(firebaseId)}')" class="bg-rose-600/20 text-rose-400 hover:bg-rose-600/40 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1"><i class="fa-solid fa-trash"></i> Eliminar</button>
+          </div></td>`;
         cuerpo.appendChild(tr);
       });
     }
@@ -1599,6 +1639,8 @@
         pin: pinGenerado,
         estado: 'ACTIVO',
         fotoMaster: fotoMasterBase64,
+        horarioHabitual: { inicio: '', fin: '' },
+        objetivosAsignados: [],
         timestamp: new Date().toISOString()
       };
 
@@ -1625,26 +1667,49 @@
       }
     }
 
-    function abrirModalEditar(id, legajo, nombre, pin, fotoMaster) {
+    async function abrirModalEditar(id) {
+      const cfg = mapaConfiguracionPersonal[id];
+      if (!cfg) return alert('No se encontró el personal seleccionado. Actualizá los datos e intentá nuevamente.');
       document.getElementById('editFirebaseId').value = id;
-      document.getElementById('editLegajo').value = legajo;
-      document.getElementById('editNombre').value = nombre;
-      document.getElementById('editPin').value = pin;
-      document.getElementById('editFotoMaster').value = "";
-
+      document.getElementById('editLegajo').value = cfg.legajo || '';
+      document.getElementById('editNombre').value = cfg.nombre || '';
+      document.getElementById('editPin').value = cfg.pin || '';
+      document.getElementById('editFotoMaster').value = '';
+      const h = cfg.horarioHabitual || {};
+      document.getElementById('editHorarioInicio').value = h.inicio || '';
+      document.getElementById('editHorarioFin').value = h.fin || '';
       const preview = document.getElementById('previewFotoActual');
-      if (fotoMaster && fotoMaster.length > 50) {
-        preview.innerHTML = `<span class="text-emerald-400"><i class="fa-solid fa-check"></i> Posee foto máster cargada</span>`;
-      } else {
-        preview.innerHTML = `<span class="text-rose-400"><i class="fa-solid fa-xmark"></i> Sin foto máster</span>`;
-      }
-
+      preview.innerHTML = (cfg.fotoMaster && cfg.fotoMaster.length > 50)
+        ? `<span class="text-emerald-400"><i class="fa-solid fa-check"></i> Posee foto máster cargada</span>`
+        : `<span class="text-rose-400"><i class="fa-solid fa-xmark"></i> Sin foto máster</span>`;
+      await cargarCheckboxObjetivosPersonal(cfg.objetivosAsignados || []);
       document.getElementById('modalEditarPersonal').classList.remove('hidden');
     }
 
-    function cerrarModalEditar() {
-      document.getElementById('modalEditarPersonal').classList.add('hidden');
+    async function cargarCheckboxObjetivosPersonal(asignados) {
+      const cont = document.getElementById('editObjetivosAsignados');
+      cont.innerHTML = '<span class="text-slate-400">Cargando objetivos...</span>';
+      try {
+        const res = await fetch(`${URL_FIREBASE}/objetivos.json?ts=${Date.now()}`, { cache: 'no-store' });
+        const data = await res.json();
+        cont.innerHTML = '';
+        if (!data) { cont.innerHTML = '<span class="text-slate-500">No hay objetivos registrados.</span>'; return; }
+        const arr = Object.entries(data).filter(([id,o]) => o && (o.nombre || o.codigo));
+        if (!arr.length) { cont.innerHTML = '<span class="text-slate-500">No hay objetivos registrados.</span>'; return; }
+        const idsAsignados = (Array.isArray(asignados) ? asignados : []).map(x => String(x.id || x.firebaseId || ''));
+        arr.forEach(([id,o]) => {
+          const checked = idsAsignados.includes(String(id));
+          const label = document.createElement('label');
+          label.className = 'flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-lg p-2 cursor-pointer hover:border-slate-600';
+          label.innerHTML = `<input type="checkbox" class="objetivo-personal-checkbox accent-amber-500" value="${escaparHtml(id)}" data-nombre="${escaparHtml(o.nombre || o.codigo || '')}" ${checked ? 'checked' : ''}> <span class="text-slate-200">${escaparHtml(o.nombre || o.codigo || '')}</span>`;
+          cont.appendChild(label);
+        });
+      } catch(e) {
+        cont.innerHTML = '<span class="text-rose-400">No se pudieron cargar los objetivos.</span>';
+      }
     }
+
+    function cerrarModalEditar() { document.getElementById('modalEditarPersonal').classList.add('hidden'); }
 
     async function guardarEdicionPersonal() {
       const id = document.getElementById('editFirebaseId').value;
@@ -1652,52 +1717,114 @@
       const nombre = document.getElementById('editNombre').value.trim();
       const pin = document.getElementById('editPin').value.trim();
       const inputFoto = document.getElementById('editFotoMaster');
-
+      const inicio = document.getElementById('editHorarioInicio').value;
+      const fin = document.getElementById('editHorarioFin').value;
       const btn = document.getElementById('btnGuardarEdicion');
-      btn.disabled = true;
-      btn.innerText = "Guardando...";
-
-      const datosActualizados = {
-        legajo: legajo,
-        nombre: nombre,
-        pin: pin
-      };
-
-      if (inputFoto.files && inputFoto.files[0]) {
-        datosActualizados.fotoMaster = await convertirImagenBase64(inputFoto.files[0]);
-      }
-
+      if (!id || !legajo || !nombre || !pin) return alert('Completá legajo, nombre y PIN.');
+      if ((inicio && !fin) || (!inicio && fin)) return alert('Completá ambos horarios habituales o dejalos vacíos.');
+      btn.disabled = true; btn.innerText = 'Guardando...';
+      const objetivosAsignados = Array.from(document.querySelectorAll('.objetivo-personal-checkbox:checked')).map(cb => ({ id: cb.value, nombre: cb.dataset.nombre || '' }));
+      const datosActualizados = { legajo, nombre, pin, horarioHabitual: { inicio: inicio || '', fin: fin || '' }, objetivosAsignados };
+      if (inputFoto.files && inputFoto.files[0]) datosActualizados.fotoMaster = await convertirImagenBase64(inputFoto.files[0]);
       try {
-        const res = await fetch(`${URL_FIREBASE}/personal/${id}.json`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(datosActualizados)
-        });
-
-        if (!res.ok) throw new Error("Error al actualizar en Firebase");
-
-        alert("Personal actualizado con éxito.");
+        const res = await fetch(`${URL_FIREBASE}/personal/${id}.json`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datosActualizados) });
+        if (!res.ok) throw new Error('Error al actualizar en Firebase');
+        mapaConfiguracionPersonal[id] = { ...(mapaConfiguracionPersonal[id] || {}), ...datosActualizados };
+        alert('Personal actualizado con éxito.');
         cerrarModalEditar();
         recargarDatosEfectivo();
-      } catch (err) {
-        alert("Ocurrió un error al editar: " + err.toString());
-      } finally {
-        btn.disabled = false;
-        btn.innerText = "Guardar Cambios";
-      }
+      } catch(err) { alert('Ocurrió un error al editar: ' + err.toString()); }
+      finally { btn.disabled = false; btn.innerText = 'Guardar Cambios'; }
     }
 
     async function eliminarPersonal(firebaseId) {
       if (!confirm(`¿Estás seguro de que deseas eliminar este registro?`)) return;
-
       try {
-        await fetch(`${URL_FIREBASE}/personal/${firebaseId}.json`, { method: "DELETE" });
-        alert("Registro eliminado con éxito.");
+        await fetch(`${URL_FIREBASE}/personal/${firebaseId}.json`, { method: 'DELETE' });
+        delete mapaConfiguracionPersonal[firebaseId];
+        alert('Registro eliminado con éxito.');
         recargarDatosEfectivo();
-      } catch (err) {
-        alert("Ocurrió un error al eliminar: " + err.toString());
+      } catch(err) { alert('Ocurrió un error al eliminar: ' + err.toString()); }
+    }
+
+    async function abrirModalTurnosPersonal(id) {
+      const cfg = mapaConfiguracionPersonal[id];
+      if (!cfg) return alert('No se encontró el vigilador.');
+      personalConfigurandoId = id;
+      document.getElementById('turnoFirebaseId').value = '';
+      document.getElementById('turnoFecha').value = '';
+      document.getElementById('turnoHoraInicio').value = '';
+      document.getElementById('turnoHoraFin').value = '';
+      document.getElementById('turnoObservacion').value = '';
+      document.getElementById('turnosPersonalSubtitulo').innerText = `${cfg.nombre || ''} · Legajo ${cfg.legajo || ''}`;
+      await cargarObjetivosTurno(cfg.objetivosAsignados || []);
+      await cargarAsignacionesTurnoPersonal();
+      document.getElementById('modalTurnosPersonal').classList.remove('hidden');
+    }
+
+    async function cargarObjetivosTurno(asignados) {
+      const sel = document.getElementById('turnoObjetivo');
+      sel.innerHTML = '<option value="">Cargando objetivos...</option>';
+      try {
+        const res = await fetch(`${URL_FIREBASE}/objetivos.json?ts=${Date.now()}`, { cache: 'no-store' });
+        const data = await res.json();
+        sel.innerHTML = '<option value="">Seleccione objetivo</option>';
+        const lista = data ? Object.entries(data).filter(([id,o]) => o && (o.nombre || o.codigo)) : [];
+        lista.forEach(([id,o]) => sel.insertAdjacentHTML('beforeend', `<option value="${escaparHtml(id)}">${escaparHtml(o.nombre || o.codigo || id)}</option>`));
+        if (!lista.length) sel.innerHTML = '<option value="">No hay objetivos registrados</option>';
+      } catch(e) {
+        sel.innerHTML = '<option value="">No se pudieron cargar los objetivos</option>';
       }
     }
+
+    async function cargarAsignacionesTurnoPersonal() {
+      const cuerpo = document.getElementById('cuerpoTurnosPersonal');
+      cuerpo.innerHTML = '<tr><td colspan="5" class="p-6 text-center text-slate-500">Cargando turnos...</td></tr>';
+      try {
+        const res = await fetch(`${URL_FIREBASE}/asignacionesTurnos.json?ts=${Date.now()}`, { cache: 'no-store' });
+        const data = await res.json();
+        asignacionesTurnosAdmin = data ? Object.entries(data).map(([id,d]) => ({...d, id})).filter(d => String(d.legajo || '') === String(mapaConfiguracionPersonal[personalConfigurandoId]?.legajo || '')) : [];
+        asignacionesTurnosAdmin.sort((a,b) => String(a.fecha || '').localeCompare(String(b.fecha || '')));
+        cuerpo.innerHTML = '';
+        if (!asignacionesTurnosAdmin.length) { cuerpo.innerHTML = '<tr><td colspan="5" class="p-6 text-center text-slate-500">No hay cambios de turno registrados.</td></tr>'; return; }
+        asignacionesTurnosAdmin.forEach(t => {
+          const tr=document.createElement('tr'); tr.className='border-t border-slate-800';
+          tr.innerHTML=`<td class="p-3 text-slate-200">${escaparHtml(t.fecha||'')}</td><td class="p-3 text-slate-200">${escaparHtml(t.objetivoNombre||t.objetivo||'')}</td><td class="p-3 font-mono text-emerald-300">${escaparHtml(t.horaInicio||'')} - ${escaparHtml(t.horaFin||'')}</td><td class="p-3 text-slate-400">${escaparHtml(t.observacion||'')}</td><td class="p-3 text-center"><button onclick="editarAsignacionTurno('${escaparHtml(t.id)}')" class="text-amber-400 hover:text-amber-300 mr-3"><i class="fa-solid fa-pen"></i></button><button onclick="eliminarAsignacionTurno('${escaparHtml(t.id)}')" class="text-rose-400 hover:text-rose-300"><i class="fa-solid fa-trash"></i></button></td>`;
+          cuerpo.appendChild(tr);
+        });
+      } catch(e) { cuerpo.innerHTML='<tr><td colspan="5" class="p-6 text-center text-rose-400">No se pudieron cargar los turnos.</td></tr>'; }
+    }
+
+    async function guardarAsignacionTurno(e) {
+      e.preventDefault();
+      const cfg=mapaConfiguracionPersonal[personalConfigurandoId]; if(!cfg) return;
+      const id=document.getElementById('turnoFirebaseId').value;
+      const fecha=document.getElementById('turnoFecha').value;
+      const objetivoId=document.getElementById('turnoObjetivo').value;
+      const objetivoNombre=document.getElementById('turnoObjetivo').selectedOptions[0]?.textContent || '';
+      const horaInicio=document.getElementById('turnoHoraInicio').value;
+      const horaFin=document.getElementById('turnoHoraFin').value;
+      const observacion=document.getElementById('turnoObservacion').value.trim();
+      if(!fecha||!objetivoId||!horaInicio||!horaFin) return alert('Completá fecha, objetivo, inicio y fin.');
+      const payload={legajo:String(cfg.legajo||''), nombre:cfg.nombre||'', objetivoId, objetivoNombre, fecha, horaInicio, horaFin, observacion, actualizadoEn:new Date().toISOString()};
+      const btn=document.getElementById('btnGuardarTurno'); btn.disabled=true; btn.innerText='Guardando...';
+      try{
+        const url=id?`${URL_FIREBASE}/asignacionesTurnos/${id}.json`:`${URL_FIREBASE}/asignacionesTurnos.json`;
+        const res=await fetch(url,{method:id?'PATCH':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+        if(!res.ok) throw new Error('Firebase rechazó el turno');
+        alert(id?'Turno actualizado correctamente.':'Turno asignado correctamente.');
+        document.getElementById('turnoFirebaseId').value=''; document.getElementById('turnoFecha').value=''; document.getElementById('turnoHoraInicio').value=''; document.getElementById('turnoHoraFin').value=''; document.getElementById('turnoObservacion').value='';
+        cargarAsignacionesTurnoPersonal();
+      }catch(e){alert('No se pudo guardar el turno: '+e.toString());}finally{btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-save"></i> Guardar';}
+    }
+
+    function editarAsignacionTurno(id){
+      const t=asignacionesTurnosAdmin.find(x=>String(x.id)===String(id)); if(!t)return;
+      document.getElementById('turnoFirebaseId').value=t.id; document.getElementById('turnoFecha').value=t.fecha||''; document.getElementById('turnoObjetivo').value=t.objetivoId||''; document.getElementById('turnoHoraInicio').value=t.horaInicio||''; document.getElementById('turnoHoraFin').value=t.horaFin||''; document.getElementById('turnoObservacion').value=t.observacion||'';
+      document.getElementById('btnGuardarTurno').innerHTML='<i class="fa-solid fa-save"></i> Actualizar';
+    }
+    async function eliminarAsignacionTurno(id){ if(!confirm('¿Eliminar esta asignación de turno?'))return; try{const r=await fetch(`${URL_FIREBASE}/asignacionesTurnos/${id}.json`,{method:'DELETE'});if(!r.ok)throw new Error('Error');cargarAsignacionesTurnoPersonal();}catch(e){alert('No se pudo eliminar el turno.');} }
+    function cerrarModalTurnosPersonal(){document.getElementById('modalTurnosPersonal').classList.add('hidden');personalConfigurandoId=null;}
 
     // =========================
     // OBJETIVOS / UBICACIONES
