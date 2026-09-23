@@ -436,6 +436,22 @@
     const alertasTardiasMostradas = new Set();
     let intervaloActualizacionPanel = null;
     let alertasArchivadasCache = [];
+    const CLAVE_STORAGE_ARCHIVADAS = 'alertasTardanzaArchivadas';
+    let alertasArchivadasMap = (function () {
+      try {
+        const raw = localStorage.getItem(CLAVE_STORAGE_ARCHIVADAS);
+        return raw ? (JSON.parse(raw) || {}) : {};
+      } catch (e) {
+        return {};
+      }
+    })();
+    function guardarArchivadasGuardadas() {
+      try {
+        localStorage.setItem(CLAVE_STORAGE_ARCHIVADAS, JSON.stringify(alertasArchivadasMap));
+      } catch (e) {
+        console.warn('No se pudo guardar el archivo de alertas:', e);
+      }
+    }
 
     let instChartDona = null;
     let instChartBarras = null;
@@ -518,10 +534,23 @@
             alerta.objetivo,
             'ENTRADA'
           ];
-          // Las alertas archivadas por el supervisor no vuelven a aparecer arriba;
-          // quedan guardadas para consultarse desde el modal de archivadas.
+          // Si en Firebase quedó marcada como archivada, la sumamos al archivo
+          // local para que tampoco aparezca arriba en este dispositivo.
           if (alerta.archivadoSupervisor === true) {
-            archivadas.push({ firebaseId, alerta, entrada });
+            const fechaKey = String(entrada[0] || '');
+            const clave = `${entrada[1] || ''}|${fechaKey}|${entrada[3] || ''}`;
+            if (!alertasArchivadasMap[clave]) {
+              alertasArchivadasMap[clave] = {
+                firebaseId: firebaseId,
+                nombre: alerta.nombre || '',
+                legajo: alerta.legajo != null ? String(alerta.legajo) : '',
+                objetivo: alerta.objetivo || '',
+                fechaHora: entrada[0] || '',
+                minutosTarde: Number(alerta.minutosTarde) || 0,
+                archivadoEn: alerta.archivadoEn || new Date().toISOString()
+              };
+              guardarArchivadasGuardadas();
+            }
             return;
           }
           mostrarAlertaTardanza(entrada, {
@@ -534,8 +563,7 @@
             } : null
           }, firebaseId);
         });
-        alertasArchivadasCache = archivadas.sort((a, b) => new Date(b.alerta.fechaHora || 0) - new Date(a.alerta.fechaHora || 0));
-        renderizarAlertasArchivadas();
+        sincronizarCacheArchivadas();
       } catch (err) {
         console.warn('No se pudieron cargar las alertas de llegada tardía:', err);
       }
@@ -569,7 +597,17 @@
     function mostrarAlertaTardanza(entrada, estadoInfo, firebaseId = '') {
       if (!entrada || estadoInfo.estado !== 'TARDE') return;
       const fechaKey = String(entrada[0] || '');
-      const clave = firebaseId ? `FIREBASE|${firebaseId}` : `${entrada[1] || ''}|${fechaKey}|${entrada[3] || ''}`;
+      // Clave estable e independiente de la fuente (tabla o Firebase) para que
+      // el archivado se respete aunque la alerta se regenere en cada recarga.
+      const clave = `${entrada[1] || ''}|${fechaKey}|${entrada[3] || ''}`;
+      // Si el supervisor ya la archivó, no se muestra arriba: queda en el modal.
+      if (alertasArchivadasMap[clave]) {
+        if (firebaseId && !alertasArchivadasMap[clave].firebaseId) {
+          alertasArchivadasMap[clave].firebaseId = firebaseId;
+          guardarArchivadasGuardadas();
+        }
+        return;
+      }
       if (alertasTardiasMostradas.has(clave)) return;
       alertasTardiasMostradas.add(clave);
 
@@ -583,6 +621,11 @@
       alerta.className = 'bg-rose-950/70 border border-rose-500/60 text-rose-100 rounded-xl p-4 shadow-lg flex flex-col md:flex-row md:items-center md:justify-between gap-3';
       alerta.dataset.firebaseId = firebaseId || '';
       alerta.dataset.claveAlerta = clave;
+      alerta.dataset.nombre = nombre;
+      alerta.dataset.legajo = entrada[1] != null ? String(entrada[1]) : '';
+      alerta.dataset.objetivo = objetivo;
+      alerta.dataset.fecha = entrada[0] || '';
+      alerta.dataset.minutos = String(estadoInfo.minutosTarde || 0);
       alerta.innerHTML = `
         <div>
           <div class="font-bold flex items-center gap-2"><i class="fa-solid fa-triangle-exclamation text-rose-400"></i> ALERTA DE LLEGADA TARDÍA</div>
@@ -595,15 +638,49 @@
 
     // ==========================================
     // ARCHIVO DE ALERTAS DE LLEGADA TARDÍA
-    // Al cerrar una alerta se marca como archivada en Firebase para que no
-    // vuelva a aparecer arriba al recargar. Quedan disponibles en el modal.
+    // Al cerrar una alerta se guarda como archivada (localStorage) para que no
+    // vuelva a aparecer arriba al recargar. Quedan disponibles en el modal y,
+    // si la alerta viene de Firebase, también se marca allí.
     // ==========================================
+    function sincronizarCacheArchivadas() {
+      alertasArchivadasCache = Object.keys(alertasArchivadasMap).map(clave => {
+        const info = alertasArchivadasMap[clave] || {};
+        return {
+          clave,
+          firebaseId: info.firebaseId || '',
+          alerta: {
+            nombre: info.nombre,
+            legajo: info.legajo,
+            objetivo: info.objetivo,
+            fechaHora: info.fechaHora,
+            minutosTarde: info.minutosTarde
+          }
+        };
+      }).sort((a, b) => new Date(b.alerta.fechaHora || 0) - new Date(a.alerta.fechaHora || 0));
+      renderizarAlertasArchivadas();
+    }
+
     async function archivarAlertaTardanza(btn) {
       const cont = btn.closest('[data-clave-alerta]') || btn.parentElement;
-      const firebaseId = cont && cont.dataset ? (cont.dataset.firebaseId || '') : '';
+      const d = cont && cont.dataset ? cont.dataset : {};
+      const clave = d.claveAlerta || '';
+      const firebaseId = d.firebaseId || '';
+      if (clave) {
+        alertasArchivadasMap[clave] = {
+          firebaseId: firebaseId,
+          nombre: d.nombre || '',
+          legajo: d.legajo || '',
+          objetivo: d.objetivo || '',
+          fechaHora: d.fecha || '',
+          minutosTarde: Number(d.minutos) || 0,
+          archivadoEn: new Date().toISOString()
+        };
+        guardarArchivadasGuardadas();
+      }
       if (cont) cont.remove();
       const contenedor = document.getElementById('contenedorAlertasTardanza');
       if (contenedor && !contenedor.querySelector('[data-clave-alerta]')) contenedor.classList.add('hidden');
+      sincronizarCacheArchivadas();
       if (firebaseId) {
         try {
           await fetch(`${URL_BASE_FIREBASE}/alertasLlegadasTarde/${firebaseId}.json`, {
@@ -611,9 +688,8 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ archivadoSupervisor: true, archivadoEn: new Date().toISOString() })
           });
-          await cargarAlertasTardanzaFirebase();
         } catch (e) {
-          console.warn('No se pudo archivar la alerta:', e);
+          console.warn('No se pudo archivar la alerta en Firebase:', e);
         }
       }
     }
@@ -637,13 +713,14 @@
         const nombre = a.nombre || `Legajo ${a.legajo || '-'}`;
         const hora = a.fechaHora ? new Date(a.fechaHora).toLocaleString('es-AR', { hour12: false }) : '-';
         const mins = Number(a.minutosTarde) || 0;
+        const claveEsc = String(item.clave).replace(/'/g, "\\'");
         return `<div class="p-3 rounded-xl border border-slate-700 bg-slate-900/60 flex flex-col md:flex-row md:items-center justify-between gap-2">
           <div>
             <div class="text-sm font-bold text-white">${nombre} · Legajo ${a.legajo || '-'}</div>
             <div class="text-xs text-slate-400 mt-1">Objetivo: ${a.objetivo || '-'}</div>
             <div class="text-xs text-rose-200/70 mt-1">Fichada: ${hora} · ${mins} min de demora</div>
           </div>
-          <button type="button" onclick="restaurarAlertaArchivada('${item.firebaseId}')" class="text-xs font-bold bg-slate-700 hover:bg-emerald-600 text-slate-200 hover:text-white px-3 py-2 rounded-lg transition self-start md:self-auto"><i class="fa-solid fa-rotate-left"></i> Restaurar</button>
+          <button type="button" onclick="restaurarAlertaArchivada('${claveEsc}')" class="text-xs font-bold bg-slate-700 hover:bg-emerald-600 text-slate-200 hover:text-white px-3 py-2 rounded-lg transition self-start md:self-auto"><i class="fa-solid fa-rotate-left"></i> Restaurar</button>
         </div>`;
       }).join('');
     }
@@ -651,7 +728,7 @@
     function abrirModalAlertasArchivadas() {
       const modal = document.getElementById('modalAlertasArchivadas');
       if (modal) modal.classList.remove('hidden');
-      cargarAlertasTardanzaFirebase();
+      sincronizarCacheArchivadas();
     }
 
     function cerrarModalAlertasArchivadas() {
@@ -659,19 +736,27 @@
       if (modal) modal.classList.add('hidden');
     }
 
-    async function restaurarAlertaArchivada(firebaseId) {
-      if (!firebaseId) return;
-      try {
-        await fetch(`${URL_BASE_FIREBASE}/alertasLlegadasTarde/${firebaseId}.json`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ archivadoSupervisor: false, archivadoEn: null })
-        });
-        alertasTardiasMostradas.delete(`FIREBASE|${firebaseId}`);
-        await cargarAlertasTardanzaFirebase();
-      } catch (e) {
-        console.warn('No se pudo restaurar la alerta:', e);
+    async function restaurarAlertaArchivada(clave) {
+      if (!clave) return;
+      const info = alertasArchivadasMap[clave] || {};
+      const firebaseId = info.firebaseId || '';
+      delete alertasArchivadasMap[clave];
+      guardarArchivadasGuardadas();
+      alertasTardiasMostradas.delete(clave);
+      sincronizarCacheArchivadas();
+      if (firebaseId) {
+        try {
+          await fetch(`${URL_BASE_FIREBASE}/alertasLlegadasTarde/${firebaseId}.json`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ archivadoSupervisor: false, archivadoEn: null })
+          });
+        } catch (e) {
+          console.warn('No se pudo restaurar la alerta en Firebase:', e);
+        }
       }
+      cargarDatos();
+      cargarAlertasTardanzaFirebase();
     }
 
     function obtenerClasesFichada(tipo, estadoEntrada) {
