@@ -209,8 +209,6 @@
     const URL_FIREBASE = "https://fir-asistencia-fad12-default-rtdb.firebaseio.com";
     let temporizadorInactividad;
     let datosVigiladorGlobal = []; 
-    let mapaConfiguracionPersonalVigilador = {};
-    let asignacionesTurnosVigilador = [];
 
     // Variables para control del Botón de Pánico sostenido
     let temporizadorPanico = null;
@@ -224,129 +222,6 @@
       if (!isNaN(d.getTime())) return d;
       d = new Date(String(fechaStr).replace(/-/g, '/'));
       return d;
-    }
-
-    function minutosDesdeMedianoche(hora) {
-      if (!hora || !/^\d{1,2}:\d{2}$/.test(String(hora))) return null;
-      const [h, m] = String(hora).split(':').map(Number);
-      if (h < 0 || h > 23 || m < 0 || m > 59) return null;
-      return h * 60 + m;
-    }
-
-    function obtenerFechaLocalClave(fecha) {
-      if (!(fecha instanceof Date) || isNaN(fecha.getTime())) return '';
-      const y = fecha.getFullYear();
-      const m = String(fecha.getMonth() + 1).padStart(2, '0');
-      const d = String(fecha.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
-    }
-
-    function obtenerHorarioProgramado(entrada, legajo, objetivoNombre) {
-      const fechaEntrada = parseFechaSegura(entrada);
-      if (isNaN(fechaEntrada.getTime())) return null;
-
-      const fechaClave = obtenerFechaLocalClave(fechaEntrada);
-      const legajoStr = String(legajo || '').trim();
-      const objetivoStr = String(objetivoNombre || '').trim().toLowerCase();
-
-      const turnosFecha = asignacionesTurnosVigilador.filter(t =>
-        String(t.legajo || '').trim() === legajoStr && String(t.fecha || '') === fechaClave
-      );
-
-      let turno = null;
-      if (turnosFecha.length) {
-        turno = turnosFecha.find(t => {
-          const nombre = String(t.objetivoNombre || t.objetivo || '').trim().toLowerCase();
-          return objetivoStr && nombre && (
-            nombre === objetivoStr ||
-            nombre.includes(objetivoStr) ||
-            objetivoStr.includes(nombre)
-          );
-        }) || turnosFecha[0];
-      }
-
-      if (turno && (turno.horaInicio || turno.horaFin)) {
-        return {
-          inicio: turno.horaInicio || '',
-          fin: turno.horaFin || '',
-          origen: 'Turno asignado'
-        };
-      }
-
-      const persona = Object.values(mapaConfiguracionPersonalVigilador).find(p =>
-        String(p.legajo || '').trim() === legajoStr
-      );
-      const h = persona?.horarioHabitual || {};
-
-      if (h.inicio || h.fin) {
-        return {
-          inicio: h.inicio || '',
-          fin: h.fin || '',
-          origen: 'Horario habitual'
-        };
-      }
-
-      return null;
-    }
-
-    function calcularHoras(f1, f2, horarioProgramado = null) {
-      const inicioReal = parseFechaSegura(f1);
-      const fin = parseFechaSegura(f2);
-
-      if (isNaN(inicioReal.getTime()) || isNaN(fin.getTime()) || fin <= inicioReal) {
-        return { d: 0, n: 0, t: 0, entradaComputable: inicioReal, ajusteMinutos: 0 };
-      }
-
-      let inicioComputable = new Date(inicioReal.getTime());
-      let ajusteMinutos = 0;
-
-      if (horarioProgramado?.inicio) {
-        const minutosTurno = minutosDesdeMedianoche(horarioProgramado.inicio);
-
-        if (minutosTurno !== null) {
-          const inicioTurno = new Date(inicioReal.getTime());
-          inicioTurno.setHours(
-            Math.floor(minutosTurno / 60),
-            minutosTurno % 60,
-            0,
-            0
-          );
-
-          if (inicioTurno > inicioComputable) {
-            inicioComputable = inicioTurno;
-            ajusteMinutos = Math.round((inicioComputable - inicioReal) / 60000);
-          }
-        }
-      }
-
-      if (inicioComputable >= fin) {
-        return { d: 0, n: 0, t: 0, entradaComputable: inicioComputable, ajusteMinutos };
-      }
-
-      let diurnas = 0;
-      let nocturnas = 0;
-      let cur = new Date(inicioComputable.getTime());
-
-      while (cur < fin) {
-        let siguiente = new Date(cur.getTime() + 60000);
-        if (siguiente > fin) siguiente = new Date(fin.getTime());
-
-        const h = cur.getHours();
-        const minutos = (siguiente - cur) / 60000;
-
-        if (h >= 6 && h < 21) diurnas += minutos / 60;
-        else nocturnas += minutos / 60;
-
-        cur = siguiente;
-      }
-
-      return {
-        d: diurnas,
-        n: nocturnas,
-        t: diurnas + nocturnas,
-        entradaComputable: inicioComputable,
-        ajusteMinutos
-      };
     }
 
     function reiniciarTemporizador() {
@@ -387,6 +262,23 @@
       window.addEventListener('touchstart', reiniciarTemporizador);
     }
 
+    function calcularHoras(f1, f2) {
+      let inicio = parseFechaSegura(f1);
+      let fin = parseFechaSegura(f2);
+      if (isNaN(inicio.getTime()) || isNaN(fin.getTime()) || fin <= inicio) return { d: 0, n: 0, t: 0 };
+
+      let diurnas = 0, nocturnas = 0;
+      let cur = new Date(inicio.getTime());
+
+      while (cur < fin) {
+        let h = cur.getHours();
+        if (h >= 6 && h < 21) diurnas += 1/60;
+        else nocturnas += 1/60;
+        cur.setMinutes(cur.getMinutes() + 1);
+      }
+      return { d: diurnas, n: nocturnas, t: diurnas + nocturnas };
+    }
+
     function formatearAHorasReloj(horasDecimales) {
       if (isNaN(horasDecimales) || horasDecimales <= 0) return "00:00 hs";
       const horas = Math.floor(horasDecimales);
@@ -403,26 +295,20 @@
       }
 
       Promise.all([
-        fetch(`${URL_FIREBASE}/personal.json`).then(res => res.json()),
-        fetch(`${URL_FIREBASE}/fichadas.json`).then(res => res.json()),
-        fetch(`${URL_FIREBASE}/asignacionesTurnos.json`).then(res => res.json())
+        fetch(`${URL_FIREBASE}/personal.json`).then(res => res.json()).catch(() => null),
+        fetch(`${URL_FIREBASE}/fichadas.json`).then(res => res.json()).catch(() => null)
       ])
-      .then(([personalData, fichadasData, turnosData]) => {
-        mapaConfiguracionPersonalVigilador = personalData || {};
-        asignacionesTurnosVigilador = turnosData
-          ? Object.entries(turnosData).map(([id, d]) => ({ ...d, id }))
-          : [];
-
-        let empleadoEncontrado = null;
+      .then(([personalData, fichadasData]) => {
         let nombreEmpleado = `Legajo ${legajoIngresado}`;
 
+        // Búsqueda segura en personal (compatible aunque esté vacío o devuelva null)
         if (personalData) {
           Object.values(personalData).forEach(p => {
+            if (!p) return;
             const pLegajo = String(p.legajo || "").trim();
             if (pLegajo === legajoIngresado || parseInt(pLegajo, 10) === parseInt(legajoIngresado, 10)) {
-              const pPin = String(p.pin || p.clave || "").trim();
+              const pPin = String(p.pin || p.clave || p.password || "").trim();
               if (!pPin || pPin === pinIngresado) {
-                empleadoEncontrado = p;
                 if (p.nombre) nombreEmpleado = p.nombre;
               }
             }
@@ -432,6 +318,7 @@
         let misFichadas = [];
         if (fichadasData) {
           Object.values(fichadasData).forEach(f => {
+            if (!f) return;
             const fLegajo = String(f.legajo || "").trim();
             const coincideLegajo = (fLegajo === legajoIngresado || parseInt(fLegajo, 10) === parseInt(legajoIngresado, 10));
             if (coincideLegajo) {
@@ -474,20 +361,13 @@
     }
 
     function ejecutarConsulta(legajo) {
-      Promise.all([
-        fetch(`${URL_FIREBASE}/fichadas.json`).then(res => res.json()),
-        fetch(`${URL_FIREBASE}/personal.json`).then(res => res.json()),
-        fetch(`${URL_FIREBASE}/asignacionesTurnos.json`).then(res => res.json())
-      ])
-        .then(([fichadasData, personalData, turnosData]) => {
-          mapaConfiguracionPersonalVigilador = personalData || {};
-          asignacionesTurnosVigilador = turnosData
-            ? Object.entries(turnosData).map(([id, d]) => ({ ...d, id }))
-            : [];
-
+      fetch(`${URL_FIREBASE}/fichadas.json`)
+        .then(res => res.json())
+        .then(fichadasData => {
           let misFichadas = [];
           if (fichadasData) {
             Object.values(fichadasData).forEach(f => {
+              if (!f) return;
               const fLegajo = String(f.legajo || "").trim();
               if (fLegajo === legajo || parseInt(fLegajo, 10) === parseInt(legajo, 10)) {
                 misFichadas.push({
@@ -591,9 +471,8 @@
           let entrada = marcacionesVigilador[i];
           let salida = marcacionesVigilador[i + 1] && marcacionesVigilador[i + 1].tipo === 'SALIDA' ? marcacionesVigilador[i + 1] : null;
 
+          let horas = salida ? calcularHoras(entrada.fecha, salida.fecha) : { d: 0, n: 0, t: 0 };
           let objetivoNombre = entrada.objetivo || (salida && salida.objetivo) || '-';
-          const horarioProgramado = obtenerHorarioProgramado(entrada.fecha, entrada.legajo, objetivoNombre);
-          let horas = salida ? calcularHoras(entrada.fecha, salida.fecha, horarioProgramado) : { d: 0, n: 0, t: 0, ajusteMinutos: 0 };
 
           totalD += horas.d;
           totalN += horas.n;
@@ -607,9 +486,7 @@
           tr.innerHTML = `
             <td class="p-4 text-xs font-mono">${!isNaN(fEntrada.getTime()) ? fEntrada.toLocaleString('es-AR', { hour12: false }) : entrada.fecha}</td>
             <td class="p-4 text-xs font-mono">${salida ? (!isNaN(fSalida.getTime()) ? fSalida.toLocaleString('es-AR', { hour12: false }) : salida.fecha) : '<span class="text-amber-400">En Turno</span>'}</td>
-            <td class="p-4 text-xs text-slate-300 font-medium">${objetivoNombre}
-              <div class="text-[10px] text-slate-500 mt-1">${horarioProgramado ? `Turno ${horarioProgramado.inicio || '--:--'} - ${horarioProgramado.fin \vert{}\vert{} '--:--'} ·${horarioProgramado.origen}` : 'Sin horario configurado'}${horas.ajusteMinutos > 0 ? ` · ${horas.ajusteMinutos} min anticipados no computados` : ''}</div>
-            </td>
+            <td class="p-4 text-xs text-slate-300 font-medium">${objetivoNombre}</td>
             <td class="p-4 text-center text-xs font-semibold text-amber-400">${formatearAHorasReloj(horas.d)}</td>
             <td class="p-4 text-center text-xs font-semibold text-indigo-400">${formatearAHorasReloj(horas.n)}</td>
             <td class="p-4 text-center text-xs font-bold text-emerald-400">${formatearAHorasReloj(horas.t)}</td>
