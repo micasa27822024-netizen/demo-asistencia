@@ -105,7 +105,7 @@
       </div>
       
       <div class="flex items-center gap-3">
-        <button onclick="abrirModalAlertasTardanzaArchivadas()" class="relative bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold px-3 py-2 rounded-xl text-sm transition border border-slate-600 flex items-center gap-2" title="Ver alertas archivadas">
+        <button onclick="abrirModalAlertasTardanzaArchivadas()" class="relative bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold px-3 py-2 rounded-xl text-sm transition border border-slate-600 flex items-center gap-2" title="Ver alertas archivadas de llegada tarde y salidas anticipadas">
           <i class="fa-solid fa-box-archive text-amber-400"></i>
           <span class="hidden sm:inline">Alertas archivadas</span>
           <span id="badgeAlertasTardanzaArchivadas" class="hidden items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-amber-500 text-slate-950 text-[10px] font-black">0</span>
@@ -358,8 +358,8 @@
           <i class="fa-solid fa-box-archive"></i>
         </div>
         <div>
-          <h3 class="font-bold text-white text-lg">Alertas de llegada tardía archivadas</h3>
-          <p class="text-xs text-slate-400">Las alertas cerradas por el supervisor se conservan aquí.</p>
+          <h3 class="font-bold text-white text-lg">Alertas archivadas</h3>
+          <p class="text-xs text-slate-400">Llegadas tarde y salidas anticipadas cerradas por el supervisor.</p>
         </div>
       </div>
       <div id="listaAlertasTardanzaArchivadas" class="space-y-3 overflow-y-auto max-h-[65vh] pr-1"></div>
@@ -408,6 +408,7 @@
 
     async function mostrarPanel() {
       cargarArchivadasDesdeStorage();
+      cargarAlertasEliminadasDesdeStorage();
       document.getElementById('pantallaLogin').classList.add('hidden');
       document.getElementById('contenidoPanel').classList.remove('hidden');
 
@@ -434,6 +435,7 @@
     const URL_PERSONAL = `${URL_BASE_FIREBASE}/personal.json`;
     const URL_TURNOS = `${URL_BASE_FIREBASE}/asignacionesTurnos.json`;
     const URL_ALERTAS_TARDANZA = `${URL_BASE_FIREBASE}/alertasLlegadasTarde.json`;
+    const URL_ALERTAS_SALIDA_ANTICIPADA = `${URL_BASE_FIREBASE}/alertasSalidasAnticipadas.json`;
     
     let datosLocales = [];
     let datosFiltradosActuales = [];
@@ -442,16 +444,59 @@
     let mapaConfiguracionPersonalPanel = {};
     let asignacionesTurnosPanel = [];
     const alertasTardiasMostradas = new Set();
+    const alertasSalidasAnticipadasMostradas = new Set();
     let intervaloActualizacionPanel = null;
 
-    // Historial local de alertas de llegada tardía archivadas por el supervisor.
+    // Historial local de alertas archivadas por el supervisor.
+    // Se conservan tanto llegadas tarde como salidas anticipadas.
     let alertasArchivadasCache = [];
-    const CLAVE_STORAGE_ARCHIVADAS = 'alertasTardanzaArchivadas';
+    const CLAVE_STORAGE_ARCHIVADAS = 'alertasOperativasArchivadas';
+    const CLAVE_STORAGE_ELIMINADAS = 'alertasOperativasEliminadas';
+    let alertasEliminadasCache = [];
+
+    function cargarAlertasEliminadasDesdeStorage() {
+      try {
+        const eliminadas = JSON.parse(localStorage.getItem(CLAVE_STORAGE_ELIMINADAS) || '[]');
+        alertasEliminadasCache = Array.isArray(eliminadas) ? eliminadas : [];
+      } catch (e) {
+        alertasEliminadasCache = [];
+      }
+    }
+
+    function guardarAlertasEliminadasEnStorage() {
+      try {
+        localStorage.setItem(CLAVE_STORAGE_ELIMINADAS, JSON.stringify(alertasEliminadasCache));
+      } catch (e) {
+        console.warn('No se pudo guardar el historial de alertas eliminadas:', e);
+      }
+    }
+
+    function marcarAlertaEliminada(entrada, tipoAlerta, salida = null) {
+      const claveNatural = obtenerClaveAlertaNatural(entrada, tipoAlerta, salida);
+      if (!claveNatural) return;
+      if (!alertasEliminadasCache.includes(claveNatural)) {
+        alertasEliminadasCache.push(claveNatural);
+        guardarAlertasEliminadasEnStorage();
+      }
+    }
+
+    function alertaFueEliminada(entrada, tipoAlerta, salida = null) {
+      const claveNatural = obtenerClaveAlertaNatural(entrada, tipoAlerta, salida);
+      return !!claveNatural && alertasEliminadasCache.includes(claveNatural);
+    }
+
+    cargarAlertasEliminadasDesdeStorage();
 
     function cargarArchivadasDesdeStorage() {
       try {
-        const guardadas = JSON.parse(localStorage.getItem(CLAVE_STORAGE_ARCHIVADAS) || '[]');
-        alertasArchivadasCache = Array.isArray(guardadas) ? guardadas : [];
+        const guardadas = JSON.parse(
+          localStorage.getItem(CLAVE_STORAGE_ARCHIVADAS) ||
+          localStorage.getItem('alertasTardanzaArchivadas') ||
+          '[]'
+        );
+        alertasArchivadasCache = Array.isArray(guardadas)
+          ? guardadas.map(a => ({ ...a, tipoAlerta: a.tipoAlerta || 'LLEGADA_TARDE' }))
+          : [];
       } catch (e) {
         alertasArchivadasCache = [];
       }
@@ -467,10 +512,45 @@
       actualizarBadgeAlertasArchivadas();
     }
 
-    function obtenerClaveAlertaArchivada(entrada, firebaseId = '') {
-      return firebaseId
-        ? `FIREBASE|${firebaseId}`
-        : `${entrada?.[1] || ''}|${entrada?.[0] || ''}|${entrada?.[3] || ''}`;
+    function obtenerTipoAlerta(alerta) {
+      return String(alerta?.tipoAlerta || 'LLEGADA_TARDE').trim().toUpperCase();
+    }
+
+    function obtenerClaveAlertaNatural(entrada, tipoAlerta = 'LLEGADA_TARDE', salida = null) {
+      const legajo = entrada?.[1] || '';
+      const fechaEntrada = entrada?.[0] || '';
+      const objetivo = entrada?.[3] || '';
+      const fechaSalida = salida?.[0] || '';
+      return `${tipoAlerta}|${legajo}|${fechaEntrada}|${fechaSalida}|${objetivo}`;
+    }
+
+    function obtenerIdFirebaseSalidaAnticipada(entrada, salida) {
+      const texto = obtenerClaveAlertaNatural(entrada, 'SALIDA_ANTICIPADA', salida);
+      let hash = 2166136261;
+      for (let i = 0; i < texto.length; i++) {
+        hash ^= texto.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+      }
+      return `SA_${(hash >>> 0).toString(36)}`;
+    }
+
+    function obtenerClaveAlertaArchivada(entrada, firebaseId = '', tipoAlerta = 'LLEGADA_TARDE', salida = null) {
+      if (firebaseId) return `FIREBASE|${firebaseId}`;
+      return obtenerClaveAlertaNatural(entrada, tipoAlerta, salida);
+    }
+
+    function alertaArchivadaExiste(entrada, firebaseId = '', tipoAlerta = 'LLEGADA_TARDE', salida = null) {
+      const clave = obtenerClaveAlertaArchivada(entrada, firebaseId, tipoAlerta, salida);
+      const claveNatural = obtenerClaveAlertaNatural(entrada, tipoAlerta, salida);
+      return alertasArchivadasCache.some(a =>
+        (firebaseId && a.firebaseId === firebaseId) ||
+        a.clave === clave ||
+        a.clave === claveNatural ||
+        (
+          obtenerTipoAlerta(a) === tipoAlerta &&
+          obtenerClaveAlertaNatural(a.entrada, tipoAlerta, a.salida) === claveNatural
+        )
+      );
     }
 
     function actualizarBadgeAlertasArchivadas() {
@@ -489,7 +569,10 @@
         modal.classList.remove('hidden');
         modal.classList.add('flex');
       }
-      cargarAlertasTardanzaFirebase();
+      Promise.allSettled([
+        cargarAlertasTardanzaFirebase(),
+        cargarAlertasSalidaAnticipadaFirebase()
+      ]).then(() => renderizarAlertasArchivadas());
     }
 
     function cerrarModalAlertasTardanzaArchivadas() {
@@ -513,35 +596,68 @@
         return;
       }
 
-      const ordenadas = [...alertasArchivadasCache].sort((a,b) =>
-        new Date(b.archivadoEn || b.entrada?.[0] || 0) - new Date(a.archivadoEn || a.entrada?.[0] || 0)
+      const ordenadas = [...alertasArchivadasCache].sort((a, b) =>
+        new Date(b.archivadoEn || b.fechaHoraSalida || b.entrada?.[0] || 0) -
+        new Date(a.archivadoEn || a.fechaHoraSalida || a.entrada?.[0] || 0)
       );
 
-      contenedor.innerHTML = ordenadas.map((a, index) => {
+      contenedor.innerHTML = ordenadas.map(a => {
+        const tipoAlerta = obtenerTipoAlerta(a);
+        const esSalidaAnticipada = tipoAlerta === 'SALIDA_ANTICIPADA';
         const entrada = a.entrada || [];
-        const fecha = entrada[0] ? new Date(entrada[0]).toLocaleString('es-AR', { hour12: false }) : '-';
-        const nombre = entrada[2] || `Legajo ${entrada[1] || '-'}`;
-        const legajo = entrada[1] || '-';
-        const objetivo = entrada[3] || '-';
-        const minutos = Number(a.minutosTarde) || 0;
+        const salida = a.salida || [];
+        const fechaBase = esSalidaAnticipada ? (salida[0] || a.fechaHoraSalida) : entrada[0];
+        const fecha = fechaBase
+          ? new Date(fechaBase).toLocaleString('es-AR', { hour12: false })
+          : '-';
+        const nombre = a.nombre || entrada[2] || `Legajo ${entrada[1] || a.legajo || '-'}`;
+        const legajo = a.legajo || entrada[1] || '-';
+        const objetivo = a.objetivo || entrada[3] || salida[3] || '-';
         const indiceReal = alertasArchivadasCache.indexOf(a);
+        const titulo = esSalidaAnticipada ? 'ALERTA DE SALIDA ANTICIPADA' : 'ALERTA DE LLEGADA TARDÍA';
+        const detalle = esSalidaAnticipada
+          ? `Salida: ${fecha} · ${Number(a.minutosAnticipacion) || 0} min antes de la finalización programada (${a.horaFinProgramada || a.horario?.fin || '--:--'})`
+          : `Entrada: ${fecha} · ${Number(a.minutosTarde) || 0} min después del comienzo del turno`;
 
         return `
           <div class="border border-slate-700 rounded-xl p-4 bg-slate-900/70">
             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
               <div>
                 <div class="font-bold text-white flex items-center gap-2">
-                  <i class="fa-solid fa-triangle-exclamation text-rose-400"></i> ${nombre}
+                  <i class="fa-solid ${esSalidaAnticipada ? 'fa-person-walking-arrow-right text-orange-400' : 'fa-triangle-exclamation text-rose-400'}"></i>
+                  ${titulo}
                 </div>
-                <div class="text-xs text-slate-400 mt-1">Legajo ${legajo} · Objetivo: ${objetivo}</div>
-                <div class="text-xs text-slate-500 mt-1">Fichada: ${fecha} · ${minutos} min después del comienzo del turno</div>
+                <div class="text-xs text-slate-400 mt-1">${nombre} · Legajo ${legajo} · Objetivo: ${objetivo}</div>
+                <div class="text-xs text-slate-500 mt-1">${detalle}</div>
               </div>
-              <button type="button" onclick="restaurarAlertaArchivada(${indiceReal})" class="text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-lg transition">
-                <i class="fa-solid fa-rotate-left"></i> Restaurar alerta
-              </button>
+              <div class="flex flex-wrap gap-2">
+                <button type="button" onclick="restaurarAlertaArchivada(${indiceReal})" class="text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-lg transition">
+                  <i class="fa-solid fa-rotate-left"></i> Restaurar
+                </button>
+                <button type="button" onclick="eliminarAlertaArchivada(${indiceReal})" class="text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white px-3 py-2 rounded-lg transition">
+                  <i class="fa-solid fa-trash-can"></i> Eliminar
+                </button>
+              </div>
             </div>
           </div>`;
       }).join('');
+    }
+
+    function obtenerUrlBaseAlerta(tipoAlerta) {
+      return tipoAlerta === 'SALIDA_ANTICIPADA' ? URL_ALERTAS_SALIDA_ANTICIPADA : URL_ALERTAS_TARDANZA;
+    }
+
+    async function eliminarAlertaFirebase(firebaseId, tipoAlerta) {
+      if (!firebaseId) return true;
+      try {
+        const base = obtenerUrlBaseAlerta(tipoAlerta).replace('.json', '');
+        const respuesta = await fetch(`${base}/${firebaseId}.json`, { method: 'DELETE' });
+        if (!respuesta.ok) throw new Error(`Firebase respondió ${respuesta.status}`);
+        return true;
+      } catch (err) {
+        console.warn('No se pudo eliminar la alerta en Firebase:', err);
+        return false;
+      }
     }
 
     async function archivarAlertaTardanza(btn, firebaseId = '', entradaJson = '', minutosTarde = 0, horarioJson = '') {
@@ -550,18 +666,25 @@
       try { entrada = entradaJson ? JSON.parse(decodeURIComponent(entradaJson)) : []; } catch (e) {}
       try { horario = horarioJson ? JSON.parse(decodeURIComponent(horarioJson)) : null; } catch (e) {}
 
-      const clave = obtenerClaveAlertaArchivada(entrada, firebaseId);
+      const claveNatural = obtenerClaveAlertaNatural(entrada, 'LLEGADA_TARDE');
+      const clave = firebaseId ? `FIREBASE|${firebaseId}` : claveNatural;
       const registro = {
         clave,
         firebaseId: firebaseId || '',
+        tipoAlerta: 'LLEGADA_TARDE',
         entrada,
+        salida: null,
+        nombre: entrada[2] || '',
+        legajo: entrada[1] || '',
+        objetivo: entrada[3] || '',
         minutosTarde: Number(minutosTarde) || 0,
         horario: horario || null,
         archivadoEn: new Date().toISOString()
       };
 
-      const yaExiste = alertasArchivadasCache.some(a => a.clave === clave || (firebaseId && a.firebaseId === firebaseId));
-      if (!yaExiste) alertasArchivadasCache.push(registro);
+      if (!alertaArchivadaExiste(entrada, firebaseId, 'LLEGADA_TARDE')) {
+        alertasArchivadasCache.push(registro);
+      }
       guardarArchivadasEnStorage();
 
       if (firebaseId) {
@@ -577,41 +700,185 @@
       }
 
       if (btn) {
-        const tarjeta = btn.closest('[data-alerta-tardanza]');
+        const tarjeta = btn.closest('[data-alerta-operativa]');
         if (tarjeta) tarjeta.remove();
       }
+      limpiarContenedorAlertasOperativas();
+    }
 
-      const contenedor = document.getElementById('contenedorAlertasTardanza');
-      if (contenedor && !contenedor.querySelector('[data-alerta-tardanza]')) contenedor.classList.add('hidden');
+    async function archivarAlertaSalidaAnticipada(btn, firebaseId = '', entradaJson = '', salidaJson = '', minutosAnticipacion = 0, horarioJson = '', horarioFinProgramada = '') {
+      let entrada = [];
+      let salida = [];
+      let horario = null;
+      try { entrada = entradaJson ? JSON.parse(decodeURIComponent(entradaJson)) : []; } catch (e) {}
+      try { salida = salidaJson ? JSON.parse(decodeURIComponent(salidaJson)) : []; } catch (e) {}
+      try { horario = horarioJson ? JSON.parse(decodeURIComponent(horarioJson)) : null; } catch (e) {}
+
+      const claveNatural = obtenerClaveAlertaNatural(entrada, 'SALIDA_ANTICIPADA', salida);
+      const clave = firebaseId ? `FIREBASE|${firebaseId}` : claveNatural;
+      const registro = {
+        clave,
+        firebaseId: firebaseId || '',
+        tipoAlerta: 'SALIDA_ANTICIPADA',
+        entrada,
+        salida,
+        nombre: entrada[2] || salida[2] || '',
+        legajo: entrada[1] || salida[1] || '',
+        objetivo: entrada[3] || salida[3] || '',
+        minutosAnticipacion: Number(minutosAnticipacion) || 0,
+        horaFinProgramada: horarioFinProgramada || horario?.fin || '',
+        horario: horario || null,
+        fechaHoraSalida: salida[0] || '',
+        archivadoEn: new Date().toISOString()
+      };
+
+      if (!alertaArchivadaExiste(entrada, firebaseId, 'SALIDA_ANTICIPADA', salida)) {
+        alertasArchivadasCache.push(registro);
+      }
+      guardarArchivadasEnStorage();
+
+      if (firebaseId) {
+        try {
+          await fetch(`${URL_ALERTAS_SALIDA_ANTICIPADA.replace('.json','')}/${firebaseId}.json`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ archivadoSupervisor: true, archivadoSupervisorEn: new Date().toISOString() })
+          });
+        } catch (e) {
+          console.warn('No se pudo marcar la salida anticipada como archivada en Firebase:', e);
+        }
+      }
+
+      if (btn) {
+        const tarjeta = btn.closest('[data-alerta-operativa]');
+        if (tarjeta) tarjeta.remove();
+      }
+      limpiarContenedorAlertasOperativas();
+    }
+
+    async function eliminarAlertaActiva(btn, firebaseId = '', tipoAlerta = 'LLEGADA_TARDE', clave = '') {
+      if (!confirm('¿Deseas eliminar definitivamente esta alerta? La fichada no será eliminada.')) return;
+
+      const idReal = firebaseId || '';
+      if (idReal) {
+        const ok = await eliminarAlertaFirebase(idReal, tipoAlerta);
+        if (!ok) {
+          alert('No se pudo eliminar la alerta en Firebase.');
+          return;
+        }
+      }
+
+      const claveDecodificada = clave ? decodeURIComponent(clave) : '';
+      const tarjeta = btn ? btn.closest('[data-alerta-operativa]') : null;
+      const entrada = tarjeta ? [
+        tarjeta.dataset.entradaFecha || tarjeta.dataset.alertaFecha || '',
+        tarjeta.dataset.alertaLegajo || '',
+        tarjeta.dataset.alertaNombre || '',
+        tarjeta.dataset.alertaObjetivo || '',
+        'ENTRADA'
+      ] : [];
+      const salida = tarjeta ? [
+        tarjeta.dataset.salidaFecha || tarjeta.dataset.alertaFecha || '',
+        tarjeta.dataset.alertaLegajo || '',
+        tarjeta.dataset.alertaNombre || '',
+        tarjeta.dataset.alertaObjetivo || '',
+        'SALIDA'
+      ] : null;
+
+      if (tipoAlerta === 'SALIDA_ANTICIPADA' && entrada[0] && salida?.[0]) {
+        marcarAlertaEliminada(entrada, tipoAlerta, salida);
+        alertasSalidasAnticipadasMostradas.delete(claveDecodificada);
+      } else if (tipoAlerta === 'LLEGADA_TARDE' && entrada[0]) {
+        marcarAlertaEliminada(entrada, tipoAlerta);
+        alertasTardiasMostradas.delete(claveDecodificada);
+      }
+
+      if (claveDecodificada) {
+        if (tipoAlerta === 'LLEGADA_TARDE') {
+          alertasTardiasMostradas.delete(claveDecodificada);
+        } else {
+          alertasSalidasAnticipadasMostradas.delete(claveDecodificada);
+        }
+      }
+
+      if (tarjeta) tarjeta.remove();
+      limpiarContenedorAlertasOperativas();
     }
 
     async function restaurarAlertaArchivada(indice) {
       const alerta = alertasArchivadasCache[indice];
       if (!alerta) return;
 
+      const tipoAlerta = obtenerTipoAlerta(alerta);
+
       if (alerta.firebaseId) {
         try {
-          await fetch(`${URL_ALERTAS_TARDANZA.replace('.json','')}/${alerta.firebaseId}.json`, {
+          const base = obtenerUrlBaseAlerta(tipoAlerta).replace('.json','');
+          const respuesta = await fetch(`${base}/${alerta.firebaseId}.json`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ archivadoSupervisor: false, archivadoSupervisorEn: null })
           });
+          if (!respuesta.ok) throw new Error(`Firebase respondió ${respuesta.status}`);
         } catch (e) {
           console.warn('No se pudo restaurar la alerta en Firebase:', e);
+          alert('No se pudo restaurar la alerta en Firebase.');
+          return;
         }
       }
 
       alertasArchivadasCache.splice(indice, 1);
       guardarArchivadasEnStorage();
       cerrarModalAlertasTardanzaArchivadas();
-      alertasTardiasMostradas.delete(alerta.clave);
 
-      if (alerta.entrada) {
-        mostrarAlertaTardanza(alerta.entrada, {
-          estado: 'TARDE',
-          minutosTarde: Number(alerta.minutosTarde) || 0,
-          horario: alerta.horario || null
-        }, alerta.firebaseId || '');
+      if (tipoAlerta === 'SALIDA_ANTICIPADA') {
+        const claveNatural = obtenerClaveAlertaNatural(alerta.entrada, 'SALIDA_ANTICIPADA', alerta.salida);
+        alertasSalidasAnticipadasMostradas.delete(`FIREBASE|${alerta.firebaseId || ''}`);
+        alertasSalidasAnticipadasMostradas.delete(claveNatural);
+        const infoActual = obtenerInfoSalidaAnticipadaDesdeDatos(alerta.entrada, alerta.salida);
+        if (infoActual) {
+          mostrarAlertaSalidaAnticipada(infoActual, alerta.firebaseId || '', alerta.horaFinProgramada || alerta.horario?.fin || '');
+        }
+      } else {
+        const claveNatural = obtenerClaveAlertaNatural(alerta.entrada, 'LLEGADA_TARDE');
+        alertasTardiasMostradas.delete(`FIREBASE|${alerta.firebaseId || ''}`);
+        alertasTardiasMostradas.delete(claveNatural);
+        if (alerta.entrada && existeEntradaActualParaAlerta(alerta.entrada)) {
+          mostrarAlertaTardanza(alerta.entrada, {
+            estado: 'TARDE',
+            minutosTarde: Number(alerta.minutosTarde) || 0,
+            horario: alerta.horario || null
+          }, alerta.firebaseId || '');
+        }
+      }
+    }
+
+    async function eliminarAlertaArchivada(indice) {
+      const alerta = alertasArchivadasCache[indice];
+      if (!alerta) return;
+      if (!confirm('¿Eliminar definitivamente esta alerta archivada? La fichada permanecerá intacta.')) return;
+
+      const tipoAlerta = obtenerTipoAlerta(alerta);
+      if (alerta.firebaseId) {
+        const ok = await eliminarAlertaFirebase(alerta.firebaseId, tipoAlerta);
+        if (!ok) {
+          alert('No se pudo eliminar la alerta en Firebase.');
+          return;
+        }
+      }
+
+      const entradaEliminada = alerta.entrada || [];
+      const salidaEliminada = alerta.salida || null;
+      marcarAlertaEliminada(entradaEliminada, tipoAlerta, tipoAlerta === 'SALIDA_ANTICIPADA' ? salidaEliminada : null);
+      alertasArchivadasCache.splice(indice, 1);
+      guardarArchivadasEnStorage();
+      renderizarAlertasArchivadas();
+    }
+
+    function limpiarContenedorAlertasOperativas() {
+      const contenedor = document.getElementById('contenedorAlertasTardanza');
+      if (contenedor && !contenedor.querySelector('[data-alerta-operativa]')) {
+        contenedor.classList.add('hidden');
       }
     }
 
@@ -625,10 +892,10 @@
 
       try {
         // Primero actualizamos fichadas, personal y turnos.
-        // Recién después cargamos las alertas de llegada tarde.
-        // Así una alerta nunca se evalúa contra datos de fichadas viejos.
+        // Recién después cargamos las alertas para nunca evaluarlas contra datos viejos.
         await cargarDatos();
         await cargarAlertasTardanzaFirebase();
+        await cargarAlertasSalidaAnticipadaFirebase();
       } catch (err) {
         console.error('Error en la actualización automática del panel:', err);
       } finally {
@@ -686,6 +953,7 @@
         // Si se borró una ENTRADA, cualquier alerta activa asociada
         // debe desaparecer del panel.
         limpiarAlertasTardanzaSinEntrada();
+        limpiarAlertasSalidaAnticipadaSinServicio();
 
       } catch (err) {
         console.error(err);
@@ -746,7 +1014,7 @@
       const contenedor = document.getElementById('contenedorAlertasTardanza');
       if (!contenedor) return;
 
-      contenedor.querySelectorAll('[data-alerta-tardanza]').forEach(tarjeta => {
+      contenedor.querySelectorAll('[data-alerta-operativa]').forEach(tarjeta => {
         const fecha = tarjeta.dataset.alertaFecha || '';
         const legajo = tarjeta.dataset.alertaLegajo || '';
         const objetivo = tarjeta.dataset.alertaObjetivo || '';
@@ -766,9 +1034,266 @@
         }
       });
 
-      if (!contenedor.querySelector('[data-alerta-tardanza]')) {
+      if (!contenedor.querySelector('[data-alerta-operativa]')) {
         contenedor.classList.add('hidden');
       }
+    }
+
+    function obtenerFechaFinTurnoDesdeEntrada(fechaEntrada, horario) {
+      const entrada = new Date(fechaEntrada);
+      if (isNaN(entrada) || !horario?.fin) return null;
+
+      const fin = new Date(entrada.getTime());
+      const minutosInicio = minutosDesdeMedianoche(horario.inicio);
+      const minutosFin = minutosDesdeMedianoche(horario.fin);
+      if (minutosFin === null) return null;
+
+      fin.setHours(Math.floor(minutosFin / 60), minutosFin % 60, 0, 0);
+      if (minutosInicio !== null && minutosFin <= minutosInicio) {
+        fin.setDate(fin.getDate() + 1);
+      }
+      return fin;
+    }
+
+    function obtenerInfoSalidaAnticipada(servicio) {
+      if (!servicio?.entrada || !servicio?.salida) return null;
+
+      const entrada = servicio.entrada;
+      const salida = servicio.salida;
+      const horario = obtenerHorarioProgramado(entrada[0], entrada[1], entrada[3] || salida[3] || '-');
+      const finTurno = obtenerFechaFinTurnoDesdeEntrada(entrada[0], horario);
+      const fechaSalida = new Date(salida[0]);
+
+      if (!finTurno || isNaN(fechaSalida)) return null;
+      if (fechaSalida >= finTurno) return null;
+
+      const minutosAnticipacion = Math.max(1, Math.ceil((finTurno - fechaSalida) / 60000));
+      return { servicio, entrada, salida, horario, finTurno, minutosAnticipacion };
+    }
+
+    function obtenerInfoSalidaAnticipadaDesdeDatos(entradaBuscada, salidaBuscada) {
+      if (!entradaBuscada || !salidaBuscada) return null;
+      const clave = obtenerClaveAlertaNatural(entradaBuscada, 'SALIDA_ANTICIPADA', salidaBuscada);
+      const servicio = obtenerServiciosSupervisor(datosLocales).find(s =>
+        obtenerClaveAlertaNatural(s.entrada, 'SALIDA_ANTICIPADA', s.salida) === clave
+      );
+      return obtenerInfoSalidaAnticipada(servicio);
+    }
+
+    function existeServicioSalidaAnticipadaActual(entrada, salida) {
+      return !!obtenerInfoSalidaAnticipadaDesdeDatos(entrada, salida);
+    }
+
+    function limpiarAlertasSalidaAnticipadaSinServicio() {
+      const contenedor = document.getElementById('contenedorAlertasTardanza');
+      if (!contenedor) return;
+
+      contenedor.querySelectorAll('[data-alerta-salida-anticipada]').forEach(tarjeta => {
+        const entrada = [
+          tarjeta.dataset.entradaFecha || '',
+          tarjeta.dataset.alertaLegajo || '',
+          tarjeta.dataset.alertaNombre || '',
+          tarjeta.dataset.alertaObjetivo || '',
+          'ENTRADA'
+        ];
+        const salida = [
+          tarjeta.dataset.salidaFecha || '',
+          tarjeta.dataset.alertaLegajo || '',
+          tarjeta.dataset.alertaNombre || '',
+          tarjeta.dataset.alertaObjetivo || '',
+          'SALIDA'
+        ];
+
+        if (!existeServicioSalidaAnticipadaActual(entrada, salida)) {
+          const clave = tarjeta.dataset.alertaClave || '';
+          alertasSalidasAnticipadasMostradas.delete(clave);
+          tarjeta.remove();
+        }
+      });
+
+      limpiarContenedorAlertasOperativas();
+    }
+
+    async function cargarAlertasSalidaAnticipadaFirebase() {
+      try {
+        const res = await fetch(`${URL_ALERTAS_SALIDA_ANTICIPADA}?ts=${Date.now()}`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json() || {};
+
+        const serviciosActuales = obtenerServiciosSupervisor(datosLocales);
+        const anticipadasActuales = serviciosActuales.map(obtenerInfoSalidaAnticipada).filter(Boolean);
+        const porClaveNatural = new Map(anticipadasActuales.map(info => [
+          obtenerClaveAlertaNatural(info.entrada, 'SALIDA_ANTICIPADA', info.salida), info
+        ]));
+
+        let cacheCambio = false;
+
+        for (const [firebaseId, alerta] of Object.entries(data)) {
+          if (!alerta || String(alerta.tipoAlerta || '').toUpperCase() !== 'SALIDA_ANTICIPADA') continue;
+
+          const entrada = alerta.entrada || [alerta.fechaHoraEntrada, alerta.legajo, alerta.nombre, alerta.objetivo, 'ENTRADA'];
+          const salida = alerta.salida || [alerta.fechaHoraSalida || alerta.fechaHora, alerta.legajo, alerta.nombre, alerta.objetivo, 'SALIDA'];
+          const claveNatural = obtenerClaveAlertaNatural(entrada, 'SALIDA_ANTICIPADA', salida);
+          const infoActual = porClaveNatural.get(claveNatural);
+
+          if (alertaFueEliminada(entrada, 'SALIDA_ANTICIPADA', salida) && alerta.archivadoSupervisor !== true) {
+            await eliminarAlertaFirebase(firebaseId, 'SALIDA_ANTICIPADA');
+            continue;
+          }
+
+          if (alerta.archivadoSupervisor === true) {
+            if (!alertasArchivadasCache.some(a =>
+              a.firebaseId === firebaseId ||
+              obtenerClaveAlertaNatural(a.entrada, 'SALIDA_ANTICIPADA', a.salida) === claveNatural
+            )) {
+              alertasArchivadasCache.push({
+                clave: `FIREBASE|${firebaseId}`,
+                firebaseId,
+                tipoAlerta: 'SALIDA_ANTICIPADA',
+                entrada,
+                salida,
+                nombre: alerta.nombre || entrada[2] || '',
+                legajo: alerta.legajo || entrada[1] || '',
+                objetivo: alerta.objetivo || entrada[3] || '',
+                minutosAnticipacion: Number(alerta.minutosAnticipacion) || 0,
+                horaFinProgramada: alerta.horaFinProgramada || alerta.horarioFin || '',
+                horario: alerta.horario || null,
+                fechaHoraSalida: alerta.fechaHoraSalida || salida[0] || '',
+                archivadoEn: alerta.archivadoSupervisorEn || new Date().toISOString()
+              });
+              cacheCambio = true;
+            }
+            continue;
+          }
+
+          // Una alerta activa debe tener todavía su servicio ENTRADA -> SALIDA.
+          // Si se borró cualquiera de las fichadas, desaparece la alerta activa.
+          if (!infoActual) {
+            await eliminarAlertaFirebase(firebaseId, 'SALIDA_ANTICIPADA');
+            alertasSalidasAnticipadasMostradas.delete(`FIREBASE|${firebaseId}`);
+            continue;
+          }
+
+          mostrarAlertaSalidaAnticipada(
+            infoActual,
+            firebaseId,
+            alerta.horaFinProgramada || alerta.horario?.fin || infoActual.horario?.fin || ''
+          );
+        }
+
+        // Generar/persistir las nuevas salidas anticipadas detectadas en fichadas.
+        for (const info of anticipadasActuales) {
+          const claveNatural = obtenerClaveAlertaNatural(info.entrada, 'SALIDA_ANTICIPADA', info.salida);
+          if (alertaFueEliminada(info.entrada, 'SALIDA_ANTICIPADA', info.salida)) continue;
+          const existente = Object.entries(data).find(([id, alerta]) => {
+            if (!alerta || String(alerta.tipoAlerta || '').toUpperCase() !== 'SALIDA_ANTICIPADA') return false;
+            const entrada = alerta.entrada || [alerta.fechaHoraEntrada, alerta.legajo, alerta.nombre, alerta.objetivo, 'ENTRADA'];
+            const salida = alerta.salida || [alerta.fechaHoraSalida || alerta.fechaHora, alerta.legajo, alerta.nombre, alerta.objetivo, 'SALIDA'];
+            return obtenerClaveAlertaNatural(entrada, 'SALIDA_ANTICIPADA', salida) === claveNatural;
+          });
+
+          if (existente) continue;
+
+          const alertaNueva = {
+            tipoAlerta: 'SALIDA_ANTICIPADA',
+            estado: 'NUEVA',
+            legajo: info.entrada[1],
+            nombre: info.entrada[2] || `Legajo ${info.entrada[1] || '-'}`,
+            objetivo: info.entrada[3] || info.salida[3] || '-',
+            fechaHoraEntrada: info.entrada[0],
+            fechaHoraSalida: info.salida[0],
+            fechaHora: info.salida[0],
+            horaSalida: new Date(info.salida[0]).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }),
+            horaFinProgramada: info.horario?.fin || '',
+            minutosAnticipacion: info.minutosAnticipacion,
+            horario: info.horario || null,
+            entrada: info.entrada,
+            salida: info.salida,
+            archivadoSupervisor: false,
+            creadoEn: new Date().toISOString()
+          };
+
+          try {
+            const idSeguro = obtenerIdFirebaseSalidaAnticipada(info.entrada, info.salida);
+            const put = await fetch(`${URL_ALERTAS_SALIDA_ANTICIPADA.replace('.json','')}/${idSeguro}.json`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(alertaNueva)
+            });
+
+            if (put.ok) {
+              mostrarAlertaSalidaAnticipada(info, idSeguro, info.horario?.fin || '');
+            }
+          } catch (err) {
+            console.warn('No se pudo guardar la alerta de salida anticipada:', err);
+          }
+        }
+
+        if (cacheCambio) {
+          guardarArchivadasEnStorage();
+          renderizarAlertasArchivadas();
+        }
+      } catch (err) {
+        console.warn('No se pudieron cargar las alertas de salida anticipada:', err);
+      }
+    }
+
+    function mostrarAlertaSalidaAnticipada(info, firebaseId = '', horaFinProgramada = '') {
+      if (!info) return;
+
+      const entrada = info.entrada;
+      const salida = info.salida;
+      const claveNatural = obtenerClaveAlertaNatural(entrada, 'SALIDA_ANTICIPADA', salida);
+      const clave = firebaseId ? `FIREBASE|${firebaseId}` : claveNatural;
+
+      if (alertaFueEliminada(entrada, 'SALIDA_ANTICIPADA', salida)) return;
+      if (alertaArchivadaExiste(entrada, firebaseId, 'SALIDA_ANTICIPADA', salida)) return;
+      if (alertasSalidasAnticipadasMostradas.has(clave) || alertasSalidasAnticipadasMostradas.has(claveNatural)) return;
+
+      alertasSalidasAnticipadasMostradas.add(clave);
+      alertasSalidasAnticipadasMostradas.add(claveNatural);
+
+      if (!existeServicioSalidaAnticipadaActual(entrada, salida)) return;
+
+      const contenedor = document.getElementById('contenedorAlertasTardanza');
+      if (!contenedor) return;
+
+      const nombre = entrada[2] || `Legajo ${entrada[1] || '-'}`;
+      const legajo = entrada[1] || '-';
+      const objetivo = entrada[3] || salida[3] || '-';
+      const horaEntrada = new Date(entrada[0]).toLocaleString('es-AR', { hour12: false });
+      const horaSalida = new Date(salida[0]).toLocaleString('es-AR', { hour12: false });
+      const horaFin = horaFinProgramada || info.horario?.fin || '--:--';
+      const entradaJson = encodeURIComponent(JSON.stringify(entrada));
+      const salidaJson = encodeURIComponent(JSON.stringify(salida));
+      const horarioJson = encodeURIComponent(JSON.stringify(info.horario || null));
+      const firebaseIdSeguro = String(firebaseId || '').replace(/'/g, '%27');
+      const claveSegura = encodeURIComponent(clave);
+
+      contenedor.classList.remove('hidden');
+      const alerta = document.createElement('div');
+      alerta.dataset.alertaOperativa = 'true';
+      alerta.dataset.alertaSalidaAnticipada = 'true';
+      alerta.dataset.alertaClave = clave;
+      alerta.dataset.entradaFecha = String(entrada[0] || '');
+      alerta.dataset.salidaFecha = String(salida[0] || '');
+      alerta.dataset.alertaLegajo = String(legajo);
+      alerta.dataset.alertaNombre = String(nombre);
+      alerta.dataset.alertaObjetivo = String(objetivo);
+      alerta.className = 'bg-orange-950/70 border border-orange-500/60 text-orange-100 rounded-xl p-4 shadow-lg flex flex-col md:flex-row md:items-center md:justify-between gap-3';
+      alerta.innerHTML = `
+        <div>
+          <div class="font-bold flex items-center gap-2"><i class="fa-solid fa-person-walking-arrow-right text-orange-400"></i> ALERTA DE SALIDA ANTICIPADA</div>
+          <div class="text-xs mt-1">${nombre} · Legajo ${legajo} · Objetivo: ${objetivo}</div>
+          <div class="text-xs text-orange-200/80">Entrada: ${horaEntrada} · Salida: ${horaSalida}</div>
+          <div class="text-xs text-orange-100 font-semibold mt-1">Finalización programada: ${horaFin} · Se retiró ${info.minutosAnticipacion} min antes</div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" class="text-xs font-bold bg-amber-600 hover:bg-amber-500 px-3 py-2 rounded-lg" onclick="archivarAlertaSalidaAnticipada(this, '${firebaseIdSeguro}', '${entradaJson}', '${salidaJson}', '${info.minutosAnticipacion}', '${horarioJson}', '${encodeURIComponent(String(horaFin))}')"><i class="fa-solid fa-box-archive"></i> Archivar</button>
+          <button type="button" class="text-xs font-bold bg-rose-600 hover:bg-rose-500 px-3 py-2 rounded-lg" onclick="eliminarAlertaActiva(this, '${firebaseIdSeguro}', 'SALIDA_ANTICIPADA', '${claveSegura}')"><i class="fa-solid fa-trash-can"></i> Eliminar</button>
+        </div>`;
+
+      contenedor.prepend(alerta);
     }
 
     async function cargarAlertasTardanzaFirebase() {
@@ -872,12 +1397,15 @@
       if (!entrada || estadoInfo.estado !== 'TARDE') return;
 
       const fechaKey = String(entrada[0] || '');
-      const clave = obtenerClaveAlertaArchivada(entrada, firebaseId);
+      const claveNatural = obtenerClaveAlertaNatural(entrada, 'LLEGADA_TARDE');
+      const clave = obtenerClaveAlertaArchivada(entrada, firebaseId, 'LLEGADA_TARDE');
 
       // Las alertas que ya fueron archivadas no vuelven al panel activo.
-      if (alertasArchivadasCache.some(a => a.clave === clave || (firebaseId && a.firebaseId === firebaseId))) return;
-      if (alertasTardiasMostradas.has(clave)) return;
+      if (alertaFueEliminada(entrada, 'LLEGADA_TARDE')) return;
+      if (alertaArchivadaExiste(entrada, firebaseId, 'LLEGADA_TARDE')) return;
+      if (alertasTardiasMostradas.has(clave) || alertasTardiasMostradas.has(claveNatural)) return;
       alertasTardiasMostradas.add(clave);
+      alertasTardiasMostradas.add(claveNatural);
 
       // Nunca mostramos una alerta activa si la ENTRADA que la originó
       // ya no existe en las fichadas actuales. Esto evita falsos avisos
@@ -895,6 +1423,7 @@
 
       contenedor.classList.remove('hidden');
       const alerta = document.createElement('div');
+      alerta.dataset.alertaOperativa = 'true';
       alerta.dataset.alertaTardanza = 'true';
       alerta.dataset.alertaClave = clave;
       alerta.dataset.alertaFecha = String(entrada[0] || '');
@@ -907,7 +1436,10 @@
           <div class="text-xs mt-1">${nombre} · Legajo ${entrada[1] || '-'} · Objetivo: ${objetivo}</div>
           <div class="text-xs text-rose-200/80">Fichada: ${hora} · ${estadoInfo.minutosTarde} min después del comienzo del turno</div>
         </div>
-        <button type="button" class="text-xs font-bold bg-rose-600 hover:bg-rose-500 px-3 py-2 rounded-lg" onclick="archivarAlertaTardanza(this, '${firebaseId}', '${entradaJson}', '${Number(estadoInfo.minutosTarde) || 0}', '${horarioJson}')"><i class="fa-solid fa-box-archive"></i> Cerrar y archivar</button>`;
+        <div class="flex flex-wrap gap-2">
+          <button type="button" class="text-xs font-bold bg-amber-600 hover:bg-amber-500 px-3 py-2 rounded-lg" onclick="archivarAlertaTardanza(this, '${firebaseId}', '${entradaJson}', '${Number(estadoInfo.minutosTarde) || 0}', '${horarioJson}')"><i class="fa-solid fa-box-archive"></i> Archivar</button>
+          <button type="button" class="text-xs font-bold bg-rose-600 hover:bg-rose-500 px-3 py-2 rounded-lg" onclick="eliminarAlertaActiva(this, '${encodeURIComponent(firebaseId)}', 'LLEGADA_TARDE', '${encodeURIComponent(clave)}')"><i class="fa-solid fa-trash-can"></i> Eliminar</button>
+        </div>`;
       contenedor.prepend(alerta);
     }
 
@@ -1365,16 +1897,21 @@
 
         const estadoEntradaSupervisor = evaluarEstadoEntrada(entrada[0], entrada[1], objetivoNombre);
         if (estadoEntradaSupervisor.estado === 'TARDE') mostrarAlertaTardanza(entrada, estadoEntradaSupervisor);
+
+        const infoSalidaAnticipadaSupervisor = obtenerInfoSalidaAnticipada({ entrada, salida });
+        const estadoSalidaSupervisor = infoSalidaAnticipadaSupervisor ? 'SALIDA_ANTICIPADA' : 'NORMAL';
         const tr = document.createElement('tr');
         tr.className = estadoEntradaSupervisor.estado === 'TARDE'
           ? "hover:bg-slate-800/50 transition bg-red-950/20"
-          : estadoEntradaSupervisor.estado === 'TOLERANCIA'
-            ? "hover:bg-slate-800/50 transition bg-orange-950/10"
-            : "hover:bg-slate-800/50 transition";
+          : estadoSalidaSupervisor === 'SALIDA_ANTICIPADA'
+            ? "hover:bg-slate-800/50 transition bg-orange-950/20"
+            : estadoEntradaSupervisor.estado === 'TOLERANCIA'
+              ? "hover:bg-slate-800/50 transition bg-orange-950/10"
+              : "hover:bg-slate-800/50 transition";
         tr.innerHTML = `
           <td class="p-3 text-xs font-mono">${new Date(entrada[0]).toLocaleString('es-AR', { hour12: false })}</td>
           <td class="p-3 text-xs font-mono">${salida ? new Date(salida[0]).toLocaleString('es-AR', { hour12: false }) : '<span class="text-amber-400">En Turno</span>'}</td>
-          <td class="p-3 text-xs text-slate-300 font-medium">${objetivoNombre}<div class="text-[10px] text-slate-500 mt-1">${horarioProgramado ? `Turno ${horarioProgramado.inicio || '--:--'} - ${horarioProgramado.fin || '--:--'} · ${horarioProgramado.origen}` : 'Sin horario configurado'}${horas.ajusteMinutos > 0 ? ` · ${horas.ajusteMinutos} min anticipados no computados` : ''}${horas.minutosExtra > 0 ? ` · ${horas.minutosExtra} min extra` : ''}</div></td>
+          <td class="p-3 text-xs text-slate-300 font-medium">${objetivoNombre}<div class="text-[10px] text-slate-500 mt-1">${horarioProgramado ? `Turno ${horarioProgramado.inicio || '--:--'} - ${horarioProgramado.fin || '--:--'} · ${horarioProgramado.origen}` : 'Sin horario configurado'}${horas.ajusteMinutos > 0 ? ` · ${horas.ajusteMinutos} min anticipados no computados` : ''}${horas.minutosExtra > 0 ? ` · ${horas.minutosExtra} min extra` : ''}${infoSalidaAnticipadaSupervisor ? ` · <span class="text-orange-300 font-semibold">SALIDA ANTICIPADA · ${infoSalidaAnticipadaSupervisor.minutosAnticipacion} min</span>` : ''}</div></td>
           <td class="p-3 text-center text-xs font-semibold text-amber-400">${formatearAHorasReloj(horas.d)}</td>
           <td class="p-3 text-center text-xs font-semibold text-indigo-400">${formatearAHorasReloj(horas.n)}</td>
           <td class="p-3 text-center text-xs font-bold text-emerald-400">${formatearAHorasReloj(horas.t)}</td>
