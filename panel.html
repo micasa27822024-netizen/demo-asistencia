@@ -624,10 +624,11 @@
       actualizacionPanelEnCurso = true;
 
       try {
-        await Promise.all([
-          cargarDatos(),
-          cargarAlertasTardanzaFirebase()
-        ]);
+        // Primero actualizamos fichadas, personal y turnos.
+        // Recién después cargamos las alertas de llegada tarde.
+        // Así una alerta nunca se evalúa contra datos de fichadas viejos.
+        await cargarDatos();
+        await cargarAlertasTardanzaFirebase();
       } catch (err) {
         console.error('Error en la actualización automática del panel:', err);
       } finally {
@@ -682,6 +683,10 @@
         datosLocales = fichadasArray;
         filtrarTabla();
 
+        // Si se borró una ENTRADA, cualquier alerta activa asociada
+        // debe desaparecer del panel.
+        limpiarAlertasTardanzaSinEntrada();
+
       } catch (err) {
         console.error(err);
         document.getElementById('cuerpoTabla').innerHTML = `
@@ -696,8 +701,82 @@
       }
     }
 
+    function normalizarLegajoPanel(valor) {
+      const texto = String(valor ?? '').trim();
+      return /^\d+$/.test(texto)
+        ? texto.replace(/^0+(?=\d)/, '')
+        : texto.toUpperCase();
+    }
+
+    function obtenerTimestampSeguroPanel(valor) {
+      const t = new Date(valor || '').getTime();
+      return Number.isFinite(t) ? t : 0;
+    }
+
+    function existeEntradaActualParaAlerta(entrada) {
+      if (!entrada) return false;
+
+      const legajoAlerta = normalizarLegajoPanel(entrada[1]);
+      const objetivoAlerta = String(entrada[3] || '').trim().toLowerCase();
+      const tiempoAlerta = obtenerTimestampSeguroPanel(entrada[0]);
+
+      return datosLocales.some(f => {
+        if (!f || String(f[4] || '').trim().toUpperCase() !== 'ENTRADA') return false;
+
+        const mismoLegajo =
+          normalizarLegajoPanel(f[1]) === legajoAlerta;
+
+        if (!mismoLegajo) return false;
+
+        const objetivoFichada = String(f[3] || '').trim().toLowerCase();
+        if (objetivoAlerta && objetivoFichada !== objetivoAlerta) return false;
+
+        const tiempoFichada = obtenerTimestampSeguroPanel(f[0]);
+
+        // La alerta se genera usando exactamente la fecha/hora de la ENTRADA.
+        // Permitimos una diferencia de hasta 2 segundos por si algún origen
+        // hubiera serializado la fecha con una pequeña variación.
+        return tiempoAlerta > 0 &&
+          tiempoFichada > 0 &&
+          Math.abs(tiempoFichada - tiempoAlerta) <= 2000;
+      });
+    }
+
+    function limpiarAlertasTardanzaSinEntrada() {
+      const contenedor = document.getElementById('contenedorAlertasTardanza');
+      if (!contenedor) return;
+
+      contenedor.querySelectorAll('[data-alerta-tardanza]').forEach(tarjeta => {
+        const fecha = tarjeta.dataset.alertaFecha || '';
+        const legajo = tarjeta.dataset.alertaLegajo || '';
+        const objetivo = tarjeta.dataset.alertaObjetivo || '';
+
+        const sigueExistiendo = existeEntradaActualParaAlerta([
+          fecha,
+          legajo,
+          '',
+          objetivo,
+          'ENTRADA'
+        ]);
+
+        if (!sigueExistiendo) {
+          const clave = tarjeta.dataset.alertaClave;
+          if (clave) alertasTardiasMostradas.delete(clave);
+          tarjeta.remove();
+        }
+      });
+
+      if (!contenedor.querySelector('[data-alerta-tardanza]')) {
+        contenedor.classList.add('hidden');
+      }
+    }
+
     async function cargarAlertasTardanzaFirebase() {
       try {
+        // Esta función se ejecuta después de cargarDatos(), por lo que
+        // datosLocales representa el estado actual de Firebase/fichadas.
+        limpiarAlertasTardanzaSinEntrada();
+
         const res = await fetch(`${URL_ALERTAS_TARDANZA}?ts=${Date.now()}`, { cache: 'no-store' });
         if (!res.ok) return;
         const data = await res.json();
@@ -732,6 +811,15 @@
               });
               cacheCambio = true;
             }
+            return;
+          }
+
+          // REGLA IMPORTANTE:
+          // una alerta de llegada tarde solo puede estar ACTIVA si la ENTRADA
+          // que la originó todavía existe en /fichadas.
+          // Si la entrada fue borrada, la alerta deja de ser mostrada en el panel.
+          if (!existeEntradaActualParaAlerta(entrada)) {
+            alertasTardiasMostradas.delete(clave);
             return;
           }
 
@@ -791,6 +879,11 @@
       if (alertasTardiasMostradas.has(clave)) return;
       alertasTardiasMostradas.add(clave);
 
+      // Nunca mostramos una alerta activa si la ENTRADA que la originó
+      // ya no existe en las fichadas actuales. Esto evita falsos avisos
+      // después de borrar una entrada de prueba.
+      if (!existeEntradaActualParaAlerta(entrada)) return;
+
       const contenedor = document.getElementById('contenedorAlertasTardanza');
       if (!contenedor) return;
 
@@ -804,6 +897,9 @@
       const alerta = document.createElement('div');
       alerta.dataset.alertaTardanza = 'true';
       alerta.dataset.alertaClave = clave;
+      alerta.dataset.alertaFecha = String(entrada[0] || '');
+      alerta.dataset.alertaLegajo = String(entrada[1] || '');
+      alerta.dataset.alertaObjetivo = String(entrada[3] || '');
       alerta.className = 'bg-rose-950/70 border border-rose-500/60 text-rose-100 rounded-xl p-4 shadow-lg flex flex-col md:flex-row md:items-center md:justify-between gap-3';
       alerta.innerHTML = `
         <div>
