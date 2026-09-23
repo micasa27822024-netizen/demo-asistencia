@@ -1039,6 +1039,24 @@
       }
     }
 
+    function obtenerFechaInicioTurnoDesdeEntrada(fechaEntrada, horario) {
+      const entrada = new Date(fechaEntrada);
+      if (isNaN(entrada) || !horario?.inicio) return null;
+
+      const inicio = new Date(entrada.getTime());
+      const minutosInicio = minutosDesdeMedianoche(horario.inicio);
+      if (minutosInicio === null) return null;
+
+      inicio.setHours(
+        Math.floor(minutosInicio / 60),
+        minutosInicio % 60,
+        0,
+        0
+      );
+
+      return inicio;
+    }
+
     function obtenerFechaFinTurnoDesdeEntrada(fechaEntrada, horario) {
       const entrada = new Date(fechaEntrada);
       if (isNaN(entrada) || !horario?.fin) return null;
@@ -1065,6 +1083,15 @@
       const fechaSalida = new Date(salida[0]);
 
       if (!finTurno || isNaN(fechaSalida)) return null;
+
+      // Una salida antes del inicio programado no constituye salida anticipada
+      // del turno. Ejemplo: turno 19:00-07:00, entrada 18:40 y salida 18:40.
+      // El servicio programado todavía no había comenzado.
+      const inicioTurno = horario?.inicio
+        ? obtenerFechaInicioTurnoDesdeEntrada(entrada[0], horario)
+        : null;
+
+      if (inicioTurno && fechaSalida < inicioTurno) return null;
       if (fechaSalida >= finTurno) return null;
 
       const minutosAnticipacion = Math.max(1, Math.ceil((finTurno - fechaSalida) / 60000));
