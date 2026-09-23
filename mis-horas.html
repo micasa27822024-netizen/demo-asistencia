@@ -394,22 +394,7 @@
       window.addEventListener('touchstart', reiniciarTemporizador);
     }
 
-    function calcularHoras(f1, f2) {
-      let inicio = parseFechaSegura(f1);
-      let fin = parseFechaSegura(f2);
-      if (isNaN(inicio.getTime()) || isNaN(fin.getTime()) || fin <= inicio) return { d: 0, n: 0, t: 0 };
-
-      let diurnas = 0, nocturnas = 0;
-      let cur = new Date(inicio.getTime());
-
-      while (cur < fin) {
-        let h = cur.getHours();
-        if (h >= 6 && h < 21) diurnas += 1/60;
-        else nocturnas += 1/60;
-        cur.setMinutes(cur.getMinutes() + 1);
-      }
-      return { d: diurnas, n: nocturnas, t: diurnas + nocturnas };
-    }
+    
 
     function formatearAHorasReloj(horasDecimales) {
       if (isNaN(horasDecimales) || horasDecimales <= 0) return "00:00 hs";
