@@ -328,7 +328,6 @@
       let entradaComputable = new Date(inicio.getTime());
       let ajusteMinutos = 0;
 
-      // Si el empleado llega antes del horario de inicio del turno, esos minutos no cuentan como horas laborables
       if (horarioProgramado?.inicio) {
         const minutosTurno = minutosDesdeMedianoche(horarioProgramado.inicio);
         if (minutosTurno !== null) {
