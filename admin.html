@@ -92,7 +92,7 @@
         <button onclick="recargarDatosEfectivo()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
           <i class="fa-solid fa-rotate-right" id="icono-reload"></i> Actualizar Datos
         </button>
-        <button onclick="abrirModalAlertasFichadas()" id="btnAlertasFichadas" class="relative bg-rose-600/15 hover:bg-rose-600/30 text-rose-300 font-bold px-3 py-2 rounded-xl text-sm transition border border-rose-500/30" title="Alertas de fichadas bloqueadas">
+        <button onclick="abrirModalAlertasFichadas()" id="btnAlertasFichadas" class="relative bg-rose-600/15 hover:bg-rose-600/30 text-rose-300 font-bold px-3 py-2 rounded-xl text-sm transition border border-rose-500/30" title="Alertas de fichadas: ubicación y llegadas tarde">
           <i class="fa-solid fa-bell"></i>
           <span id="badgeAlertasFichadas" class="hidden absolute -top-2 -right-2 min-w-[20px] h-5 px-1.5 rounded-full bg-rose-600 text-white text-[10px] font-black items-center justify-center border-2 border-slate-900">0</span>
         </button>
@@ -108,7 +108,7 @@
         <i class="fa-solid fa-clipboard-user"></i> Marcaciones
       </button>
       <button id="tabBtnAlertasUbicacion" onclick="cambiarTab('alertasUbicacion')" class="relative px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
-        <i class="fa-solid fa-location-crosshairs text-rose-400"></i> Alertas de ubicación
+        <i class="fa-solid fa-bell text-rose-400"></i> Alertas de Ubicacion y llegada tarde
         <span id="badgeAlertasTab" class="hidden min-w-[18px] h-5 px-1.5 rounded-full bg-rose-600 text-white text-[10px] font-black items-center justify-center">0</span>
       </button>
       <button id="tabBtnNovedades" onclick="cambiarTab('novedades')" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
@@ -262,9 +262,9 @@
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div>
             <h3 class="text-lg font-bold text-white flex items-center gap-2">
-              <i class="fa-solid fa-location-crosshairs text-rose-400"></i> Historial de fichadas bloqueadas
+              <i class="fa-solid fa-bell text-rose-400"></i> Historial de alertas de fichadas
             </h3>
-            <p class="text-xs text-slate-400 mt-1">Acá quedan guardados los intentos realizados fuera del radio permitido, incluso después de cerrar la notificación.</p>
+            <p class="text-xs text-slate-400 mt-1">Acá quedan las fichadas bloqueadas por ubicación y las llegadas tarde detectadas automáticamente, incluso después de cerrar la notificación.</p>
           </div>
           <div class="flex gap-2">
             <button onclick="cargarAlertasFichadas(false)" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-lg text-xs font-semibold transition">
@@ -693,7 +693,7 @@
         </div>
         <div>
           <h3 class="font-bold text-white text-lg">Alertas de fichadas</h3>
-          <p class="text-xs text-slate-400">Intentos bloqueados por encontrarse fuera del radio del objetivo</p>
+          <p class="text-xs text-slate-400">Ubicación fuera del radio permitido y llegadas tarde según el horario programado</p>
         </div>
       </div>
       <div class="flex flex-wrap gap-2">
@@ -857,35 +857,271 @@
       intervaloAlertasFichadas = setInterval(() => cargarAlertasFichadas(false), 5000);
     }
 
+    // --- RECONOCIMIENTO AUTOMÁTICO DE LLEGADAS SEGÚN HORARIO ---
+    // Usa la misma regla de panel.html:
+    // antes del turno = NORMAL | 0-15 min = TOLERANCIA | 16+ min = TARDE.
+    const TOLERANCIA_ENTRADA_ADMIN_MINUTOS = 15;
+
+    function minutosDesdeMedianocheAdmin(hora) {
+      if (!hora || !/^\d{1,2}:\d{2}$/.test(String(hora))) return null;
+      const [h, m] = String(hora).split(':').map(Number);
+      if (h < 0 || h > 23 || m < 0 || m > 59) return null;
+      return h * 60 + m;
+    }
+
+    function obtenerFechaLocalClaveAdmin(fecha) {
+      if (!(fecha instanceof Date) || isNaN(fecha)) return '';
+      const y = fecha.getFullYear();
+      const m = String(fecha.getMonth() + 1).padStart(2, '0');
+      const d = String(fecha.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function obtenerHorarioProgramadoAdmin(fechaEntradaStr, legajo, objetivoNombre, personalData, turnosData) {
+      const fechaEntrada = new Date(fechaEntradaStr);
+      if (isNaN(fechaEntrada)) return null;
+
+      const fechaClave = obtenerFechaLocalClaveAdmin(fechaEntrada);
+      const legajoStr = String(legajo || '').trim();
+      const objetivoStr = String(objetivoNombre || '').trim().toLowerCase();
+
+      const turnos = turnosData ? Object.entries(turnosData).map(([id, t]) => ({ ...t, id })) : [];
+      const turnosFecha = turnos.filter(t =>
+        String(t.legajo || '').trim() === legajoStr && String(t.fecha || '') === fechaClave
+      );
+
+      let turno = null;
+      if (turnosFecha.length) {
+        turno = turnosFecha.find(t => {
+          const nombre = String(t.objetivoNombre || t.objetivo || '').trim().toLowerCase();
+          return objetivoStr && nombre && (
+            nombre === objetivoStr ||
+            nombre.includes(objetivoStr) ||
+            objetivoStr.includes(nombre)
+          );
+        }) || turnosFecha[0];
+      }
+
+      if (turno && (turno.horaInicio || turno.horaFin)) {
+        return {
+          inicio: turno.horaInicio || '',
+          fin: turno.horaFin || '',
+          origen: 'Turno asignado'
+        };
+      }
+
+      const personas = personalData ? Object.values(personalData) : [];
+      const persona = personas.find(p => String(p?.legajo || '').trim() === legajoStr);
+      const h = persona?.horarioHabitual || {};
+      if (h.inicio || h.fin) {
+        return {
+          inicio: h.inicio || '',
+          fin: h.fin || '',
+          origen: 'Horario habitual'
+        };
+      }
+
+      return null;
+    }
+
+    function evaluarEstadoEntradaAdmin(fechaEntrada, legajo, objetivoNombre, personalData, turnosData) {
+      const fecha = new Date(fechaEntrada);
+      if (isNaN(fecha)) return { estado: 'NORMAL', minutosTarde: 0, horario: null };
+
+      const horario = obtenerHorarioProgramadoAdmin(fechaEntrada, legajo, objetivoNombre, personalData, turnosData);
+      if (!horario?.inicio) return { estado: 'NORMAL', minutosTarde: 0, horario };
+
+      const minutosTurno = minutosDesdeMedianocheAdmin(horario.inicio);
+      if (minutosTurno === null) return { estado: 'NORMAL', minutosTarde: 0, horario };
+
+      const inicioTurno = new Date(fecha.getTime());
+      inicioTurno.setHours(Math.floor(minutosTurno / 60), minutosTurno % 60, 0, 0);
+
+      const diferenciaMin = Math.floor((fecha - inicioTurno) / 60000);
+
+      if (diferenciaMin < 0) return { estado: 'NORMAL', minutosTarde: 0, horario };
+      if (diferenciaMin <= TOLERANCIA_ENTRADA_ADMIN_MINUTOS) {
+        return { estado: 'TOLERANCIA', minutosTarde: diferenciaMin, horario };
+      }
+      return { estado: 'TARDE', minutosTarde: diferenciaMin, horario };
+    }
+
     async function cargarAlertasFichadas(esCargaInicial = false) {
       try {
-        const res = await fetch(`${URL_FIREBASE}/alertasFichadas.json?ts=${Date.now()}`, { cache: 'no-store' });
-        if (!res.ok) throw new Error('No se pudieron consultar las alertas.');
-        const data = await res.json();
+        const [resAlertas, resFichadas, resPersonal, resTurnos] = await Promise.all([
+          fetch(`${URL_FIREBASE}/alertasFichadas.json?ts=${Date.now()}`, { cache: 'no-store' }),
+          fetch(`${URL_FIREBASE}/fichadas.json?ts=${Date.now()}`, { cache: 'no-store' }),
+          fetch(`${URL_FIREBASE}/personal.json?ts=${Date.now()}`, { cache: 'no-store' }),
+          fetch(`${URL_FIREBASE}/asignacionesTurnos.json?ts=${Date.now()}`, { cache: 'no-store' })
+        ]);
+
+        if (!resAlertas.ok) throw new Error('No se pudieron consultar las alertas.');
+
+        const data = await resAlertas.json();
+        const fichadasData = resFichadas.ok ? await resFichadas.json() : null;
+        const personalData = resPersonal.ok ? await resPersonal.json() : null;
+        const turnosData = resTurnos.ok ? await resTurnos.json() : null;
         const lista = [];
 
         if (data) {
           Object.keys(data).forEach(id => {
             const a = data[id];
-            if (a) lista.push({ id, ...a });
+            if (a) lista.push({ id, ...a, fuenteAlerta: 'alertasFichadas' });
           });
         }
 
-        lista.sort((a, b) => new Date(b.fechaHora || 0) - new Date(a.fechaHora || 0));
-        alertasFichadasCache = lista;
+        // Reconstruye el estado de TODAS las entradas, incluso las fichadas antes
+        // de que index.html comenzara a guardar estadoHorario/minutosTardanza.
+        const alertasParaCrear = [];
+
+        if (fichadasData) {
+          Object.keys(fichadasData).forEach(id => {
+            const f = fichadasData[id];
+            if (!f || String(f.tipo || '').toUpperCase() !== 'ENTRADA') return;
+
+            const fecha = f.fechaHoraDispositivo || f.fecha || f.timestamp;
+            if (!fecha) return;
+
+            const calculado = evaluarEstadoEntradaAdmin(
+              fecha,
+              f.legajo,
+              f.objetivo,
+              personalData,
+              turnosData
+            );
+
+            // Si la fichada ya tiene el estado guardado, respetamos ese dato;
+            // si no lo tiene, usamos el cálculo automático como hace panel.html.
+            let estado = calculado.estado;
+            let minutosTarde = calculado.minutosTarde;
+            let horario = calculado.horario;
+
+            const estadoGuardado = String(f.estadoHorario || '').toUpperCase();
+            if (estadoGuardado === 'TARDANZA_ALERTA') {
+              estado = 'TARDE';
+              minutosTarde = Number(f.minutosTardanza) || calculado.minutosTarde;
+            } else if (estadoGuardado === 'TARDANZA_TOLERANCIA') {
+              estado = 'TOLERANCIA';
+              minutosTarde = Number(f.minutosTardanza) || calculado.minutosTarde;
+            }
+
+            if (estado !== 'TARDE' && estado !== 'TOLERANCIA') return;
+
+            const existe = lista.find(a =>
+              a.fuenteAlerta === 'alertasFichadas' &&
+              a.tipoAlerta === 'FICHADA_TARDIA_ENTRADA' &&
+              String(a.legajo || '') === String(f.legajo || '') &&
+              String(a.fechaHora || '') === String(fecha || '')
+            );
+
+            const alertaLocal = {
+              id: `fichada-${id}`,
+              fuenteAlerta: 'fichadas',
+              firebaseFichadaId: id,
+              vistoAdmin: existe?.vistoAdmin === true || f.vistoAdminFichada === true,
+              estado: existe?.estado || 'NUEVA',
+              tipoAlerta: 'FICHADA_TARDIA_ENTRADA',
+              legajo: f.legajo,
+              nombre: f.nombre || `Legajo ${f.legajo || '-'}`,
+              objetivo: f.objetivo || 'Sin objetivo',
+              tipoFichada: 'ENTRADA',
+              fechaHora: fecha,
+              horaInicioProgramada: f.horarioProgramadoInicio || horario?.inicio || null,
+              minutosTardanza: minutosTarde,
+              toleranciaMinutos: Number(f.toleranciaEntradaMinutos) || TOLERANCIA_ENTRADA_ADMIN_MINUTOS,
+              estadoHorario: estado === 'TOLERANCIA' ? 'TARDANZA_TOLERANCIA' : 'TARDANZA_ALERTA',
+              mensaje: estado === 'TOLERANCIA'
+                ? `Llegada dentro de la tolerancia: ${minutosTarde} minutos después del inicio del turno.`
+                : `Llegada tarde: ${minutosTarde} minutos después del inicio del turno.`,
+              generadoAutomaticamenteDesdeFichada: estado === 'TARDE'
+            };
+
+            if (existe) {
+              // La alerta persistente es la fuente de verdad si ya existe.
+              return;
+            }
+
+            lista.push(alertaLocal);
+
+            // Las llegadas de 16+ minutos deben quedar como alerta persistente
+            // para que el supervisor pueda recibirla aunque la fichada sea antigua.
+            if (estado === 'TARDE') {
+              alertasParaCrear.push(alertaLocal);
+            }
+          });
+        }
+
+        // Crea solamente las alertas de llegada tarde que todavía no existen.
+        // No crea alertas para la tolerancia de 0-15 minutos, tal como la regla de panel.html.
+        for (const alerta of alertasParaCrear) {
+          try {
+            const respuesta = await fetch(`${URL_FIREBASE}/alertasFichadas.json`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tipoAlerta: 'FICHADA_TARDIA_ENTRADA',
+                estado: 'NUEVA',
+                vistoAdmin: false,
+                legajo: alerta.legajo,
+                nombre: alerta.nombre,
+                objetivo: alerta.objetivo,
+                tipoFichada: 'ENTRADA',
+                fechaHora: alerta.fechaHora,
+                horaInicioProgramada: alerta.horaInicioProgramada,
+                minutosTardanza: alerta.minutosTardanza,
+                toleranciaMinutos: alerta.toleranciaMinutos,
+                estadoHorario: 'TARDANZA_ALERTA',
+                mensaje: alerta.mensaje,
+                generadoAutomaticamenteDesdeFichada: true,
+                fichadaFirebaseId: alerta.firebaseFichadaId
+              })
+            });
+            if (respuesta.ok) {
+              const creado = await respuesta.json();
+              alerta.id = creado?.name || alerta.id;
+              alerta.fuenteAlerta = 'alertasFichadas';
+            }
+          } catch (e) {
+            console.warn('No se pudo persistir la alerta de llegada tarde:', e);
+          }
+        }
+
+        // Si acabamos de persistir alertas, las mezclamos sin duplicarlas.
+        const porClave = new Map();
+        lista.forEach(a => {
+          const clave = `${a.tipoAlerta || ''}|${a.legajo || ''}|${a.fechaHora || ''}`;
+          if (!porClave.has(clave) || a.fuenteAlerta === 'alertasFichadas') porClave.set(clave, a);
+        });
+
+        const listaFinal = Array.from(porClave.values());
+        listaFinal.sort((a, b) => new Date(b.fechaHora || 0) - new Date(a.fechaHora || 0));
+        alertasFichadasCache = listaFinal;
         actualizarBadgeAlertasFichadas();
-        renderizarAlertasFichadas(lista);
+        renderizarAlertasFichadas(listaFinal);
 
         if (!alertasFichadasInicializadas || esCargaInicial) {
-          lista.forEach(a => alertasFichadasConocidas.add(a.id));
+          // En la primera carga también avisamos las llegadas tarde que fueron
+          // detectadas automáticamente en fichadas anteriores.
+          listaFinal.forEach(a => {
+            if (a.tipoAlerta === 'FICHADA_TARDIA_ENTRADA' && a.estadoHorario === 'TARDANZA_ALERTA') {
+              alertasFichadasConocidas.add(a.id);
+              if (a.fuenteAlerta === 'alertasFichadas' && a.generadoAutomaticamenteDesdeFichada) {
+                notificarNuevaAlertaFichada(a);
+              }
+            } else {
+              alertasFichadasConocidas.add(a.id);
+            }
+          });
           alertasFichadasInicializadas = true;
           return;
         }
 
-        const nuevas = lista.filter(a => !alertasFichadasConocidas.has(a.id));
+        const nuevas = listaFinal.filter(a => !alertasFichadasConocidas.has(a.id));
         nuevas.forEach(a => {
           alertasFichadasConocidas.add(a.id);
-          notificarNuevaAlertaFichada(a);
+          if (a.tipoAlerta === 'FICHADA_TARDIA_ENTRADA' && a.estadoHorario === 'TARDANZA_ALERTA') {
+            notificarNuevaAlertaFichada(a);
+          }
         });
       } catch (err) {
         console.warn('Error consultando alertas de fichadas:', err);
@@ -924,27 +1160,33 @@
       const cont = document.getElementById('listaAlertasFichadas');
       if (!cont) return;
       if (!lista.length) {
-        cont.innerHTML = `<div class="p-6 text-center text-slate-400 text-sm">No hay alertas de fichadas bloqueadas.</div>`;
+        cont.innerHTML = `<div class="p-6 text-center text-slate-400 text-sm">No hay alertas de ubicación ni llegadas tarde.</div>`;
         return;
       }
 
       const htmlAlertas = lista.slice(0, 100).map(a => {
         const vista = a.vistoAdmin === true;
+        const esTardanza = a.tipoAlerta === 'FICHADA_TARDIA_ENTRADA';
         const mapa = (Number.isFinite(Number(a.latitud)) && Number.isFinite(Number(a.longitud)))
           ? `https://maps.google.com/?q=${a.latitud},${a.longitud}` : '';
-        return `<div class="p-3 rounded-xl border ${vista ? 'border-slate-700 bg-slate-800/60' : 'border-rose-500/40 bg-rose-950/20'}">
+        const esTolerancia = esTardanza && a.estadoHorario === 'TARDANZA_TOLERANCIA';
+        const claseAlerta = vista
+          ? 'border-slate-700 bg-slate-800/60'
+          : (esTolerancia ? 'border-orange-500/50 bg-orange-950/20' : (esTardanza ? 'border-red-500/50 bg-red-950/20' : 'border-rose-500/40 bg-rose-950/20'));
+        return `<div class="p-3 rounded-xl border ${claseAlerta}">
           <div class="flex flex-col md:flex-row md:items-center justify-between gap-2">
             <div>
               <div class="flex items-center gap-2">
                 <span class="text-sm font-bold text-white">${a.nombre || 'Sin nombre'}</span>
-                ${vista ? '<span class="text-[10px] text-slate-500 uppercase">Vista</span>' : '<span class="text-[10px] font-black text-rose-400 uppercase">Nueva</span>'}
+                ${vista ? '<span class="text-[10px] text-slate-500 uppercase">Vista</span>' : (esTolerancia ? '<span class="text-[10px] font-black text-orange-400 uppercase">Tolerancia</span>' : '<span class="text-[10px] font-black text-red-400 uppercase">Llegada tarde</span>')}
               </div>
               <p class="text-xs text-slate-400 mt-1">Legajo: ${a.legajo || '-'} · ${a.tipoFichada || '-'} · ${formatearFechaAlerta(a.fechaHora)}</p>
               <p class="text-xs text-slate-300 mt-1">Objetivo: <strong>${a.objetivo || '-'}</strong></p>
             </div>
             <div class="text-left md:text-right">
-              <p class="text-sm font-black text-rose-300">${formatearDistanciaAlerta(a.distanciaMetros)}</p>
-              <p class="text-[11px] text-slate-400">Radio permitido: ${Math.round(Number(a.radioPermitidoMetros) || 100)} m</p>
+              ${esTardanza
+                ? `<p class="text-sm font-black ${esTolerancia ? 'text-orange-300' : 'text-red-300'}">${Number(a.minutosTardanza) || 0} min de demora</p><p class="text-[11px] text-slate-400">Inicio programado: ${a.horaInicioProgramada || '--:--'}</p>`
+                : `<p class="text-sm font-black text-rose-300">${formatearDistanciaAlerta(a.distanciaMetros)}</p><p class="text-[11px] text-slate-400">Radio permitido: ${Math.round(Number(a.radioPermitidoMetros) || 100)} m</p>`}
             </div>
           </div>
           <div class="mt-2 flex flex-wrap gap-2">
@@ -971,11 +1213,20 @@
       const pendientes = alertasFichadasCache.filter(a => a.vistoAdmin !== true && a.estado !== 'ATENDIDA');
       if (!pendientes.length) return;
       try {
-        await Promise.all(pendientes.map(a => fetch(`${URL_FIREBASE}/alertasFichadas/${a.id}.json`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ vistoAdmin: true, vistoEn: new Date().toISOString() })
-        })));
+        const persistentes = pendientes.filter(a => a.fuenteAlerta === 'alertasFichadas');
+        const desdeFichada = pendientes.filter(a => a.fuenteAlerta === 'fichadas' && a.firebaseFichadaId);
+        await Promise.all([
+          ...persistentes.map(a => fetch(`${URL_FIREBASE}/alertasFichadas/${a.id}.json`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ vistoAdmin: true, vistoEn: new Date().toISOString() })
+          })),
+          ...desdeFichada.map(a => fetch(`${URL_FIREBASE}/fichadas/${a.firebaseFichadaId}.json`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ vistoAdminFichada: true, vistoEnFichada: new Date().toISOString() })
+          }))
+        ]);
         await cargarAlertasFichadas(false);
       } catch (err) {
         alert('No se pudieron actualizar todas las alertas.');
@@ -996,8 +1247,13 @@
     }
 
     function notificarNuevaAlertaFichada(alerta) {
-      const titulo = '🚨 Alerta de fichada';
-      const cuerpo = `${alerta.nombre || 'Empleado'} está a ${formatearDistanciaAlerta(alerta.distanciaMetros)} de ${alerta.objetivo || 'su objetivo'}. Fichada bloqueada.`;
+      const esTardanza = alerta.tipoAlerta === 'FICHADA_TARDIA_ENTRADA';
+      const titulo = esTardanza
+        ? '🔴 Alerta de llegada tarde'
+        : '🚨 Alerta de fichada';
+      const cuerpo = esTardanza
+        ? `${alerta.nombre || 'Empleado'} llegó ${alerta.minutosTardanza || 0} minutos después del inicio del turno en ${alerta.objetivo || 'su objetivo'}.`
+        : `${alerta.nombre || 'Empleado'} está a ${formatearDistanciaAlerta(alerta.distanciaMetros)} de ${alerta.objetivo || 'su objetivo'}. Fichada bloqueada.`;
 
       const modal = document.getElementById('modalAlertasFichadas');
       if (modal && modal.classList.contains('hidden')) {
@@ -1133,9 +1389,13 @@
         }
         renderizarTablaPersonal(datosPersonal);
 
-        // 2. Cargar Marcaciones
-        const resMarcaciones = await fetch(`${URL_FIREBASE}/fichadas.json`);
+        // 2. Cargar Marcaciones y turnos para mostrar TARDE/TOLERANCIA igual que panel.html
+        const [resMarcaciones, resTurnosMarcaciones] = await Promise.all([
+          fetch(`${URL_FIREBASE}/fichadas.json`),
+          fetch(`${URL_FIREBASE}/asignacionesTurnos.json`)
+        ]);
         const dataMarcaciones = await resMarcaciones.json();
+        const dataTurnosMarcaciones = resTurnosMarcaciones.ok ? await resTurnosMarcaciones.json() : null;
         datosMarcaciones = [];
         if (dataMarcaciones) {
           Object.keys(dataMarcaciones).forEach(id => {
@@ -1162,7 +1422,29 @@
                 distanciaEuclidiana,
                 motivoFraude,
                 fotoMaster,
-                id
+                id,
+                // Estado horario calculado automáticamente con la misma regla de panel.html.
+                ...(String(d.tipo || '').toUpperCase() === 'ENTRADA' ? (() => {
+                  const calculado = evaluarEstadoEntradaAdmin(
+                    fecha,
+                    d.legajo,
+                    d.objetivo,
+                    dataPersonal,
+                    dataTurnosMarcaciones
+                  );
+                  const estadoGuardado = String(d.estadoHorario || '').toUpperCase();
+                  let estado = calculado.estado;
+                  let minutos = calculado.minutosTarde;
+                  let horario = calculado.horario;
+                  if (estadoGuardado === 'TARDANZA_ALERTA') {
+                    estado = 'TARDE';
+                    minutos = Number(d.minutosTardanza) || calculado.minutosTarde;
+                  } else if (estadoGuardado === 'TARDANZA_TOLERANCIA') {
+                    estado = 'TOLERANCIA';
+                    minutos = Number(d.minutosTardanza) || calculado.minutosTarde;
+                  }
+                  return [estado, minutos, d.horarioProgramadoInicio || horario?.inicio || ''];
+                })() : ['NORMAL', 0, ''])
               ]);
             }
           });
@@ -1260,10 +1542,24 @@
         const alertaFraude = fila[7];
         const distanciaEuclidiana = fila[8];
         const firebaseId = fila[11];
+        const estadoHorario = fila[12] || 'NORMAL';
+        const minutosTardanza = Number(fila[13]) || 0;
+        const horaInicioProgramada = fila[14] || '';
 
-        const badgeTipo = tipo === 'ENTRADA' 
-          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-          : 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+        const esEntradaTarde = tipo === 'ENTRADA' && estadoHorario === 'TARDE';
+        const esEntradaTolerancia = tipo === 'ENTRADA' && estadoHorario === 'TOLERANCIA';
+        const textoTipo = esEntradaTarde
+          ? `ENTRADA · TARDE ${minutosTardanza} MIN`
+          : esEntradaTolerancia
+            ? `ENTRADA · TOLERANCIA ${minutosTardanza} MIN`
+            : tipo;
+        const badgeTipo = esEntradaTarde
+          ? 'bg-red-500/15 text-red-300 border-red-500/40'
+          : esEntradaTolerancia
+            ? 'bg-orange-500/15 text-orange-300 border-orange-500/40'
+            : tipo === 'ENTRADA'
+              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+              : 'bg-rose-500/10 text-rose-400 border-rose-500/20';
 
         let badgeIA = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"><i class="fa-solid fa-circle-check"></i> OK</span>`;
         
@@ -1297,14 +1593,22 @@
         }
 
         const tr = document.createElement('tr');
-        tr.className = alertaFraude ? "bg-rose-950/20 hover:bg-rose-900/30 transition border-l-4 border-l-rose-500" : "hover:bg-slate-700/30 transition";
+        tr.className = alertaFraude
+          ? "bg-rose-950/20 hover:bg-rose-900/30 transition border-l-4 border-l-rose-500"
+          : esEntradaTarde
+            ? "bg-red-950/15 hover:bg-red-900/20 transition border-l-4 border-l-red-500"
+            : esEntradaTolerancia
+              ? "bg-orange-950/10 hover:bg-orange-900/20 transition border-l-4 border-l-orange-500"
+              : "hover:bg-slate-700/30 transition";
         tr.innerHTML = `
           <td class="p-4 font-mono text-xs text-slate-300">${fecha}</td>
           <td class="p-4 font-semibold text-white">${legajo}</td>
           <td class="p-4 font-medium text-slate-200">${nombre}</td>
           <td class="p-4 text-slate-400">${objetivo}</td>
           <td class="p-4 text-center">
-            <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${badgeTipo}">${tipo}</span>
+            <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${badgeTipo}">${textoTipo}</span>
+            ${esEntradaTarde ? `<div class="text-[10px] text-red-300/80 mt-1 font-semibold">Inicio programado: ${horaInicioProgramada || '--:--'}</div>` : ''}
+            ${esEntradaTolerancia ? `<div class="text-[10px] text-orange-300/80 mt-1 font-semibold">Inicio programado: ${horaInicioProgramada || '--:--'}</div>` : ''}
           </td>
           <td class="p-4 text-center">${badgeIA}</td>
           <td class="p-4 text-center">${btnMapa}</td>
