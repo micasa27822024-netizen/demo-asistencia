@@ -394,23 +394,6 @@
       window.addEventListener('touchstart', reiniciarTemporizador);
     }
 
-    function calcularHoras(f1, f2) {
-      let inicio = parseFechaSegura(f1);
-      let fin = parseFechaSegura(f2);
-      if (isNaN(inicio.getTime()) || isNaN(fin.getTime()) || fin <= inicio) return { d: 0, n: 0, t: 0 };
-
-      let diurnas = 0, nocturnas = 0;
-      let cur = new Date(inicio.getTime());
-
-      while (cur < fin) {
-        let h = cur.getHours();
-        if (h >= 6 && h < 21) diurnas += 1/60;
-        else nocturnas += 1/60;
-        cur.setMinutes(cur.getMinutes() + 1);
-      }
-      return { d: diurnas, n: nocturnas, t: diurnas + nocturnas };
-    }
-
     function formatearAHorasReloj(horasDecimales) {
       if (isNaN(horasDecimales) || horasDecimales <= 0) return "00:00 hs";
       const horas = Math.floor(horasDecimales);
@@ -635,7 +618,7 @@
             <td class="p-4 text-xs font-mono">${!isNaN(fEntrada.getTime()) ? fEntrada.toLocaleString('es-AR', { hour12: false }) : entrada.fecha}</td>
             <td class="p-4 text-xs font-mono">${salida ? (!isNaN(fSalida.getTime()) ? fSalida.toLocaleString('es-AR', { hour12: false }) : salida.fecha) : '<span class="text-amber-400">En Turno</span>'}</td>
             <td class="p-4 text-xs text-slate-300 font-medium">${objetivoNombre}
-              <div class="text-[10px] text-slate-500 mt-1">${horarioProgramado ? `Turno ${horarioProgramado.inicio || '--:--'} - ${horarioProgramado.fin || '--:--'} · ${horarioProgramado.origen}` : 'Sin horario configurado'}${horas.ajusteMinutos > 0 ? ` · ${horas.ajusteMinutos} min anticipados no computados` : ''}</div>
+              <div class="text-[10px] text-slate-500 mt-1">${horarioProgramado ? `Turno ${horarioProgramado.inicio || '--:--'} - ${horarioProgramado.fin \vert{}\vert{} '--:--'} ·${horarioProgramado.origen}` : 'Sin horario configurado'}${horas.ajusteMinutos > 0 ? ` · ${horas.ajusteMinutos} min anticipados no computados` : ''}</div>
             </td>
             <td class="p-4 text-center text-xs font-semibold text-amber-400">${formatearAHorasReloj(horas.d)}</td>
             <td class="p-4 text-center text-xs font-semibold text-indigo-400">${formatearAHorasReloj(horas.n)}</td>
