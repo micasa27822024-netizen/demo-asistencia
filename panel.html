@@ -394,12 +394,17 @@
     // ==========================================
     // LÓGICA DE DATOS Y DASHBOARD (FIREBASE: DEMO ASISTENCIA)
     // ==========================================
-    const URL_FIREBASE = "https://fir-asistencia-fad12-default-rtdb.firebaseio.com/fichadas.json";
+    const URL_BASE_FIREBASE = "https://fir-asistencia-fad12-default-rtdb.firebaseio.com";
+    const URL_FIREBASE = `${URL_BASE_FIREBASE}/fichadas.json`;
+    const URL_PERSONAL = `${URL_BASE_FIREBASE}/personal.json`;
+    const URL_TURNOS = `${URL_BASE_FIREBASE}/asignacionesTurnos.json`;
     
     let datosLocales = [];
     let datosFiltradosActuales = [];
     let datosSupervisorGlobal = [];
     let firebaseKeysMap = {}; // Guarda la relación de los elementos con sus IDs de Firebase
+    let mapaConfiguracionPersonalPanel = {};
+    let asignacionesTurnosPanel = [];
 
     let instChartDona = null;
     let instChartBarras = null;
@@ -409,8 +414,24 @@
       if (icono) icono.classList.add('fa-spin');
 
       try {
-        const res = await fetch(URL_FIREBASE);
+        const [res, resPersonal, resTurnos] = await Promise.all([
+          fetch(URL_FIREBASE),
+          fetch(`${URL_PERSONAL}?ts=${Date.now()}`, { cache: 'no-store' }),
+          fetch(`${URL_TURNOS}?ts=${Date.now()}`, { cache: 'no-store' })
+        ]);
         const resFirebase = res.ok ? await res.json() : null;
+        const resPersonalData = resPersonal.ok ? await resPersonal.json() : null;
+        const resTurnosData = resTurnos.ok ? await resTurnos.json() : null;
+
+        mapaConfiguracionPersonalPanel = {};
+        if (resPersonalData) {
+          Object.entries(resPersonalData).forEach(([id, persona]) => {
+            if (persona) mapaConfiguracionPersonalPanel[id] = { ...persona, firebaseId: id };
+          });
+        }
+        asignacionesTurnosPanel = resTurnosData
+          ? Object.entries(resTurnosData).map(([id, t]) => ({ ...t, id })).filter(t => t && t.legajo)
+          : [];
 
         let fichadasArray = [];
         firebaseKeysMap = {}; 
@@ -562,17 +583,103 @@
     // ==========================================
     // CÁLCULO Y GESTIÓN DE HORAS DEL SUPERVISOR
     // ==========================================
-    function calcularHoras(fechaInicioStr, fechaFinStr) {
-      const inicio = new Date(fechaInicioStr);
+
+    function minutosDesdeMedianoche(hora) {
+      if (!hora || !/^\d{1,2}:\d{2}$/.test(String(hora))) return null;
+      const [h, m] = String(hora).split(':').map(Number);
+      if (h < 0 || h > 23 || m < 0 || m > 59) return null;
+      return h * 60 + m;
+    }
+
+    function obtenerFechaLocalClave(fecha) {
+      if (!(fecha instanceof Date) || isNaN(fecha)) return '';
+      const y = fecha.getFullYear();
+      const m = String(fecha.getMonth() + 1).padStart(2, '0');
+      const d = String(fecha.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function obtenerHorarioProgramado(entrada, legajo, objetivoNombre) {
+      const fechaEntrada = new Date(entrada);
+      if (isNaN(fechaEntrada)) return null;
+      const fechaClave = obtenerFechaLocalClave(fechaEntrada);
+      const legajoStr = String(legajo || '').trim();
+      const objetivoStr = String(objetivoNombre || '').trim().toLowerCase();
+
+      // Primero se busca un turno puntual cargado desde Admin para esa fecha.
+      const turnosFecha = asignacionesTurnosPanel.filter(t =>
+        String(t.legajo || '').trim() === legajoStr && String(t.fecha || '') === fechaClave
+      );
+
+      let turno = null;
+      if (turnosFecha.length) {
+        // Si hay varios turnos ese día, priorizar el objetivo de la fichada.
+        turno = turnosFecha.find(t => {
+          const nombre = String(t.objetivoNombre || t.objetivo || '').trim().toLowerCase();
+          return objetivoStr && nombre && (nombre === objetivoStr || nombre.includes(objetivoStr) || objetivoStr.includes(nombre));
+        }) || turnosFecha[0];
+      }
+
+      if (turno && (turno.horaInicio || turno.horaFin)) {
+        return {
+          inicio: turno.horaInicio || '',
+          fin: turno.horaFin || '',
+          origen: 'Turno asignado'
+        };
+      }
+
+      // Si no existe un turno puntual, usar el horario habitual configurado en Admin.
+      const persona = Object.values(mapaConfiguracionPersonalPanel).find(p => String(p.legajo || '').trim() === legajoStr);
+      const h = persona?.horarioHabitual || {};
+      if (h.inicio || h.fin) {
+        return {
+          inicio: h.inicio || '',
+          fin: h.fin || '',
+          origen: 'Horario habitual'
+        };
+      }
+
+      return null;
+    }
+
+    function calcularHoras(fechaInicioStr, fechaFinStr, horarioProgramado = null) {
+      let inicio = new Date(fechaInicioStr);
       const fin = new Date(fechaFinStr);
-      if (isNaN(inicio) || isNaN(fin) || fin <= inicio) return { d: 0, n: 0, t: 0 };
+      if (isNaN(inicio) || isNaN(fin) || fin <= inicio) return { d: 0, n: 0, t: 0, entradaComputable: inicio, ajusteMinutos: 0 };
+
+      let entradaComputable = new Date(inicio.getTime());
+      let ajusteMinutos = 0;
+
+      // Regla laboral del sistema:
+      // si el empleado llega ANTES del horario de inicio del turno, esos minutos
+      // no forman parte de las horas computables ni se consideran horas extra.
+      if (horarioProgramado?.inicio) {
+        const minutosTurno = minutosDesdeMedianoche(horarioProgramado.inicio);
+        if (minutosTurno !== null) {
+          const fechaTurno = new Date(inicio.getTime());
+          fechaTurno.setHours(Math.floor(minutosTurno / 60), minutosTurno % 60, 0, 0);
+
+          // Para turnos nocturnos que comienzan tarde, la comparación sigue siendo
+          // sobre la fecha de la ENTRADA. El punto importante es no contar llegada anticipada.
+          if (fechaTurno > entradaComputable) {
+            entradaComputable = fechaTurno;
+            ajusteMinutos = Math.max(0, Math.round((entradaComputable - inicio) / 60000));
+          }
+        }
+      }
+
+      // Si por alguna configuración extraña el horario programado cae después de la salida,
+      // no se computan horas de ese período.
+      if (entradaComputable >= fin) {
+        return { d: 0, n: 0, t: 0, entradaComputable, ajusteMinutos };
+      }
 
       let horasDiurnas = 0;
       let horasNocturnas = 0;
-      let actual = new Date(inicio.getTime());
+      let actual = new Date(entradaComputable.getTime());
 
       while (actual < fin) {
-        let siguiente = new Date(actual.getTime() + 60000); 
+        let siguiente = new Date(actual.getTime() + 60000);
         if (siguiente > fin) siguiente = new Date(fin.getTime());
 
         let hora = actual.getHours();
@@ -587,7 +694,9 @@
       return {
         d: horasDiurnas,
         n: horasNocturnas,
-        t: horasDiurnas + horasNocturnas
+        t: horasDiurnas + horasNocturnas,
+        entradaComputable,
+        ajusteMinutos
       };
     }
 
@@ -700,8 +809,9 @@
           let entrada = marcacionesVigilador[i];
           let salida = marcacionesVigilador[i + 1] && marcacionesVigilador[i + 1][4] === 'SALIDA' ? marcacionesVigilador[i + 1] : null;
 
-          let horas = salida ? calcularHoras(entrada[0], salida[0]) : { d: 0, n: 0, t: 0 };
           let objetivoNombre = entrada[3] || (salida && salida[3]) || '-';
+          const horarioProgramado = obtenerHorarioProgramado(entrada[0], entrada[1], objetivoNombre);
+          let horas = salida ? calcularHoras(entrada[0], salida[0], horarioProgramado) : { d: 0, n: 0, t: 0, entradaComputable: new Date(entrada[0]), ajusteMinutos: 0 };
 
           totalD += horas.d;
           totalN += horas.n;
@@ -712,7 +822,7 @@
           tr.innerHTML = `
             <td class="p-3 text-xs font-mono">${new Date(entrada[0]).toLocaleString('es-AR', { hour12: false })}</td>
             <td class="p-3 text-xs font-mono">${salida ? new Date(salida[0]).toLocaleString('es-AR', { hour12: false }) : '<span class="text-amber-400">En Turno</span>'}</td>
-            <td class="p-3 text-xs text-slate-300 font-medium">${objetivoNombre}</td>
+            <td class="p-3 text-xs text-slate-300 font-medium">${objetivoNombre}<div class="text-[10px] text-slate-500 mt-1">${horarioProgramado ? `Turno ${horarioProgramado.inicio || '--:--'} - ${horarioProgramado.fin || '--:--'} · ${horarioProgramado.origen}` : 'Sin horario configurado'}${horas.ajusteMinutos > 0 ? ` · ${horas.ajusteMinutos} min anticipados no computados` : ''}</div></td>
             <td class="p-3 text-center text-xs font-semibold text-amber-400">${formatearAHorasReloj(horas.d)}</td>
             <td class="p-3 text-center text-xs font-semibold text-indigo-400">${formatearAHorasReloj(horas.n)}</td>
             <td class="p-3 text-center text-xs font-bold text-emerald-400">${formatearAHorasReloj(horas.t)}</td>
