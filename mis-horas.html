@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Demo Asistencia - Mi Historial de Horas y Marcaciones</title>
+  <title>VGA 24 - Mi Historial de Horas y Marcaciones</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
   <style>
@@ -292,12 +292,30 @@
       return null;
     }
 
+    function evaluarEstadoEntradaVigilador(fechaEntrada, horarioProgramado) {
+      const fecha = parseFechaSegura(fechaEntrada);
+      if (isNaN(fecha.getTime()) || !horarioProgramado?.inicio) {
+        return { estado: 'NORMAL', minutosTarde: 0 };
+      }
+
+      const minutosTurno = minutosDesdeMedianoche(horarioProgramado.inicio);
+      if (minutosTurno === null) return { estado: 'NORMAL', minutosTarde: 0 };
+
+      const inicioTurno = new Date(fecha.getTime());
+      inicioTurno.setHours(Math.floor(minutosTurno / 60), minutosTurno % 60, 0, 0);
+      const diferenciaMin = Math.floor((fecha - inicioTurno) / 60000);
+
+      if (diferenciaMin < 0) return { estado: 'NORMAL', minutosTarde: 0 };
+      if (diferenciaMin <= 15) return { estado: 'TOLERANCIA', minutosTarde: diferenciaMin };
+      return { estado: 'TARDE', minutosTarde: diferenciaMin };
+    }
+
     function calcularHoras(f1, f2, horarioProgramado = null) {
       const inicioReal = parseFechaSegura(f1);
       const fin = parseFechaSegura(f2);
 
       if (isNaN(inicioReal.getTime()) || isNaN(fin.getTime()) || fin <= inicioReal) {
-        return { d: 0, n: 0, t: 0, entradaComputable: inicioReal, ajusteMinutos: 0 };
+        return { d: 0, n: 0, t: 0, entradaComputable: inicioReal, ajusteMinutos: 0, minutosExtra: 0 };
       }
 
       // La fichada real NO se modifica. Solo se modifica el punto desde el cual
@@ -326,17 +344,48 @@
         }
       }
 
-      if (inicioComputable >= fin) {
-        return { d: 0, n: 0, t: 0, entradaComputable: inicioComputable, ajusteMinutos };
+      // Tolerancia de salida: los primeros 30 minutos posteriores al fin del turno
+      // no se consideran extra. Si la salida supera el minuto 30, se contabiliza
+      // todo el tiempo desde el fin programado, incluidos esos 30 minutos.
+      let finComputable = new Date(fin.getTime());
+      let minutosExtra = 0;
+
+      if (horarioProgramado?.fin) {
+        const minutosFinTurno = minutosDesdeMedianoche(horarioProgramado.fin);
+        if (minutosFinTurno !== null) {
+          const finTurno = new Date(inicioReal.getTime());
+          finTurno.setHours(Math.floor(minutosFinTurno / 60), minutosFinTurno % 60, 0, 0);
+
+          // Turnos que cruzan medianoche, por ejemplo 19:00 - 07:00.
+          if (horarioProgramado.inicio) {
+            const minutosInicioTurno = minutosDesdeMedianoche(horarioProgramado.inicio);
+            if (minutosInicioTurno !== null && minutosFinTurno <= minutosInicioTurno) {
+              finTurno.setDate(finTurno.getDate() + 1);
+            }
+          }
+
+          const limiteTolerancia = new Date(finTurno.getTime() + 30 * 60000);
+          if (fin > limiteTolerancia) {
+            minutosExtra = Math.max(0, Math.round((fin - finTurno) / 60000));
+            finComputable = fin;
+          } else if (fin > finTurno) {
+            // Salida dentro de la tolerancia: se computa solamente hasta el fin del turno.
+            finComputable = finTurno;
+          }
+        }
+      }
+
+      if (inicioComputable >= finComputable) {
+        return { d: 0, n: 0, t: 0, entradaComputable: inicioComputable, ajusteMinutos, minutosExtra: 0 };
       }
 
       let diurnas = 0;
       let nocturnas = 0;
       let cur = new Date(inicioComputable.getTime());
 
-      while (cur < fin) {
+      while (cur < finComputable) {
         let siguiente = new Date(cur.getTime() + 60000);
-        if (siguiente > fin) siguiente = new Date(fin.getTime());
+        if (siguiente > finComputable) siguiente = new Date(finComputable.getTime());
 
         const h = cur.getHours();
         const minutos = (siguiente - cur) / 60000;
@@ -352,7 +401,8 @@
         n: nocturnas,
         t: diurnas + nocturnas,
         entradaComputable: inicioComputable,
-        ajusteMinutos
+        ajusteMinutos,
+        minutosExtra
       };
     }
 
@@ -614,13 +664,24 @@
           const fEntrada = parseFechaSegura(entrada.fecha);
           const fSalida = salida ? parseFechaSegura(salida.fecha) : null;
 
+          const estadoEntrada = evaluarEstadoEntradaVigilador(entrada.fecha, horarioProgramado);
+          const estadoTexto = estadoEntrada.estado === 'TARDE'
+            ? `<span class="inline-block mt-1 px-2 py-0.5 rounded-full bg-red-500/15 text-red-300 border border-red-500/40 text-[10px] font-bold">🔴 LLEGADA TARDE · ${estadoEntrada.minutosTarde} MIN</span>`
+            : estadoEntrada.estado === 'TOLERANCIA'
+              ? `<span class="inline-block mt-1 px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-300 border border-orange-500/40 text-[10px] font-bold">🟠 TOLERANCIA · ${estadoEntrada.minutosTarde} MIN</span>`
+              : '';
+
           const tr = document.createElement('tr');
-          tr.className = "hover:bg-slate-700/30 transition";
+          tr.className = estadoEntrada.estado === 'TARDE'
+            ? "hover:bg-red-950/30 transition bg-red-950/20"
+            : estadoEntrada.estado === 'TOLERANCIA'
+              ? "hover:bg-orange-950/20 transition bg-orange-950/10"
+              : "hover:bg-slate-700/30 transition";
           tr.innerHTML = `
-            <td class="p-4 text-xs font-mono">${!isNaN(fEntrada.getTime()) ? fEntrada.toLocaleString('es-AR', { hour12: false }) : entrada.fecha}</td>
+            <td class="p-4 text-xs font-mono">${!isNaN(fEntrada.getTime()) ? fEntrada.toLocaleString('es-AR', { hour12: false }) : entrada.fecha}${estadoTexto}</td>
             <td class="p-4 text-xs font-mono">${salida ? (!isNaN(fSalida.getTime()) ? fSalida.toLocaleString('es-AR', { hour12: false }) : salida.fecha) : '<span class="text-amber-400">En Turno</span>'}</td>
             <td class="p-4 text-xs text-slate-300 font-medium">${objetivoNombre}
-              <div class="text-[10px] text-slate-500 mt-1">${horarioProgramado ? `Turno ${horarioProgramado.inicio || '--:--'} - ${horarioProgramado.fin || '--:--'} · ${horarioProgramado.origen}` : 'Sin horario configurado'}${horas.ajusteMinutos > 0 ? ` · ${horas.ajusteMinutos} min anticipados no computados` : ''}</div>
+              <div class="text-[10px] text-slate-500 mt-1">${horarioProgramado ? `Turno ${horarioProgramado.inicio || '--:--'} - ${horarioProgramado.fin || '--:--'} · ${horarioProgramado.origen}` : 'Sin horario configurado'}${horas.ajusteMinutos > 0 ? ` · ${horas.ajusteMinutos} min anticipados no computados` : ''}${horas.minutosExtra > 0 ? ` · ${horas.minutosExtra} min extra` : ''}</div>
             </td>
             <td class="p-4 text-center text-xs font-semibold text-amber-400">${formatearAHorasReloj(horas.d)}</td>
             <td class="p-4 text-center text-xs font-semibold text-indigo-400">${formatearAHorasReloj(horas.n)}</td>
