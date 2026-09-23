@@ -108,6 +108,10 @@
         <button onclick="cargarDatos()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
           <i class="fa-solid fa-rotate-right" id="icono-reload"></i> Actualizar
         </button>
+        <button onclick="abrirModalAlertasArchivadas()" class="relative bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold px-3 py-2 rounded-xl text-sm transition border border-slate-600" title="Alertas archivadas">
+          <i class="fa-solid fa-box-archive"></i>
+          <span id="badgeAlertasArchivadas" class="hidden absolute -top-2 -right-2 min-w-[20px] h-5 px-1.5 rounded-full bg-rose-600 text-white text-[10px] font-black items-center justify-center border-2 border-slate-900">0</span>
+        </button>
         <button onclick="cerrarSesion()" class="bg-slate-700 hover:bg-rose-600 text-slate-300 hover:text-white font-semibold px-3 py-2 rounded-xl text-sm transition border border-slate-600" title="Cerrar Sesión">
           <i class="fa-solid fa-right-from-bracket"></i>
         </button>
@@ -354,6 +358,20 @@
     </div>
   </div>
 
+  <!-- MODAL ALERTAS ARCHIVADAS -->
+  <div id="modalAlertasArchivadas" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5 max-w-2xl w-full relative space-y-4 max-h-[85vh] overflow-y-auto">
+      <button onclick="cerrarModalAlertasArchivadas()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <div>
+        <h3 class="font-bold text-white text-base flex items-center gap-2"><i class="fa-solid fa-box-archive text-rose-400"></i> Alertas archivadas</h3>
+        <p class="text-xs text-slate-400 mt-1">Acá quedan las alertas de llegada tardía que cerraste. No vuelven a aparecer arriba al recargar la página, salvo que las restaures.</p>
+      </div>
+      <div id="listaAlertasArchivadas" class="space-y-2"></div>
+    </div>
+  </div>
+
   <script>
     // ==========================================
     // CONFIGURACIÓN DE SEGURIDAD (CONTRASEÑA)
@@ -417,6 +435,7 @@
     let asignacionesTurnosPanel = [];
     const alertasTardiasMostradas = new Set();
     let intervaloActualizacionPanel = null;
+    let alertasArchivadasCache = [];
 
     let instChartDona = null;
     let instChartBarras = null;
@@ -489,6 +508,7 @@
         const data = await res.json();
         if (!data) return;
 
+        const archivadas = [];
         Object.entries(data).forEach(([firebaseId, alerta]) => {
           if (!alerta || String(alerta.tipoAlerta || '') !== 'LLEGADA_TARDE') return;
           const entrada = [
@@ -498,6 +518,12 @@
             alerta.objetivo,
             'ENTRADA'
           ];
+          // Las alertas archivadas por el supervisor no vuelven a aparecer arriba;
+          // quedan guardadas para consultarse desde el modal de archivadas.
+          if (alerta.archivadoSupervisor === true) {
+            archivadas.push({ firebaseId, alerta, entrada });
+            return;
+          }
           mostrarAlertaTardanza(entrada, {
             estado: 'TARDE',
             minutosTarde: Number(alerta.minutosTarde) || 0,
@@ -508,6 +534,8 @@
             } : null
           }, firebaseId);
         });
+        alertasArchivadasCache = archivadas.sort((a, b) => new Date(b.alerta.fechaHora || 0) - new Date(a.alerta.fechaHora || 0));
+        renderizarAlertasArchivadas();
       } catch (err) {
         console.warn('No se pudieron cargar las alertas de llegada tardía:', err);
       }
@@ -553,14 +581,97 @@
       contenedor.classList.remove('hidden');
       const alerta = document.createElement('div');
       alerta.className = 'bg-rose-950/70 border border-rose-500/60 text-rose-100 rounded-xl p-4 shadow-lg flex flex-col md:flex-row md:items-center md:justify-between gap-3';
+      alerta.dataset.firebaseId = firebaseId || '';
+      alerta.dataset.claveAlerta = clave;
       alerta.innerHTML = `
         <div>
           <div class="font-bold flex items-center gap-2"><i class="fa-solid fa-triangle-exclamation text-rose-400"></i> ALERTA DE LLEGADA TARDÍA</div>
           <div class="text-xs mt-1">${nombre} · Legajo ${entrada[1] || '-'} · Objetivo: ${objetivo}</div>
           <div class="text-xs text-rose-200/80">Fichada: ${hora} · ${estadoInfo.minutosTarde} min después del comienzo del turno</div>
         </div>
-        <button type="button" class="text-xs font-bold bg-rose-600 hover:bg-rose-500 px-3 py-2 rounded-lg" onclick="this.parentElement.remove();">Cerrar</button>`;
+        <button type="button" class="text-xs font-bold bg-rose-600 hover:bg-rose-500 px-3 py-2 rounded-lg" onclick="archivarAlertaTardanza(this);">Cerrar</button>`;
       contenedor.prepend(alerta);
+    }
+
+    // ==========================================
+    // ARCHIVO DE ALERTAS DE LLEGADA TARDÍA
+    // Al cerrar una alerta se marca como archivada en Firebase para que no
+    // vuelva a aparecer arriba al recargar. Quedan disponibles en el modal.
+    // ==========================================
+    async function archivarAlertaTardanza(btn) {
+      const cont = btn.closest('[data-clave-alerta]') || btn.parentElement;
+      const firebaseId = cont && cont.dataset ? (cont.dataset.firebaseId || '') : '';
+      if (cont) cont.remove();
+      const contenedor = document.getElementById('contenedorAlertasTardanza');
+      if (contenedor && !contenedor.querySelector('[data-clave-alerta]')) contenedor.classList.add('hidden');
+      if (firebaseId) {
+        try {
+          await fetch(`${URL_BASE_FIREBASE}/alertasLlegadasTarde/${firebaseId}.json`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ archivadoSupervisor: true, archivadoEn: new Date().toISOString() })
+          });
+          await cargarAlertasTardanzaFirebase();
+        } catch (e) {
+          console.warn('No se pudo archivar la alerta:', e);
+        }
+      }
+    }
+
+    function renderizarAlertasArchivadas() {
+      const cont = document.getElementById('listaAlertasArchivadas');
+      const badge = document.getElementById('badgeAlertasArchivadas');
+      const total = alertasArchivadasCache.length;
+      if (badge) {
+        badge.innerText = total > 99 ? '99+' : String(total);
+        badge.classList.toggle('hidden', total === 0);
+        badge.classList.toggle('flex', total > 0);
+      }
+      if (!cont) return;
+      if (!total) {
+        cont.innerHTML = `<div class="p-6 text-center text-slate-400 text-sm">No hay alertas archivadas.</div>`;
+        return;
+      }
+      cont.innerHTML = alertasArchivadasCache.map(item => {
+        const a = item.alerta || {};
+        const nombre = a.nombre || `Legajo ${a.legajo || '-'}`;
+        const hora = a.fechaHora ? new Date(a.fechaHora).toLocaleString('es-AR', { hour12: false }) : '-';
+        const mins = Number(a.minutosTarde) || 0;
+        return `<div class="p-3 rounded-xl border border-slate-700 bg-slate-900/60 flex flex-col md:flex-row md:items-center justify-between gap-2">
+          <div>
+            <div class="text-sm font-bold text-white">${nombre} · Legajo ${a.legajo || '-'}</div>
+            <div class="text-xs text-slate-400 mt-1">Objetivo: ${a.objetivo || '-'}</div>
+            <div class="text-xs text-rose-200/70 mt-1">Fichada: ${hora} · ${mins} min de demora</div>
+          </div>
+          <button type="button" onclick="restaurarAlertaArchivada('${item.firebaseId}')" class="text-xs font-bold bg-slate-700 hover:bg-emerald-600 text-slate-200 hover:text-white px-3 py-2 rounded-lg transition self-start md:self-auto"><i class="fa-solid fa-rotate-left"></i> Restaurar</button>
+        </div>`;
+      }).join('');
+    }
+
+    function abrirModalAlertasArchivadas() {
+      const modal = document.getElementById('modalAlertasArchivadas');
+      if (modal) modal.classList.remove('hidden');
+      cargarAlertasTardanzaFirebase();
+    }
+
+    function cerrarModalAlertasArchivadas() {
+      const modal = document.getElementById('modalAlertasArchivadas');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    async function restaurarAlertaArchivada(firebaseId) {
+      if (!firebaseId) return;
+      try {
+        await fetch(`${URL_BASE_FIREBASE}/alertasLlegadasTarde/${firebaseId}.json`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ archivadoSupervisor: false, archivadoEn: null })
+        });
+        alertasTardiasMostradas.delete(`FIREBASE|${firebaseId}`);
+        await cargarAlertasTardanzaFirebase();
+      } catch (e) {
+        console.warn('No se pudo restaurar la alerta:', e);
+      }
     }
 
     function obtenerClasesFichada(tipo, estadoEntrada) {
