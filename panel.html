@@ -34,7 +34,7 @@
         </div>
       </div>
 
-      <!-- MENÚ DE NAVEGACIÓN RÁPIDA -->
+      <!-- MENÚ DE NAVEGACIÓN RÁPIDA (ENTRELAZADO) -->
       <nav class="flex flex-wrap justify-center items-center gap-1 bg-slate-800/80 p-1.5 rounded-xl border border-slate-700/60">
         <a href="index.html" class="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition flex items-center space-x-1.5">
           <i class="fa-solid fa-camera-retro text-emerald-400"></i>
@@ -90,7 +90,7 @@
   </div>
 
   <!-- ========================================== -->
-  <!-- CONTENIDO PRINCIPAL DEL DASHBOARD          -->
+  <!-- CONTENIDO PRINCIPAL DEL DASHBOARD (OCULTO) -->
   <!-- ========================================== -->
   <div id="contenidoPanel" class="max-w-7xl mx-auto space-y-6 p-4 md:p-8 flex-grow hidden w-full">
     <div id="contenedorAlertasTardanza" class="hidden space-y-2"></div>
@@ -108,21 +108,16 @@
         <button onclick="cargarDatos()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
           <i class="fa-solid fa-rotate-right" id="icono-reload"></i> Actualizar
         </button>
-
-        <button onclick="abrirModalAlertasArchivadas()" class="relative bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold px-3 py-2 rounded-xl text-sm transition border border-slate-600" title="Alertas archivadas">
-          <i class="fa-solid fa-box-archive"></i>
-          <span id="badgeAlertasArchivadas" class="hidden absolute -top-2 -right-2 min-w-[20px] h-5 px-1.5 rounded-full bg-rose-600 text-white text-[10px] font-black items-center justify-center border-2 border-slate-900">0</span>
-        </button>
-
         <button onclick="cerrarSesion()" class="bg-slate-700 hover:bg-rose-600 text-slate-300 hover:text-white font-semibold px-3 py-2 rounded-xl text-sm transition border border-slate-600" title="Cerrar Sesión">
           <i class="fa-solid fa-right-from-bracket"></i>
         </button>
       </div>
     </div>
 
-    <!-- SECCIÓN DE KPIS -->
+    <!-- SECCIÓN DE KPIS (TARJETAS INDICADORAS) -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       
+      <!-- KPI 1: PRESENTES HOY -->
       <div class="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg flex items-center justify-between">
         <div>
           <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Entradas Hoy</p>
@@ -133,6 +128,7 @@
         </div>
       </div>
 
+      <!-- KPI 2: SALIDAS HOY -->
       <div class="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg flex items-center justify-between">
         <div>
           <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Salidas Hoy</p>
@@ -143,6 +139,7 @@
         </div>
       </div>
 
+      <!-- KPI 3: EN PLANTA AHORA -->
       <div class="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg flex items-center justify-between">
         <div>
           <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">En Planta Hoy</p>
@@ -153,6 +150,7 @@
         </div>
       </div>
 
+      <!-- KPI 4: TOTAL DE REGISTROS -->
       <div class="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg flex items-center justify-between">
         <div>
           <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Filtrados</p>
@@ -168,6 +166,7 @@
     <!-- SECCIÓN DE GRÁFICOS -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       
+      <!-- GRÁFICO 1: ESTADO DEL DÍA (DONA) -->
       <div class="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-xl flex flex-col items-center justify-center">
         <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2 self-start">
           <i class="fa-solid fa-chart-pie text-sky-400"></i> Estado del Personal (Hoy)
@@ -177,6 +176,7 @@
         </div>
       </div>
 
+      <!-- GRÁFICO 2: ACTIVIDAD DE LA ÚLTIMA SEMANA (BARRAS) -->
       <div class="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-xl lg:col-span-2">
         <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">
           <i class="fa-solid fa-chart-column text-emerald-400"></i> Marcaciones de los Últimos 7 Días
@@ -188,13 +188,14 @@
 
     </div>
 
-    <!-- MÓDULO DE HORAS -->
+    <!-- MÓDULO OPTIMIZADO: CONSULTA Y GESTIÓN DE HORAS POR VIGILADOR -->
     <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
       <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <h3 class="text-lg font-bold text-white flex items-center gap-2">
           <i class="fa-solid fa-user-clock text-emerald-400"></i> Auditoría de Horas por Empleado
         </h3>
         
+        <!-- CONTROLES EXTRA (Filtros y Exportación) - Se muestran tras consultar -->
         <div id="controlesSupervisor" class="hidden flex flex-wrap items-center gap-2">
           <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5">
             <span class="text-xs text-slate-400 font-semibold"><i class="fa-solid fa-calendar-days text-emerald-400"></i> Mes:</span>
@@ -211,45 +212,43 @@
         </div>
       </div>
       
+      <!-- BUSCADOR Y FILTROS DE FECHA ESPECÍFICA -->
       <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
         <div class="relative md:col-span-1">
           <i class="fa-solid fa-id-badge absolute left-3 top-3 text-slate-400 text-sm"></i>
           <input type="text" id="legajoSupervisorInput" placeholder="N° de Legajo..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
         </div>
-
         <div class="flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5">
           <span class="text-xs text-slate-400">Desde:</span>
           <input type="date" id="supFechaDesde" onchange="aplicarFiltrosSupervisor()" class="bg-slate-900 text-xs text-white focus:outline-none w-full">
         </div>
-
         <div class="flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5">
           <span class="text-xs text-slate-400">Hasta:</span>
           <input type="date" id="supFechaHasta" onchange="aplicarFiltrosSupervisor()" class="bg-slate-900 text-xs text-white focus:outline-none w-full">
         </div>
-
         <button onclick="consultarHorasSupervisor()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-2 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
           <i class="fa-solid fa-magnifying-glass"></i> Consultar Horas
         </button>
       </div>
 
+      <!-- Resultado de la consulta -->
       <div id="resultadoSupervisor" class="hidden space-y-4 pt-4 border-t border-slate-700">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 text-center border-l-4 border-l-amber-500">
             <p class="text-xs text-slate-400 font-semibold">HORAS DIURNAS (06-21hs)</p>
             <p id="supHorasDiurnas" class="text-xl font-bold text-amber-400 mt-1">00:00 hs</p>
           </div>
-
           <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 text-center border-l-4 border-l-indigo-500">
             <p class="text-xs text-slate-400 font-semibold">HORAS NOCTURNAS (21-06hs)</p>
             <p id="supHorasNocturnas" class="text-xl font-bold text-indigo-400 mt-1">00:00 hs</p>
           </div>
-
           <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 text-center border-l-4 border-l-emerald-500">
             <p class="text-xs text-slate-400 font-semibold">TOTAL TRABAJADO</p>
             <p id="supHorasTotales" class="text-xl font-bold text-emerald-400 mt-1">00:00 hs</p>
           </div>
         </div>
 
+        <!-- Tabla Detallada para el Supervisor -->
         <div class="overflow-x-auto bg-slate-900 rounded-xl border border-slate-700">
           <table class="w-full text-left text-sm text-slate-300">
             <thead class="bg-slate-950 text-slate-400 uppercase text-xs border-b border-slate-700">
@@ -268,32 +267,38 @@
       </div>
     </div>
 
-    <!-- FILTROS -->
+    <!-- FILTROS, BÚSQUEDA Y EXPORTACIÓN GENERAL -->
     <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 flex flex-col lg:flex-row gap-4 justify-between items-center">
       
+      <!-- Búsqueda por texto -->
       <div class="flex-1 relative w-full">
         <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
         <input type="text" id="inputBusqueda" onkeyup="filtrarTabla()" placeholder="Buscar por Nombre, Legajo u Objetivo..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
       </div>
       
+      <!-- Controles de Fecha, Tipo y Exportación -->
       <div class="flex flex-wrap md:flex-nowrap items-center gap-3 w-full lg:w-auto">
         
+        <!-- Fecha Desde -->
         <div class="flex items-center gap-1.5 w-full md:w-auto">
           <span class="text-xs text-slate-400 font-semibold">Desde:</span>
           <input type="date" id="fechaDesde" onchange="filtrarTabla()" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 w-full md:w-auto">
         </div>
 
+        <!-- Fecha Hasta -->
         <div class="flex items-center gap-1.5 w-full md:w-auto">
           <span class="text-xs text-slate-400 font-semibold">Hasta:</span>
           <input type="date" id="fechaHasta" onchange="filtrarTabla()" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 w-full md:w-auto">
         </div>
 
+        <!-- Tipo de Marcación -->
         <select id="filtroTipo" onchange="filtrarTabla()" class="w-full md:w-auto bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
           <option value="TODOS">Todos los tipos</option>
           <option value="ENTRADA">Solo Entradas</option>
           <option value="SALIDA">Solo Salidas</option>
         </select>
 
+        <!-- Botones de Exportación -->
         <div class="flex items-center gap-2 w-full md:w-auto">
           <button onclick="exportarExcel()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md flex-1 md:flex-none">
             <i class="fa-solid fa-file-excel"></i> Excel
@@ -306,7 +311,7 @@
       </div>
     </div>
 
-    <!-- TABLA -->
+    <!-- TABLA DE REGISTROS -->
     <div class="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
       <div class="overflow-x-auto">
         <table class="w-full text-left text-sm text-slate-300">
@@ -349,23 +354,9 @@
     </div>
   </div>
 
-  <!-- MODAL ALERTAS ARCHIVADAS -->
-  <div id="modalAlertasArchivadas" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
-    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5 max-w-2xl w-full relative space-y-4 max-h-[85vh] overflow-y-auto">
-      <button onclick="cerrarModalAlertasArchivadas()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-      <div>
-        <h3 class="font-bold text-white text-base flex items-center gap-2"><i class="fa-solid fa-box-archive text-rose-400"></i> Alertas archivadas</h3>
-        <p class="text-xs text-slate-400 mt-1">Acá quedan las alertas de llegada tardía que cerraste. No vuelven a aparecer arriba al recargar la página, salvo que las restaures.</p>
-      </div>
-      <div id="listaAlertasArchivadas" class="space-y-2"></div>
-    </div>
-  </div>
-
   <script>
     // ==========================================
-    // CONFIGURACIÓN DE SEGURIDAD
+    // CONFIGURACIÓN DE SEGURIDAD (CONTRASEÑA)
     // ==========================================
     const PASSWORD_SUPERVISOR = "admin123"; 
 
@@ -390,17 +381,18 @@
       }
     }
 
-    function mostrarPanel() {
+    async function mostrarPanel() {
       document.getElementById('pantallaLogin').classList.add('hidden');
       document.getElementById('contenidoPanel').classList.remove('hidden');
-      cargarDatos();
-      cargarAlertasTardanzaFirebase();
-      if (intervaloActualizacionPanel) clearInterval(intervaloActualizacionPanel);
 
+      await actualizarPanelAutomaticamente();
+
+      if (intervaloActualizacionPanel) clearInterval(intervaloActualizacionPanel);
+      // Actualización automática frecuente para que entradas, salidas y estado
+      // de planta se reflejen sin tener que pulsar "Actualizar".
       intervaloActualizacionPanel = setInterval(() => {
-        cargarDatos();
-        cargarAlertasTardanzaFirebase();
-      }, 15000);
+        actualizarPanelAutomaticamente();
+      }, 5000);
     }
 
     function cerrarSesion() {
@@ -409,7 +401,7 @@
     }
 
     // ==========================================
-    // LÓGICA DE DATOS
+    // LÓGICA DE DATOS Y DASHBOARD (FIREBASE: DEMO ASISTENCIA)
     // ==========================================
     const URL_BASE_FIREBASE = "https://fir-asistencia-fad12-default-rtdb.firebaseio.com";
     const URL_FIREBASE = `${URL_BASE_FIREBASE}/fichadas.json`;
@@ -420,51 +412,30 @@
     let datosLocales = [];
     let datosFiltradosActuales = [];
     let datosSupervisorGlobal = [];
-    let firebaseKeysMap = {};
+    let firebaseKeysMap = {}; // Guarda la relación de los elementos con sus IDs de Firebase
     let mapaConfiguracionPersonalPanel = {};
     let asignacionesTurnosPanel = [];
     const alertasTardiasMostradas = new Set();
     let intervaloActualizacionPanel = null;
-    let alertasArchivadasCache = [];
-    const CLAVE_STORAGE_ARCHIVADAS = 'alertasTardanzaArchivadas';
-
-    let alertasArchivadasMap = (function () {
-      try {
-        const raw = localStorage.getItem(CLAVE_STORAGE_ARCHIVADAS);
-        return raw ? (JSON.parse(raw) || {}) : {};
-      } catch (e) {
-        return {};
-      }
-    })();
-
-    function guardarArchivadasGuardadas() {
-      try {
-        localStorage.setItem(CLAVE_STORAGE_ARCHIVADAS, JSON.stringify(alertasArchivadasMap));
-      } catch (e) {
-        console.warn('No se pudo guardar el archivo de alertas:', e);
-      }
-    }
 
     let instChartDona = null;
     let instChartBarras = null;
+    let actualizacionPanelEnCurso = false;
 
-    // ==========================================================
-    // NUEVO: ACTUALIZA SOLO EL CONTADOR DE ALERTAS ACTIVAS
-    // Las alertas archivadas NO participan del contador.
-    // ==========================================================
-    function actualizarBadgeAlertasActivas() {
-      const badge = document.getElementById('badgeAlertasArchivadas');
-      const contenedor = document.getElementById('contenedorAlertasTardanza');
+    async function actualizarPanelAutomaticamente() {
+      if (actualizacionPanelEnCurso) return;
+      actualizacionPanelEnCurso = true;
 
-      if (!badge) return;
-
-      const cantidadActivas = contenedor
-        ? contenedor.querySelectorAll('[data-clave-alerta]').length
-        : 0;
-
-      badge.innerText = cantidadActivas > 99 ? '99+' : String(cantidadActivas);
-      badge.classList.toggle('hidden', cantidadActivas === 0);
-      badge.classList.toggle('flex', cantidadActivas > 0);
+      try {
+        await Promise.all([
+          cargarDatos(),
+          cargarAlertasTardanzaFirebase()
+        ]);
+      } catch (err) {
+        console.error('Error en la actualización automática del panel:', err);
+      } finally {
+        actualizacionPanelEnCurso = false;
+      }
     }
 
     async function cargarDatos() {
@@ -473,23 +444,20 @@
 
       try {
         const [res, resPersonal, resTurnos] = await Promise.all([
-          fetch(URL_FIREBASE),
+          fetch(`${URL_FIREBASE}?ts=${Date.now()}`, { cache: 'no-store' }),
           fetch(`${URL_PERSONAL}?ts=${Date.now()}`, { cache: 'no-store' }),
           fetch(`${URL_TURNOS}?ts=${Date.now()}`, { cache: 'no-store' })
         ]);
-
         const resFirebase = res.ok ? await res.json() : null;
         const resPersonalData = resPersonal.ok ? await resPersonal.json() : null;
         const resTurnosData = resTurnos.ok ? await resTurnos.json() : null;
 
         mapaConfiguracionPersonalPanel = {};
-
         if (resPersonalData) {
           Object.entries(resPersonalData).forEach(([id, persona]) => {
             if (persona) mapaConfiguracionPersonalPanel[id] = { ...persona, firebaseId: id };
           });
         }
-
         asignacionesTurnosPanel = resTurnosData
           ? Object.entries(resTurnosData).map(([id, t]) => ({ ...t, id })).filter(t => t && t.legajo)
           : [];
@@ -500,7 +468,6 @@
         if (resFirebase) {
           Object.keys(resFirebase).forEach(key => {
             const item = resFirebase[key];
-
             const arrayItem = [
               item.fechaHoraDispositivo || item.fecha || item.timestamp,
               item.legajo,
@@ -510,7 +477,6 @@
               item.mapa || item.urlMapa || `https://www.google.com/maps?q=${item.latitud},${item.longitud}`,
               item.foto || item.urlFoto || item.fotoBase64 || ''
             ];
-
             fichadasArray.push(arrayItem);
             firebaseKeysMap[JSON.stringify(arrayItem)] = key;
           });
@@ -521,7 +487,6 @@
 
       } catch (err) {
         console.error(err);
-
         document.getElementById('cuerpoTabla').innerHTML = `
           <tr>
             <td colspan="8" class="p-8 text-center text-rose-400">
@@ -536,19 +501,13 @@
 
     async function cargarAlertasTardanzaFirebase() {
       try {
-        const res = await fetch(`${URL_ALERTAS_TARDANZA}?ts=${Date.now()}`, {
-          cache: 'no-store'
-        });
-
+        const res = await fetch(`${URL_ALERTAS_TARDANZA}?ts=${Date.now()}`, { cache: 'no-store' });
         if (!res.ok) return;
-
         const data = await res.json();
         if (!data) return;
 
         Object.entries(data).forEach(([firebaseId, alerta]) => {
-
           if (!alerta || String(alerta.tipoAlerta || '') !== 'LLEGADA_TARDE') return;
-
           const entrada = [
             alerta.fechaHora || alerta.fechaHoraDispositivo,
             alerta.legajo,
@@ -556,28 +515,6 @@
             alerta.objetivo,
             'ENTRADA'
           ];
-
-          if (alerta.archivadoSupervisor === true) {
-            const fechaKey = String(entrada[0] || '');
-            const clave = `${entrada[1] || ''}|${fechaKey}|${entrada[3] || ''}`;
-
-            if (!alertasArchivadasMap[clave]) {
-              alertasArchivadasMap[clave] = {
-                firebaseId: firebaseId,
-                nombre: alerta.nombre || '',
-                legajo: alerta.legajo != null ? String(alerta.legajo) : '',
-                objetivo: alerta.objetivo || '',
-                fechaHora: entrada[0] || '',
-                minutosTarde: Number(alerta.minutosTarde) || 0,
-                archivadoEn: alerta.archivadoEn || new Date().toISOString()
-              };
-
-              guardarArchivadasGuardadas();
-            }
-
-            return;
-          }
-
           mostrarAlertaTardanza(entrada, {
             estado: 'TARDE',
             minutosTarde: Number(alerta.minutosTarde) || 0,
@@ -588,9 +525,6 @@
             } : null
           }, firebaseId);
         });
-
-        sincronizarCacheArchivadas();
-
       } catch (err) {
         console.warn('No se pudieron cargar las alertas de llegada tardía:', err);
       }
@@ -598,901 +532,232 @@
 
     function evaluarEstadoEntrada(fechaEntrada, legajo, objetivoNombre) {
       const fecha = new Date(fechaEntrada);
-
-      if (isNaN(fecha)) {
-        return {
-          estado: 'NORMAL',
-          minutosTarde: 0,
-          horario: null
-        };
-      }
+      if (isNaN(fecha)) return { estado: 'NORMAL', minutosTarde: 0, horario: null };
 
       const horario = obtenerHorarioProgramado(fechaEntrada, legajo, objetivoNombre);
-
-      if (!horario?.inicio) {
-        return {
-          estado: 'NORMAL',
-          minutosTarde: 0,
-          horario
-        };
-      }
+      if (!horario?.inicio) return { estado: 'NORMAL', minutosTarde: 0, horario };
 
       const minutosTurno = minutosDesdeMedianoche(horario.inicio);
-
-      if (minutosTurno === null) {
-        return {
-          estado: 'NORMAL',
-          minutosTarde: 0,
-          horario
-        };
-      }
+      if (minutosTurno === null) return { estado: 'NORMAL', minutosTarde: 0, horario };
 
       const inicioTurno = new Date(fecha.getTime());
+      inicioTurno.setHours(Math.floor(minutosTurno / 60), minutosTurno % 60, 0, 0);
 
-      inicioTurno.setHours(
-        Math.floor(minutosTurno / 60),
-        minutosTurno % 60,
-        0,
-        0
-      );
+      const diferenciaMin = Math.floor((fecha - inicioTurno) / 60000);
 
-      const diferenciaMin = Math.floor(
-        (fecha - inicioTurno) / 60000
-      );
+      // Antes del turno: se mantiene NORMAL/verde.
+      if (diferenciaMin < 0) return { estado: 'NORMAL', minutosTarde: 0, horario };
 
-      if (diferenciaMin < 0) {
-        return {
-          estado: 'NORMAL',
-          minutosTarde: 0,
-          horario
-        };
-      }
+      // Desde el comienzo hasta el minuto 15 inclusive: tolerancia naranja.
+      if (diferenciaMin <= 15) return { estado: 'TOLERANCIA', minutosTarde: diferenciaMin, horario };
 
-      if (diferenciaMin <= 15) {
-        return {
-          estado: 'TOLERANCIA',
-          minutosTarde: diferenciaMin,
-          horario
-        };
-      }
-
-      return {
-        estado: 'TARDE',
-        minutosTarde: diferenciaMin,
-        horario
-      };
+      // Desde el minuto 16: llegada tardía roja.
+      return { estado: 'TARDE', minutosTarde: diferenciaMin, horario };
     }
 
     function mostrarAlertaTardanza(entrada, estadoInfo, firebaseId = '') {
-
       if (!entrada || estadoInfo.estado !== 'TARDE') return;
-
       const fechaKey = String(entrada[0] || '');
-
-      const clave = `${entrada[1] || ''}|${fechaKey}|${entrada[3] || ''}`;
-
-      if (alertasArchivadasMap[clave]) {
-
-        if (firebaseId && !alertasArchivadasMap[clave].firebaseId) {
-          alertasArchivadasMap[clave].firebaseId = firebaseId;
-          guardarArchivadasGuardadas();
-        }
-
-        return;
-      }
-
+      const clave = firebaseId ? `FIREBASE|${firebaseId}` : `${entrada[1] || ''}|${fechaKey}|${entrada[3] || ''}`;
       if (alertasTardiasMostradas.has(clave)) return;
-
       alertasTardiasMostradas.add(clave);
 
       const contenedor = document.getElementById('contenedorAlertasTardanza');
-
       if (!contenedor) return;
-
-      const hora = new Date(entrada[0]).toLocaleString(
-        'es-AR',
-        { hour12: false }
-      );
-
+      const hora = new Date(entrada[0]).toLocaleString('es-AR', { hour12: false });
       const nombre = entrada[2] || `Legajo ${entrada[1] || '-'}`;
       const objetivo = entrada[3] || '-';
-
       contenedor.classList.remove('hidden');
-
       const alerta = document.createElement('div');
-
-      alerta.className =
-        'bg-rose-950/70 border border-rose-500/60 text-rose-100 rounded-xl p-4 shadow-lg flex flex-col md:flex-row md:items-center md:justify-between gap-3';
-
-      alerta.dataset.firebaseId = firebaseId || '';
-      alerta.dataset.claveAlerta = clave;
-      alerta.dataset.nombre = nombre;
-      alerta.dataset.legajo = entrada[1] != null ? String(entrada[1]) : '';
-      alerta.dataset.objetivo = objetivo;
-      alerta.dataset.fecha = entrada[0] || '';
-      alerta.dataset.minutos = String(estadoInfo.minutosTarde || 0);
-
+      alerta.className = 'bg-rose-950/70 border border-rose-500/60 text-rose-100 rounded-xl p-4 shadow-lg flex flex-col md:flex-row md:items-center md:justify-between gap-3';
       alerta.innerHTML = `
         <div>
-          <div class="font-bold flex items-center gap-2">
-            <i class="fa-solid fa-triangle-exclamation text-rose-400"></i>
-            ALERTA DE LLEGADA TARDÍA
-          </div>
-
-          <div class="text-xs mt-1">
-            ${nombre} · Legajo ${entrada[1] || '-'} · Objetivo: ${objetivo}
-          </div>
-
-          <div class="text-xs text-rose-200/80">
-            Fichada: ${hora} · ${estadoInfo.minutosTarde} min después del comienzo del turno
-          </div>
+          <div class="font-bold flex items-center gap-2"><i class="fa-solid fa-triangle-exclamation text-rose-400"></i> ALERTA DE LLEGADA TARDÍA</div>
+          <div class="text-xs mt-1">${nombre} · Legajo ${entrada[1] || '-'} · Objetivo: ${objetivo}</div>
+          <div class="text-xs text-rose-200/80">Fichada: ${hora} · ${estadoInfo.minutosTarde} min después del comienzo del turno</div>
         </div>
-
-        <button
-          type="button"
-          class="text-xs font-bold bg-rose-600 hover:bg-rose-500 px-3 py-2 rounded-lg"
-          onclick="archivarAlertaTardanza(this);">
-          Cerrar
-        </button>`;
-
+        <button type="button" class="text-xs font-bold bg-rose-600 hover:bg-rose-500 px-3 py-2 rounded-lg" onclick="this.closest('div.bg-rose-950\\/70').remove();">Cerrar</button>`;
       contenedor.prepend(alerta);
-
-      // ======================================================
-      // MODIFICACIÓN: EL CONTADOR CUENTA SOLO ALERTAS ACTIVAS
-      // ======================================================
-      actualizarBadgeAlertasActivas();
-    }
-
-    // ==========================================
-    // ARCHIVO DE ALERTAS
-    // ==========================================
-
-    function sincronizarCacheArchivadas() {
-
-      alertasArchivadasCache = Object.keys(alertasArchivadasMap)
-        .map(clave => {
-
-          const info = alertasArchivadasMap[clave] || {};
-
-          return {
-            clave,
-            firebaseId: info.firebaseId || '',
-            alerta: {
-              nombre: info.nombre,
-              legajo: info.legajo,
-              objetivo: info.objetivo,
-              fechaHora: info.fechaHora,
-              minutosTarde: info.minutosTarde
-            }
-          };
-
-        })
-        .sort(
-          (a, b) =>
-            new Date(b.alerta.fechaHora || 0) -
-            new Date(a.alerta.fechaHora || 0)
-        );
-
-      renderizarAlertasArchivadas();
-    }
-
-    async function archivarAlertaTardanza(btn) {
-
-      const cont =
-        btn.closest('[data-clave-alerta]') ||
-        btn.parentElement;
-
-      const d =
-        cont && cont.dataset
-          ? cont.dataset
-          : {};
-
-      const clave = d.claveAlerta || '';
-      const firebaseId = d.firebaseId || '';
-
-      if (clave) {
-
-        alertasArchivadasMap[clave] = {
-          firebaseId: firebaseId,
-          nombre: d.nombre || '',
-          legajo: d.legajo || '',
-          objetivo: d.objetivo || '',
-          fechaHora: d.fecha || '',
-          minutosTarde: Number(d.minutos) || 0,
-          archivadoEn: new Date().toISOString()
-        };
-
-        guardarArchivadasGuardadas();
-      }
-
-      if (cont) cont.remove();
-
-      const contenedor =
-        document.getElementById('contenedorAlertasTardanza');
-
-      if (
-        contenedor &&
-        !contenedor.querySelector('[data-clave-alerta]')
-      ) {
-        contenedor.classList.add('hidden');
-      }
-
-      // ======================================================
-      // MODIFICACIÓN: AL CERRAR, SE ACTUALIZA EL CONTADOR
-      // ======================================================
-      actualizarBadgeAlertasActivas();
-
-      sincronizarCacheArchivadas();
-
-      if (firebaseId) {
-
-        try {
-
-          await fetch(
-            `${URL_BASE_FIREBASE}/alertasLlegadasTarde/${firebaseId}.json`,
-            {
-              method: 'PATCH',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                archivadoSupervisor: true,
-                archivadoEn: new Date().toISOString()
-              })
-            }
-          );
-
-        } catch (e) {
-
-          console.warn(
-            'No se pudo archivar la alerta en Firebase:',
-            e
-          );
-        }
-      }
-    }
-
-    function renderizarAlertasArchivadas() {
-
-      const cont =
-        document.getElementById('listaAlertasArchivadas');
-
-      /*
-       * IMPORTANTE:
-       * Acá ya NO usamos alertasArchivadasCache.length
-       * para el badge.
-       *
-       * El badge ahora representa exclusivamente las alertas
-       * que están actualmente visibles arriba.
-       */
-      actualizarBadgeAlertasActivas();
-
-      if (!cont) return;
-
-      const total = alertasArchivadasCache.length;
-
-      if (!total) {
-
-        cont.innerHTML =
-          `<div class="p-6 text-center text-slate-400 text-sm">
-            No hay alertas archivadas.
-          </div>`;
-
-        return;
-      }
-
-      cont.innerHTML =
-        alertasArchivadasCache.map(item => {
-
-          const a = item.alerta || {};
-
-          const nombre =
-            a.nombre ||
-            `Legajo ${a.legajo || '-'}`;
-
-          const hora =
-            a.fechaHora
-              ? new Date(a.fechaHora)
-                  .toLocaleString(
-                    'es-AR',
-                    { hour12: false }
-                  )
-              : '-';
-
-          const mins =
-            Number(a.minutosTarde) || 0;
-
-          const claveEsc =
-            String(item.clave)
-              .replace(/'/g, "\\'");
-
-          return `
-            <div class="p-3 rounded-xl border border-slate-700 bg-slate-900/60 flex flex-col md:flex-row md:items-center justify-between gap-2">
-
-              <div>
-
-                <div class="text-sm font-bold text-white">
-                  ${nombre} · Legajo ${a.legajo || '-'}
-                </div>
-
-                <div class="text-xs text-slate-400 mt-1">
-                  Objetivo: ${a.objetivo || '-'}
-                </div>
-
-                <div class="text-xs text-rose-200/70 mt-1">
-                  Fichada: ${hora} · ${mins} min de demora
-                </div>
-
-              </div>
-
-              <button
-                type="button"
-                onclick="restaurarAlertaArchivada('${claveEsc}')"
-                class="text-xs font-bold bg-slate-700 hover:bg-emerald-600 text-slate-200 hover:text-white px-3 py-2 rounded-lg transition self-start md:self-auto">
-
-                <i class="fa-solid fa-rotate-left"></i>
-                Restaurar
-
-              </button>
-
-            </div>`;
-        }).join('');
-    }
-
-    function abrirModalAlertasArchivadas() {
-
-      const modal =
-        document.getElementById(
-          'modalAlertasArchivadas'
-        );
-
-      if (modal) {
-        modal.classList.remove('hidden');
-      }
-
-      sincronizarCacheArchivadas();
-    }
-
-    function cerrarModalAlertasArchivadas() {
-
-      const modal =
-        document.getElementById(
-          'modalAlertasArchivadas'
-        );
-
-      if (modal) {
-        modal.classList.add('hidden');
-      }
-    }
-
-    async function restaurarAlertaArchivada(clave) {
-
-      if (!clave) return;
-
-      const info =
-        alertasArchivadasMap[clave] || {};
-
-      const firebaseId =
-        info.firebaseId || '';
-
-      delete alertasArchivadasMap[clave];
-
-      guardarArchivadasGuardadas();
-
-      alertasTardiasMostradas.delete(clave);
-
-      sincronizarCacheArchivadas();
-
-      if (firebaseId) {
-
-        try {
-
-          await fetch(
-            `${URL_BASE_FIREBASE}/alertasLlegadasTarde/${firebaseId}.json`,
-            {
-              method: 'PATCH',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                archivadoSupervisor: false,
-                archivadoEn: null
-              })
-            }
-          );
-
-        } catch (e) {
-
-          console.warn(
-            'No se pudo restaurar la alerta en Firebase:',
-            e
-          );
-        }
-      }
-
-      cargarDatos();
-      cargarAlertasTardanzaFirebase();
     }
 
     function obtenerClasesFichada(tipo, estadoEntrada) {
-
       if (tipo !== 'ENTRADA') {
         return 'bg-rose-500/10 text-rose-400 border-rose-500/20';
       }
-
       if (estadoEntrada === 'TOLERANCIA') {
         return 'bg-orange-500/15 text-orange-300 border-orange-500/40';
       }
-
       if (estadoEntrada === 'TARDE') {
         return 'bg-red-500/15 text-red-300 border-red-500/50';
       }
-
       return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
     }
 
     function renderizarTabla(registros) {
-
-      const cuerpo =
-        document.getElementById('cuerpoTabla');
-
+      const cuerpo = document.getElementById('cuerpoTabla');
       cuerpo.innerHTML = "";
 
       if (!registros || registros.length === 0) {
-
         cuerpo.innerHTML = `
           <tr>
-            <td colspan="8" class="p-8 text-center text-slate-400">
-              No hay registros cargados en Firebase aún.
-            </td>
+            <td colspan="8" class="p-8 text-center text-slate-400">No hay registros cargados en Firebase aún.</td>
           </tr>`;
-
         return;
       }
 
-      const ordenados =
-        [...registros].reverse();
+      const ordenados = [...registros].reverse();
 
       ordenados.forEach(fila => {
+        const fecha = fila[0] ? new Date(fila[0]).toLocaleString('es-AR', { hour12: false }) : '-';
+        const legajo = fila[1] !== undefined ? String(fila[1]) : '-';
+        const nombre = fila[2] || '-';
+        const objetivo = fila[3] || '-';
+        const tipo = fila[4] || '-';
+        const urlMapa = fila[5] || '';
+        const urlFoto = fila[6] || '';
 
-        const fecha =
-          fila[0]
-            ? new Date(fila[0])
-                .toLocaleString(
-                  'es-AR',
-                  { hour12: false }
-                )
-            : '-';
-
-        const legajo =
-          fila[1] !== undefined
-            ? String(fila[1])
-            : '-';
-
-        const nombre =
-          fila[2] || '-';
-
-        const objetivo =
-          fila[3] || '-';
-
-        const tipo =
-          fila[4] || '-';
-
-        const urlMapa =
-          fila[5] || '';
-
-        const urlFoto =
-          fila[6] || '';
-
-        const estadoEntrada =
-          tipo === 'ENTRADA'
-            ? evaluarEstadoEntrada(
-                fila[0],
-                legajo,
-                objetivo
-              )
-            : {
-                estado: 'NORMAL',
-                minutosTarde: 0,
-                horario: null
-              };
-
-        const badgeColor =
-          obtenerClasesFichada(
-            tipo,
-            estadoEntrada.estado
-          );
-
-        if (
-          tipo === 'ENTRADA' &&
-          estadoEntrada.estado === 'TARDE'
-        ) {
-          mostrarAlertaTardanza(
-            fila,
-            estadoEntrada
-          );
+        const estadoEntrada = tipo === 'ENTRADA'
+          ? evaluarEstadoEntrada(fila[0], legajo, objetivo)
+          : { estado: 'NORMAL', minutosTarde: 0, horario: null };
+        const badgeColor = obtenerClasesFichada(tipo, estadoEntrada.estado);
+        if (tipo === 'ENTRADA' && estadoEntrada.estado === 'TARDE') {
+          mostrarAlertaTardanza(fila, estadoEntrada);
         }
+        const etiquetaEntrada = tipo === 'ENTRADA'
+          ? (estadoEntrada.estado === 'TARDE'
+              ? `ENTRADA · TARDE ${estadoEntrada.minutosTarde} MIN`
+              : estadoEntrada.estado === 'TOLERANCIA'
+                ? `ENTRADA · TOLERANCIA${estadoEntrada.minutosTarde ? ` ${estadoEntrada.minutosTarde} MIN` : ''}`
+                : 'ENTRADA')
+          : tipo;
 
-        const etiquetaEntrada =
-          tipo === 'ENTRADA'
-            ? (
-                estadoEntrada.estado === 'TARDE'
-                  ? `ENTRADA · TARDE ${estadoEntrada.minutosTarde} MIN`
-                  : estadoEntrada.estado === 'TOLERANCIA'
-                    ? `ENTRADA · TOLERANCIA${estadoEntrada.minutosTarde ? ` ${estadoEntrada.minutosTarde} MIN` : ''}`
-                    : 'ENTRADA'
-              )
-            : tipo;
+        const btnMapa = (urlMapa && urlMapa.includes('http'))
+          ? `<a href="${urlMapa}" target="_blank" class="inline-flex items-center gap-1 bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
+              <i class="fa-solid fa-map-location-dot"></i> Mapa
+             </a>`
+          : `<span class="text-xs text-slate-500">Sin GPS</span>`;
 
-        const btnMapa =
-          (
-            urlMapa &&
-            urlMapa.includes('http')
-          )
-            ? `
-              <a
-                href="${urlMapa}"
-                target="_blank"
-                class="inline-flex items-center gap-1 bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
+        const btnFoto = (urlFoto && (urlFoto.includes('http') || urlFoto.includes('data:image')))
+          ? `<button onclick="abrirFoto('${urlFoto}')" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
+              <i class="fa-solid fa-image"></i> Ver Foto
+             </button>`
+          : `<span class="text-xs text-slate-500">Sin Foto</span>`;
 
-                <i class="fa-solid fa-map-location-dot"></i>
-                Mapa
+        const firebaseKey = firebaseKeysMap[JSON.stringify(fila)];
+        const btnBorrar = firebaseKey 
+          ? `<button onclick="eliminarFichadaFirebase('${firebaseKey}')" class="bg-rose-600/20 hover:bg-rose-600/40 text-rose-400 border border-rose-500/30 px-2.5 py-1 rounded-lg text-xs font-semibold transition" title="Eliminar registro">
+              <i class="fa-solid fa-trash-can"></i>
+             </button>`
+          : `<span class="text-[10px] text-slate-500">-</span>`;
 
-              </a>`
-            : `
-              <span class="text-xs text-slate-500">
-                Sin GPS
-              </span>`;
-
-        const btnFoto =
-          (
-            urlFoto &&
-            (
-              urlFoto.includes('http') ||
-              urlFoto.includes('data:image')
-            )
-          )
-            ? `
-              <button
-                onclick="abrirFoto('${urlFoto}')"
-                class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
-
-                <i class="fa-solid fa-image"></i>
-                Ver Foto
-
-              </button>`
-            : `
-              <span class="text-xs text-slate-500">
-                Sin Foto
-              </span>`;
-
-        const firebaseKey =
-          firebaseKeysMap[
-            JSON.stringify(fila)
-          ];
-
-        const btnBorrar =
-          firebaseKey
-            ? `
-              <button
-                onclick="eliminarFichadaFirebase('${firebaseKey}')"
-                class="bg-rose-600/20 hover:bg-rose-600/40 text-rose-400 border border-rose-500/30 px-2.5 py-1 rounded-lg text-xs font-semibold transition"
-                title="Eliminar registro">
-
-                <i class="fa-solid fa-trash-can"></i>
-
-              </button>`
-            : `
-              <span class="text-[10px] text-slate-500">
-                -
-              </span>`;
-
-        const tr =
-          document.createElement('tr');
-
-        tr.className =
-          "hover:bg-slate-700/30 transition";
-
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-700/30 transition";
         tr.innerHTML = `
-          <td class="p-4 font-mono text-xs text-slate-300">
-            ${fecha}
-          </td>
-
-          <td class="p-4 font-semibold text-white">
-            ${legajo}
-          </td>
-
-          <td class="p-4 font-medium text-slate-200">
-            ${nombre}
-          </td>
-
-          <td class="p-4 text-slate-400">
-            ${objetivo}
-          </td>
-
+          <td class="p-4 font-mono text-xs text-slate-300">${fecha}</td>
+          <td class="p-4 font-semibold text-white">${legajo}</td>
+          <td class="p-4 font-medium text-slate-200">${nombre}</td>
+          <td class="p-4 text-slate-400">${objetivo}</td>
           <td class="p-4 text-center">
-
-            <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${badgeColor}">
-              ${etiquetaEntrada}
-            </span>
-
+            <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${badgeColor}">${etiquetaEntrada}</span>
           </td>
-
-          <td class="p-4 text-center">
-            ${btnMapa}
-          </td>
-
-          <td class="p-4 text-center">
-            ${btnFoto}
-          </td>
-
-          <td class="p-4 text-center">
-            ${btnBorrar}
-          </td>
+          <td class="p-4 text-center">${btnMapa}</td>
+          <td class="p-4 text-center">${btnFoto}</td>
+          <td class="p-4 text-center">${btnBorrar}</td>
         `;
-
         cuerpo.appendChild(tr);
-
       });
     }
 
     async function eliminarFichadaFirebase(firebaseKey) {
-
-      if (
-        !confirm(
-          "¿Estás seguro de que deseas eliminar este registro de fichada?"
-        )
-      ) return;
+      if (!confirm("¿Estás seguro de que deseas eliminar este registro de fichada?")) return;
 
       try {
-
-        const urlDelete =
-          `https://fir-asistencia-fad12-default-rtdb.firebaseio.com/fichadas/${firebaseKey}.json`;
-
-        const respuesta =
-          await fetch(
-            urlDelete,
-            { method: 'DELETE' }
-          );
+        const urlDelete = `https://fir-asistencia-fad12-default-rtdb.firebaseio.com/fichadas/${firebaseKey}.json`;
+        const respuesta = await fetch(urlDelete, { method: 'DELETE' });
 
         if (respuesta.ok) {
-
-          alert(
-            "Registro eliminado con éxito."
-          );
-
-          cargarDatos();
-
+          alert("Registro eliminado con éxito.");
+          cargarDatos(); 
         } else {
-
-          alert(
-            "No se pudo eliminar el registro en Firebase."
-          );
+          alert("No se pudo eliminar el registro en Firebase.");
         }
-
       } catch (err) {
-
         console.error(err);
-
-        alert(
-          "Ocurrió un error al intentar eliminar."
-        );
+        alert("Ocurrió un error al intentar eliminar.");
       }
     }
 
     function filtrarTabla() {
+      const busqueda = document.getElementById('inputBusqueda').value.toLowerCase();
+      const filtroTipo = document.getElementById('filtroTipo').value;
+      const valDesde = document.getElementById('fechaDesde').value;
+      const valHasta = document.getElementById('fechaHasta').value;
 
-      const busqueda =
-        document
-          .getElementById('inputBusqueda')
-          .value
-          .toLowerCase();
+      datosFiltradosActuales = datosLocales.filter(fila => {
+        const textoFila = `${fila[1]} ${fila[2]} ${fila[3]}`.toLowerCase();
+        const coincideBusqueda = textoFila.includes(busqueda);
+        const coincideTipo = (filtroTipo === 'TODOS') || (fila[4] === filtroTipo);
 
-      const filtroTipo =
-        document
-          .getElementById('filtroTipo')
-          .value;
+        let coincideFecha = true;
+        if (fila[0]) {
+          const fechaObj = new Date(fila[0]);
+          const fechaIsoFila = fechaObj.toISOString().slice(0, 10);
+          
+          if (valDesde && fechaIsoFila < valDesde) coincideFecha = false;
+          if (valHasta && fechaIsoFila > valHasta) coincideFecha = false;
+        }
 
-      const valDesde =
-        document
-          .getElementById('fechaDesde')
-          .value;
+        return coincideBusqueda && coincideTipo && coincideFecha;
+      });
 
-      const valHasta =
-        document
-          .getElementById('fechaHasta')
-          .value;
-
-      datosFiltradosActuales =
-        datosLocales.filter(fila => {
-
-          const textoFila =
-            `${fila[1]} ${fila[2]} ${fila[3]}`
-              .toLowerCase();
-
-          const coincideBusqueda =
-            textoFila.includes(busqueda);
-
-          const coincideTipo =
-            (
-              filtroTipo === 'TODOS'
-            ) ||
-            (
-              fila[4] === filtroTipo
-            );
-
-          let coincideFecha = true;
-
-          if (fila[0]) {
-
-            const fechaObj =
-              new Date(fila[0]);
-
-            const fechaIsoFila =
-              fechaObj
-                .toISOString()
-                .slice(0, 10);
-
-            if (
-              valDesde &&
-              fechaIsoFila < valDesde
-            ) {
-              coincideFecha = false;
-            }
-
-            if (
-              valHasta &&
-              fechaIsoFila > valHasta
-            ) {
-              coincideFecha = false;
-            }
-          }
-
-          return (
-            coincideBusqueda &&
-            coincideTipo &&
-            coincideFecha
-          );
-        });
-
-      renderizarTabla(
-        datosFiltradosActuales
-      );
-
-      actualizarMetricasYGraficos(
-        datosFiltradosActuales
-      );
+      renderizarTabla(datosFiltradosActuales);
+      // La tabla respeta los filtros, pero los KPIs y gráficos generales
+      // se calculan con TODAS las fichadas para no perder empleados en planta
+      // cuando se selecciona un tipo, una fecha o una búsqueda.
+      actualizarMetricasYGraficos(datosLocales);
     }
 
     // ==========================================
-    // CÁLCULO DE HORAS
+    // CÁLCULO Y GESTIÓN DE HORAS DEL SUPERVISOR
     // ==========================================
 
     function minutosDesdeMedianoche(hora) {
-
-      if (
-        !hora ||
-        !/^\d{1,2}:\d{2}$/.test(
-          String(hora)
-        )
-      ) {
-        return null;
-      }
-
-      const [h, m] =
-        String(hora)
-          .split(':')
-          .map(Number);
-
-      if (
-        h < 0 ||
-        h > 23 ||
-        m < 0 ||
-        m > 59
-      ) {
-        return null;
-      }
-
+      if (!hora || !/^\d{1,2}:\d{2}$/.test(String(hora))) return null;
+      const [h, m] = String(hora).split(':').map(Number);
+      if (h < 0 || h > 23 || m < 0 || m > 59) return null;
       return h * 60 + m;
     }
 
     function obtenerFechaLocalClave(fecha) {
-
-      if (
-        !(fecha instanceof Date) ||
-        isNaN(fecha)
-      ) {
-        return '';
-      }
-
-      const y =
-        fecha.getFullYear();
-
-      const m =
-        String(
-          fecha.getMonth() + 1
-        ).padStart(2, '0');
-
-      const d =
-        String(
-          fecha.getDate()
-        ).padStart(2, '0');
-
+      if (!(fecha instanceof Date) || isNaN(fecha)) return '';
+      const y = fecha.getFullYear();
+      const m = String(fecha.getMonth() + 1).padStart(2, '0');
+      const d = String(fecha.getDate()).padStart(2, '0');
       return `${y}-${m}-${d}`;
     }
 
-    function obtenerHorarioProgramado(
-      entrada,
-      legajo,
-      objetivoNombre
-    ) {
+    function obtenerHorarioProgramado(entrada, legajo, objetivoNombre) {
+      const fechaEntrada = new Date(entrada);
+      if (isNaN(fechaEntrada)) return null;
+      const fechaClave = obtenerFechaLocalClave(fechaEntrada);
+      const legajoStr = String(legajo || '').trim();
+      const objetivoStr = String(objetivoNombre || '').trim().toLowerCase();
 
-      const fechaEntrada =
-        new Date(entrada);
-
-      if (isNaN(fechaEntrada)) {
-        return null;
-      }
-
-      const fechaClave =
-        obtenerFechaLocalClave(
-          fechaEntrada
-        );
-
-      const legajoStr =
-        String(legajo || '')
-          .trim();
-
-      const objetivoStr =
-        String(objetivoNombre || '')
-          .trim()
-          .toLowerCase();
-
-      const turnosFecha =
-        asignacionesTurnosPanel.filter(
-          t =>
-            String(t.legajo || '').trim() === legajoStr &&
-            String(t.fecha || '') === fechaClave
-        );
+      // Primero se busca un turno puntual cargado desde Admin para esa fecha.
+      const turnosFecha = asignacionesTurnosPanel.filter(t =>
+        String(t.legajo || '').trim() === legajoStr && String(t.fecha || '') === fechaClave
+      );
 
       let turno = null;
-
       if (turnosFecha.length) {
-
-        turno =
-          turnosFecha.find(t => {
-
-            const nombre =
-              String(
-                t.objetivoNombre ||
-                t.objetivo ||
-                ''
-              )
-              .trim()
-              .toLowerCase();
-
-            return (
-              objetivoStr &&
-              nombre &&
-              (
-                nombre === objetivoStr ||
-                nombre.includes(objetivoStr) ||
-                objetivoStr.includes(nombre)
-              )
-            );
-
-          }) ||
-          turnosFecha[0];
+        // Si hay varios turnos ese día, priorizar el objetivo de la fichada.
+        turno = turnosFecha.find(t => {
+          const nombre = String(t.objetivoNombre || t.objetivo || '').trim().toLowerCase();
+          return objetivoStr && nombre && (nombre === objetivoStr || nombre.includes(objetivoStr) || objetivoStr.includes(nombre));
+        }) || turnosFecha[0];
       }
 
-      if (
-        turno &&
-        (
-          turno.horaInicio ||
-          turno.horaFin
-        )
-      ) {
-
+      if (turno && (turno.horaInicio || turno.horaFin)) {
         return {
           inicio: turno.horaInicio || '',
           fin: turno.horaFin || '',
@@ -1500,24 +765,10 @@
         };
       }
 
-      const persona =
-        Object.values(
-          mapaConfiguracionPersonalPanel
-        )
-        .find(
-          p =>
-            String(p.legajo || '')
-              .trim() === legajoStr
-        );
-
-      const h =
-        persona?.horarioHabitual || {};
-
-      if (
-        h.inicio ||
-        h.fin
-      ) {
-
+      // Si no existe un turno puntual, usar el horario habitual configurado en Admin.
+      const persona = Object.values(mapaConfiguracionPersonalPanel).find(p => String(p.legajo || '').trim() === legajoStr);
+      const h = persona?.horarioHabitual || {};
+      if (h.inicio || h.fin) {
         return {
           inicio: h.inicio || '',
           fin: h.fin || '',
@@ -1528,929 +779,330 @@
       return null;
     }
 
-    function calcularHoras(
-      fechaInicioStr,
-      fechaFinStr,
-      horarioProgramado = null
-    ) {
+    function calcularHoras(fechaInicioStr, fechaFinStr, horarioProgramado = null) {
+      let inicio = new Date(fechaInicioStr);
+      const fin = new Date(fechaFinStr);
+      if (isNaN(inicio) || isNaN(fin) || fin <= inicio) return { d: 0, n: 0, t: 0, entradaComputable: inicio, ajusteMinutos: 0, minutosExtra: 0 };
 
-      let inicio =
-        new Date(fechaInicioStr);
-
-      const fin =
-        new Date(fechaFinStr);
-
-      if (
-        isNaN(inicio) ||
-        isNaN(fin) ||
-        fin <= inicio
-      ) {
-
-        return {
-          d: 0,
-          n: 0,
-          t: 0,
-          entradaComputable: inicio,
-          ajusteMinutos: 0,
-          minutosExtra: 0
-        };
-      }
-
-      let entradaComputable =
-        new Date(
-          inicio.getTime()
-        );
-
+      let entradaComputable = new Date(inicio.getTime());
       let ajusteMinutos = 0;
 
-      if (
-        horarioProgramado?.inicio
-      ) {
+      // Regla laboral del sistema:
+      // si el empleado llega ANTES del horario de inicio del turno, esos minutos
+      // no forman parte de las horas computables ni se consideran horas extra.
+      if (horarioProgramado?.inicio) {
+        const minutosTurno = minutosDesdeMedianoche(horarioProgramado.inicio);
+        if (minutosTurno !== null) {
+          const fechaTurno = new Date(inicio.getTime());
+          fechaTurno.setHours(Math.floor(minutosTurno / 60), minutosTurno % 60, 0, 0);
 
-        const minutosTurno =
-          minutosDesdeMedianoche(
-            horarioProgramado.inicio
-          );
-
-        if (
-          minutosTurno !== null
-        ) {
-
-          const fechaTurno =
-            new Date(
-              inicio.getTime()
-            );
-
-          fechaTurno.setHours(
-            Math.floor(
-              minutosTurno / 60
-            ),
-            minutosTurno % 60,
-            0,
-            0
-          );
-
-          if (
-            fechaTurno >
-            entradaComputable
-          ) {
-
-            entradaComputable =
-              fechaTurno;
-
-            ajusteMinutos =
-              Math.max(
-                0,
-                Math.round(
-                  (
-                    entradaComputable -
-                    inicio
-                  ) / 60000
-                )
-              );
+          // Para turnos nocturnos que comienzan tarde, la comparación sigue siendo
+          // sobre la fecha de la ENTRADA. El punto importante es no contar llegada anticipada.
+          if (fechaTurno > entradaComputable) {
+            entradaComputable = fechaTurno;
+            ajusteMinutos = Math.max(0, Math.round((entradaComputable - inicio) / 60000));
           }
         }
       }
 
-      let finComputable =
-        new Date(
-          fin.getTime()
-        );
-
+      // Tolerancia de salida: los primeros 30 minutos posteriores al fin del turno
+      // no se consideran extra. Si la salida supera el minuto 30, se habilita todo
+      // el tiempo transcurrido desde la finalización programada del turno.
+      let finComputable = new Date(fin.getTime());
       let minutosExtra = 0;
+      if (horarioProgramado?.fin) {
+        const minutosFinTurno = minutosDesdeMedianoche(horarioProgramado.fin);
+        if (minutosFinTurno !== null) {
+          const finTurno = new Date(inicio.getTime());
+          finTurno.setHours(Math.floor(minutosFinTurno / 60), minutosFinTurno % 60, 0, 0);
 
-      if (
-        horarioProgramado?.fin
-      ) {
-
-        const minutosFinTurno =
-          minutosDesdeMedianoche(
-            horarioProgramado.fin
-          );
-
-        if (
-          minutosFinTurno !== null
-        ) {
-
-          const finTurno =
-            new Date(
-              inicio.getTime()
-            );
-
-          finTurno.setHours(
-            Math.floor(
-              minutosFinTurno / 60
-            ),
-            minutosFinTurno % 60,
-            0,
-            0
-          );
-
-          if (
-            horarioProgramado.inicio
-          ) {
-
-            const minutosInicioTurno =
-              minutosDesdeMedianoche(
-                horarioProgramado.inicio
-              );
-
-            if (
-              minutosInicioTurno !== null &&
-              minutosFinTurno <=
-                minutosInicioTurno
-            ) {
-
-              finTurno.setDate(
-                finTurno.getDate() + 1
-              );
+          // Turno nocturno: si el fin configurado es menor/igual al inicio,
+          // el fin pertenece al día siguiente.
+          if (horarioProgramado.inicio) {
+            const minutosInicioTurno = minutosDesdeMedianoche(horarioProgramado.inicio);
+            if (minutosInicioTurno !== null && minutosFinTurno <= minutosInicioTurno) {
+              finTurno.setDate(finTurno.getDate() + 1);
             }
           }
 
-          const limiteTolerancia =
-            new Date(
-              finTurno.getTime() +
-              30 * 60000
-            );
-
-          if (
-            fin >
-            limiteTolerancia
-          ) {
-
-            minutosExtra =
-              Math.max(
-                0,
-                Math.round(
-                  (
-                    fin -
-                    finTurno
-                  ) / 60000
-                )
-              );
-
+          const limiteTolerancia = new Date(finTurno.getTime() + 30 * 60000);
+          if (fin > limiteTolerancia) {
+            minutosExtra = Math.max(0, Math.round((fin - finTurno) / 60000));
             finComputable = fin;
-
-          } else if (
-            fin >
-            finTurno
-          ) {
-
-            finComputable =
-              finTurno;
+          } else if (fin > finTurno) {
+            // Salida dentro de los 30 minutos de tolerancia: se computa hasta el fin del turno.
+            finComputable = finTurno;
           }
         }
       }
 
-      if (
-        entradaComputable >=
-        finComputable
-      ) {
-
-        return {
-          d: 0,
-          n: 0,
-          t: 0,
-          entradaComputable,
-          ajusteMinutos,
-          minutosExtra: 0
-        };
+      // Si por alguna configuración extraña el horario programado cae después de la salida,
+      // no se computan horas de ese período.
+      if (entradaComputable >= finComputable) {
+        return { d: 0, n: 0, t: 0, entradaComputable, ajusteMinutos, minutosExtra: 0 };
       }
 
       let horasDiurnas = 0;
       let horasNocturnas = 0;
+      let actual = new Date(entradaComputable.getTime());
 
-      let actual =
-        new Date(
-          entradaComputable.getTime()
-        );
+      while (actual < finComputable) {
+        let siguiente = new Date(actual.getTime() + 60000);
+        if (siguiente > finComputable) siguiente = new Date(finComputable.getTime());
 
-      while (
-        actual <
-        finComputable
-      ) {
-
-        let siguiente =
-          new Date(
-            actual.getTime() +
-            60000
-          );
-
-        if (
-          siguiente >
-          finComputable
-        ) {
-          siguiente =
-            new Date(
-              finComputable.getTime()
-            );
-        }
-
-        let hora =
-          actual.getHours();
-
-        if (
-          hora >= 21 ||
-          hora < 6
-        ) {
-
-          horasNocturnas +=
-            (
-              siguiente -
-              actual
-            ) / 3600000;
-
+        let hora = actual.getHours();
+        if (hora >= 21 || hora < 6) {
+          horasNocturnas += (siguiente - actual) / 3600000;
         } else {
-
-          horasDiurnas +=
-            (
-              siguiente -
-              actual
-            ) / 3600000;
+          horasDiurnas += (siguiente - actual) / 3600000;
         }
-
         actual = siguiente;
       }
 
       return {
         d: horasDiurnas,
         n: horasNocturnas,
-        t:
-          horasDiurnas +
-          horasNocturnas,
+        t: horasDiurnas + horasNocturnas,
         entradaComputable,
         ajusteMinutos,
         minutosExtra
       };
     }
 
-    function formatearAHorasReloj(
-      horasDecimales
-    ) {
-
-      if (
-        isNaN(horasDecimales) ||
-        horasDecimales <= 0
-      ) {
-        return "00:00 hs";
-      }
-
-      const horas =
-        Math.floor(
-          horasDecimales
-        );
-
-      const minutos =
-        Math.round(
-          (
-            horasDecimales -
-            horas
-          ) * 60
-        );
-
+    function formatearAHorasReloj(horasDecimales) {
+      if (isNaN(horasDecimales) || horasDecimales <= 0) return "00:00 hs";
+      const horas = Math.floor(horasDecimales);
+      const minutos = Math.round((horasDecimales - horas) * 60);
       return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')} hs`;
     }
 
     function consultarHorasSupervisor() {
-
-      const legajo =
-        document
-          .getElementById(
-            'legajoSupervisorInput'
-          )
-          .value
-          .trim();
-
+      const legajo = document.getElementById('legajoSupervisorInput').value.trim();
       if (!legajo) {
-        return alert(
-          "Por favor ingresa un número de legajo para consultar."
-        );
+        return alert("Por favor ingresa un número de legajo para consultar.");
       }
 
-      if (
-        !datosLocales ||
-        datosLocales.length === 0
-      ) {
-        return alert(
-          "Los datos aún se están cargando o no hay registros disponibles."
-        );
+      if (!datosLocales || datosLocales.length === 0) {
+        return alert("Los datos aún se están cargando o no hay registros disponibles.");
       }
 
-      const marcacionesVigilador =
-        datosLocales.filter(
-          f =>
-            String(f[1]).trim() ===
-            legajo
-        );
-
-      if (
-        marcacionesVigilador.length === 0
-      ) {
-
-        alert(
-          "No se encontraron registros para el legajo especificado."
-        );
-
-        document
-          .getElementById(
-            'resultadoSupervisor'
-          )
-          .classList.add('hidden');
-
-        document
-          .getElementById(
-            'controlesSupervisor'
-          )
-          .classList.add('hidden');
-
+      const marcacionesVigilador = datosLocales.filter(f => String(f[1]).trim() === legajo);
+      
+      if (marcacionesVigilador.length === 0) {
+        alert("No se encontraron registros para el legajo especificado.");
+        document.getElementById('resultadoSupervisor').classList.add('hidden');
+        document.getElementById('controlesSupervisor').classList.add('hidden');
         return;
       }
 
-      datosSupervisorGlobal =
-        marcacionesVigilador;
-
-      poblarSelectMesesSupervisor(
-        datosSupervisorGlobal
-      );
-
+      datosSupervisorGlobal = marcacionesVigilador;
+      poblarSelectMesesSupervisor(datosSupervisorGlobal);
       aplicarFiltrosSupervisor();
 
-      document
-        .getElementById(
-          'resultadoSupervisor'
-        )
-        .classList.remove('hidden');
-
-      document
-        .getElementById(
-          'controlesSupervisor'
-        )
-        .classList.remove('hidden');
+      document.getElementById('resultadoSupervisor').classList.remove('hidden');
+      document.getElementById('controlesSupervisor').classList.remove('hidden');
     }
 
-    function poblarSelectMesesSupervisor(
-      datos
-    ) {
-
-      const selectMes =
-        document.getElementById(
-          'supFiltroMes'
-        );
-
-      const mesActualSeleccionado =
-        selectMes.value;
-
-      const mesesSet =
-        new Set();
-
+    function poblarSelectMesesSupervisor(datos) {
+      const selectMes = document.getElementById('supFiltroMes');
+      const mesActualSeleccionado = selectMes.value;
+      
+      const mesesSet = new Set();
       datos.forEach(f => {
-
-        if (f[0]) {
-
-          const d =
-            new Date(f[0]);
-
-          if (!isNaN(d)) {
-
-            const anio =
-              d.getFullYear();
-
-            const mes =
-              String(
-                d.getMonth() + 1
-              ).padStart(2, '0');
-
-            mesesSet.add(
-              `${anio}-${mes}`
-            );
+        if(f[0]) {
+          const d = new Date(f[0]);
+          if(!isNaN(d)) {
+            const anio = d.getFullYear();
+            const mes = String(d.getMonth() + 1).padStart(2, '0');
+            mesesSet.add(`${anio}-${mes}`);
           }
         }
       });
 
-      const mesesOrdenados =
-        Array.from(mesesSet)
-          .sort()
-          .reverse();
-
-      selectMes.innerHTML =
-        `<option value="todos">Todos los meses</option>`;
-
-      const nombresMeses = [
-        "Enero",
-        "Febrero",
-        "Marzo",
-        "Abril",
-        "Mayo",
-        "Junio",
-        "Julio",
-        "Agosto",
-        "Septiembre",
-        "Octubre",
-        "Noviembre",
-        "Diciembre"
-      ];
+      const mesesOrdenados = Array.from(mesesSet).sort().reverse();
+      selectMes.innerHTML = `<option value="todos">Todos los meses</option>`;
+      const nombresMeses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
       mesesOrdenados.forEach(m => {
-
-        const [anio, mesNum] =
-          m.split('-');
-
-        const nombreMesTexto =
-          `${nombresMeses[parseInt(mesNum) - 1]} ${anio}`;
-
-        const opt =
-          document.createElement(
-            'option'
-          );
-
+        const [anio, mesNum] = m.split('-');
+        const nombreMesTexto = `${nombresMeses[parseInt(mesNum) - 1]} ${anio}`;
+        const opt = document.createElement('option');
         opt.value = m;
-        opt.innerText =
-          nombreMesTexto;
-
+        opt.innerText = nombreMesTexto;
         selectMes.appendChild(opt);
       });
 
-      if (
-        mesesOrdenados.includes(
-          mesActualSeleccionado
-        )
-      ) {
-        selectMes.value =
-          mesActualSeleccionado;
+      if (mesesOrdenados.includes(mesActualSeleccionado)) {
+        selectMes.value = mesActualSeleccionado;
       }
+    }
+
+    function obtenerServiciosSupervisor(marcaciones) {
+      const ordenadas = [...(marcaciones || [])]
+        .filter(f => f && f[0] && (f[4] === 'ENTRADA' || f[4] === 'SALIDA'))
+        .sort((a, b) => new Date(a[0]) - new Date(b[0]));
+
+      const servicios = [];
+
+      for (let i = 0; i < ordenadas.length; i++) {
+        const entrada = ordenadas[i];
+        if (entrada[4] !== 'ENTRADA') continue;
+
+        const siguiente = ordenadas[i + 1];
+        const salida = siguiente && siguiente[4] === 'SALIDA' ? siguiente : null;
+
+        servicios.push({
+          entrada,
+          salida,
+          inicio: new Date(entrada[0]),
+          fin: salida ? new Date(salida[0]) : null
+        });
+      }
+
+      return servicios;
+    }
+
+    function servicioCoincideFiltrosSupervisor(servicio, mesFiltro, valDesde, valHasta) {
+      const inicio = servicio.inicio;
+      const fin = servicio.fin || servicio.inicio;
+      if (isNaN(inicio)) return false;
+
+      // Un servicio nocturno que cruza medianoche/mes pertenece a ambos
+      // períodos: se muestra si toca el mes o rango consultado.
+      if (mesFiltro !== 'todos') {
+        const mesInicio = `${inicio.getFullYear()}-${String(inicio.getMonth() + 1).padStart(2, '0')}`;
+        const mesFin = `${fin.getFullYear()}-${String(fin.getMonth() + 1).padStart(2, '0')}`;
+        if (mesInicio !== mesFiltro && mesFin !== mesFiltro) return false;
+      }
+
+      if (valDesde || valHasta) {
+        const inicioRango = valDesde ? new Date(`${valDesde}T00:00:00`) : null;
+        const finRango = valHasta ? new Date(`${valHasta}T23:59:59.999`) : null;
+
+        if (inicioRango && fin < inicioRango) return false;
+        if (finRango && inicio > finRango) return false;
+      }
+
+      return true;
     }
 
     function aplicarFiltrosSupervisor() {
+      const mesFiltro = document.getElementById('supFiltroMes').value;
+      const valDesde = document.getElementById('supFechaDesde').value;
+      const valHasta = document.getElementById('supFechaHasta').value;
 
-      const mesFiltro =
-        document
-          .getElementById(
-            'supFiltroMes'
-          )
-          .value;
-
-      const valDesde =
-        document
-          .getElementById(
-            'supFechaDesde'
-          )
-          .value;
-
-      const valHasta =
-        document
-          .getElementById(
-            'supFechaHasta'
-          )
-          .value;
-
-      let filtrados =
-        datosSupervisorGlobal;
-
-      if (
-        mesFiltro !== 'todos'
-      ) {
-
-        filtrados =
-          filtrados.filter(f => {
-
-            const d =
-              new Date(f[0]);
-
-            const anio =
-              d.getFullYear();
-
-            const mes =
-              String(
-                d.getMonth() + 1
-              ).padStart(2, '0');
-
-            return (
-              `${anio}-${mes}` ===
-              mesFiltro
-            );
-          });
-      }
-
-      if (
-        valDesde ||
-        valHasta
-      ) {
-
-        filtrados =
-          filtrados.filter(f => {
-
-            if (!f[0]) return false;
-
-            const fechaIsoFila =
-              new Date(f[0])
-                .toISOString()
-                .slice(0, 10);
-
-            if (
-              valDesde &&
-              fechaIsoFila < valDesde
-            ) {
-              return false;
-            }
-
-            if (
-              valHasta &&
-              fechaIsoFila > valHasta
-            ) {
-              return false;
-            }
-
-            return true;
-          });
-      }
-
-      procesarYRenderizarSupervisor(
-        filtrados
+      const servicios = obtenerServiciosSupervisor(datosSupervisorGlobal);
+      const filtrados = servicios.filter(servicio =>
+        servicioCoincideFiltrosSupervisor(servicio, mesFiltro, valDesde, valHasta)
       );
+
+      procesarYRenderizarSupervisor(filtrados);
     }
 
-    function procesarYRenderizarSupervisor(
-      marcacionesVigilador
-    ) {
-
-      marcacionesVigilador.sort(
-        (a, b) =>
-          new Date(a[0]) -
-          new Date(b[0])
-      );
-
-      let totalD = 0;
-      let totalN = 0;
-      let totalT = 0;
-
-      const tabla =
-        document.getElementById(
-          'supCuerpoDetalle'
-        );
-
+    function procesarYRenderizarSupervisor(servicios) {
+      let totalD = 0, totalN = 0, totalT = 0;
+      const tabla = document.getElementById('supCuerpoDetalle');
       tabla.innerHTML = "";
 
-      for (
-        let i = 0;
-        i < marcacionesVigilador.length;
-        i++
-      ) {
+      for (const servicio of servicios) {
+        const entrada = servicio.entrada;
+        const salida = servicio.salida;
 
-        if (
-          marcacionesVigilador[i][4] ===
-          'ENTRADA'
-        ) {
+        let objetivoNombre = entrada[3] || (salida && salida[3]) || '-';
+        const horarioProgramado = obtenerHorarioProgramado(entrada[0], entrada[1], objetivoNombre);
+        let horas = salida
+          ? calcularHoras(entrada[0], salida[0], horarioProgramado)
+          : { d: 0, n: 0, t: 0, entradaComputable: new Date(entrada[0]), ajusteMinutos: 0, minutosExtra: 0 };
 
-          let entrada =
-            marcacionesVigilador[i];
+        totalD += horas.d;
+        totalN += horas.n;
+        totalT += horas.t;
 
-          let salida =
-            marcacionesVigilador[i + 1] &&
-            marcacionesVigilador[i + 1][4] ===
-              'SALIDA'
-              ? marcacionesVigilador[i + 1]
-              : null;
-
-          let objetivoNombre =
-            entrada[3] ||
-            (
-              salida &&
-              salida[3]
-            ) ||
-            '-';
-
-          const horarioProgramado =
-            obtenerHorarioProgramado(
-              entrada[0],
-              entrada[1],
-              objetivoNombre
-            );
-
-          let horas =
-            salida
-              ? calcularHoras(
-                  entrada[0],
-                  salida[0],
-                  horarioProgramado
-                )
-              : {
-                  d: 0,
-                  n: 0,
-                  t: 0,
-                  entradaComputable:
-                    new Date(entrada[0]),
-                  ajusteMinutos: 0
-                };
-
-          totalD += horas.d;
-          totalN += horas.n;
-          totalT += horas.t;
-
-          const estadoEntradaSupervisor =
-            evaluarEstadoEntrada(
-              entrada[0],
-              entrada[1],
-              objetivoNombre
-            );
-
-          if (
-            estadoEntradaSupervisor.estado ===
-            'TARDE'
-          ) {
-            mostrarAlertaTardanza(
-              entrada,
-              estadoEntradaSupervisor
-            );
-          }
-
-          const tr =
-            document.createElement('tr');
-
-          tr.className =
-            estadoEntradaSupervisor.estado ===
-            'TARDE'
-              ? "hover:bg-slate-800/50 transition bg-red-950/20"
-              : estadoEntradaSupervisor.estado ===
-                'TOLERANCIA'
-                ? "hover:bg-slate-800/50 transition bg-orange-950/10"
-                : "hover:bg-slate-800/50 transition";
-
-          tr.innerHTML = `
-            <td class="p-3 text-xs font-mono">
-              ${new Date(entrada[0]).toLocaleString('es-AR', { hour12: false })}
-            </td>
-
-            <td class="p-3 text-xs font-mono">
-              ${
-                salida
-                  ? new Date(salida[0]).toLocaleString('es-AR', { hour12: false })
-                  : '<span class="text-amber-400">En Turno</span>'
-              }
-            </td>
-
-            <td class="p-3 text-xs text-slate-300 font-medium">
-              ${objetivoNombre}
-
-              <div class="text-[10px] text-slate-500 mt-1">
-                ${
-                  horarioProgramado
-                    ? `Turno ${horarioProgramado.inicio || '--:--'} - ${horarioProgramado.fin || '--:--'} · ${horarioProgramado.origen}`
-                    : 'Sin horario configurado'
-                }
-
-                ${
-                  horas.ajusteMinutos > 0
-                    ? ` · ${horas.ajusteMinutos} min anticipados no computados`
-                    : ''
-                }
-
-                ${
-                  horas.minutosExtra > 0
-                    ? ` · ${horas.minutosExtra} min extra`
-                    : ''
-                }
-              </div>
-            </td>
-
-            <td class="p-3 text-center text-xs font-semibold text-amber-400">
-              ${formatearAHorasReloj(horas.d)}
-            </td>
-
-            <td class="p-3 text-center text-xs font-semibold text-indigo-400">
-              ${formatearAHorasReloj(horas.n)}
-            </td>
-
-            <td class="p-3 text-center text-xs font-bold text-emerald-400">
-              ${formatearAHorasReloj(horas.t)}
-            </td>
-          `;
-
-          tabla.appendChild(tr);
-        }
+        const estadoEntradaSupervisor = evaluarEstadoEntrada(entrada[0], entrada[1], objetivoNombre);
+        if (estadoEntradaSupervisor.estado === 'TARDE') mostrarAlertaTardanza(entrada, estadoEntradaSupervisor);
+        const tr = document.createElement('tr');
+        tr.className = estadoEntradaSupervisor.estado === 'TARDE'
+          ? "hover:bg-slate-800/50 transition bg-red-950/20"
+          : estadoEntradaSupervisor.estado === 'TOLERANCIA'
+            ? "hover:bg-slate-800/50 transition bg-orange-950/10"
+            : "hover:bg-slate-800/50 transition";
+        tr.innerHTML = `
+          <td class="p-3 text-xs font-mono">${new Date(entrada[0]).toLocaleString('es-AR', { hour12: false })}</td>
+          <td class="p-3 text-xs font-mono">${salida ? new Date(salida[0]).toLocaleString('es-AR', { hour12: false }) : '<span class="text-amber-400">En Turno</span>'}</td>
+          <td class="p-3 text-xs text-slate-300 font-medium">${objetivoNombre}<div class="text-[10px] text-slate-500 mt-1">${horarioProgramado ? `Turno ${horarioProgramado.inicio || '--:--'} - ${horarioProgramado.fin || '--:--'} · ${horarioProgramado.origen}` : 'Sin horario configurado'}${horas.ajusteMinutos > 0 ? ` · ${horas.ajusteMinutos} min anticipados no computados` : ''}${horas.minutosExtra > 0 ? ` · ${horas.minutosExtra} min extra` : ''}</div></td>
+          <td class="p-3 text-center text-xs font-semibold text-amber-400">${formatearAHorasReloj(horas.d)}</td>
+          <td class="p-3 text-center text-xs font-semibold text-indigo-400">${formatearAHorasReloj(horas.n)}</td>
+          <td class="p-3 text-center text-xs font-bold text-emerald-400">${formatearAHorasReloj(horas.t)}</td>
+        `;
+        tabla.appendChild(tr);
       }
 
-      document.getElementById(
-        'supHorasDiurnas'
-      ).innerText =
-        formatearAHorasReloj(totalD);
-
-      document.getElementById(
-        'supHorasNocturnas'
-      ).innerText =
-        formatearAHorasReloj(totalN);
-
-      document.getElementById(
-        'supHorasTotales'
-      ).innerText =
-        formatearAHorasReloj(totalT);
+      document.getElementById('supHorasDiurnas').innerText = formatearAHorasReloj(totalD);
+      document.getElementById('supHorasNocturnas').innerText = formatearAHorasReloj(totalN);
+      document.getElementById('supHorasTotales').innerText = formatearAHorasReloj(totalT);
     }
 
     function exportarExcelSupervisor() {
+      const legajo = document.getElementById('legajoSupervisorInput').value.trim();
+      const filas = document.querySelectorAll('#supCuerpoDetalle tr');
+      if (filas.length === 0) return alert("No hay datos para exportar.");
 
-      const legajo =
-        document
-          .getElementById(
-            'legajoSupervisorInput'
-          )
-          .value
-          .trim();
-
-      const filas =
-        document.querySelectorAll(
-          '#supCuerpoDetalle tr'
-        );
-
-      if (filas.length === 0) {
-        return alert(
-          "No hay datos para exportar."
-        );
-      }
-
-      let csv =
-        "Entrada;Salida;Objetivo;Diurnas;Nocturnas;Total\n";
-
+      let csv = "Entrada;Salida;Objetivo;Diurnas;Nocturnas;Total\n";
       filas.forEach(tr => {
-
-        const cols =
-          tr.querySelectorAll('td');
-
-        const filaData =
-          Array.from(cols)
-            .map(
-              c =>
-                `"${c.innerText.replace(/[\n\r]+/g, "").trim()}"`
-            )
-            .join(";");
-
-        csv +=
-          filaData +
-          "\n";
+        const cols = tr.querySelectorAll('td');
+        const filaData = Array.from(cols).map(c => `"${c.innerText.replace(/[\n\r]+/g, "").trim()}"`).join(";");
+        csv += filaData + "\n";
       });
 
-      const blob =
-        new Blob(
-          ["\ufeff" + csv],
-          {
-            type:
-              'text/csv;charset=utf-8;'
-          }
-        );
-
-      const url =
-        URL.createObjectURL(blob);
-
-      const a =
-        document.createElement('a');
-
+      const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
       a.href = url;
-
-      a.download =
-        `Reporte_Horas_Legajo_${legajo}.csv`;
-
+      a.download = `Reporte_Horas_Legajo_${legajo}.csv`;
       document.body.appendChild(a);
-
       a.click();
-
       document.body.removeChild(a);
     }
 
     function exportarPdfSupervisor() {
+      const legajo = document.getElementById('legajoSupervisorInput').value.trim();
+      const filas = document.querySelectorAll('#supCuerpoDetalle tr');
+      if (filas.length === 0) return alert("No hay datos para exportar.");
 
-      const legajo =
-        document
-          .getElementById(
-            'legajoSupervisorInput'
-          )
-          .value
-          .trim();
-
-      const filas =
-        document.querySelectorAll(
-          '#supCuerpoDetalle tr'
-        );
-
-      if (filas.length === 0) {
-        return alert(
-          "No hay datos para exportar."
-        );
+      let nombreApellido = "No especificado";
+      if (datosSupervisorGlobal && datosSupervisorGlobal.length > 0) {
+        nombreApellido = datosSupervisorGlobal[0][2] || "No especificado";
       }
 
-      let nombreApellido =
-        "No especificado";
+      const horasDiurnasTotal = document.getElementById('supHorasDiurnas').innerText;
+      const horasNocturnasTotal = document.getElementById('supHorasNocturnas').innerText;
+      const horasTotalesGeneral = document.getElementById('supHorasTotales').innerText;
 
-      if (
-        datosSupervisorGlobal &&
-        datosSupervisorGlobal.length > 0
-      ) {
-
-        nombreApellido =
-          datosSupervisorGlobal[0][2] ||
-          "No especificado";
-      }
-
-      const horasDiurnasTotal =
-        document.getElementById(
-          'supHorasDiurnas'
-        ).innerText;
-
-      const horasNocturnasTotal =
-        document.getElementById(
-          'supHorasNocturnas'
-        ).innerText;
-
-      const horasTotalesGeneral =
-        document.getElementById(
-          'supHorasTotales'
-        ).innerText;
-
-      const { jsPDF } =
-        window.jspdf;
-
-      const doc =
-        new jsPDF();
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
 
       doc.setFontSize(14);
-
-      doc.setTextColor(
-        15,
-        23,
-        42
-      );
-
-      doc.text(
-        "Demo Asistencia - Reporte de Horas por Empleado",
-        14,
-        15
-      );
+      doc.setTextColor(15, 23, 42);
+      doc.text("Demo Asistencia - Reporte de Horas por Empleado", 14, 15);
 
       doc.setFontSize(10);
-
-      doc.setTextColor(
-        71,
-        85,
-        105
-      );
-
-      doc.text(
-        `Fecha de emisión: ${new Date().toLocaleString('es-AR', { hour12: false })}`,
-        14,
-        22
-      );
+      doc.setTextColor(71, 85, 105);
+      doc.text(`Fecha de emisión: ${new Date().toLocaleString('es-AR', { hour12: false })}`, 14, 22);
 
       doc.setFontSize(10);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`Legajo: ${legajo}`, 14, 31);
+      doc.text(`Nombre y Apellido: ${nombreApellido}`, 14, 37);
 
-      doc.setTextColor(
-        15,
-        23,
-        42
-      );
+      doc.text(`Total Horas Diurnas: ${horasDiurnasTotal}`, 120, 31);
+      doc.text(`Total Horas Nocturnas: ${horasNocturnasTotal}`, 120, 37);
+      doc.text(`Total General del Periodo: ${horasTotalesGeneral}`, 120, 43);
 
-      doc.text(
-        `Legajo: ${legajo}`,
-        14,
-        31
-      );
-
-      doc.text(
-        `Nombre y Apellido: ${nombreApellido}`,
-        14,
-        37
-      );
-
-      doc.text(
-        `Total Horas Diurnas: ${horasDiurnasTotal}`,
-        120,
-        31
-      );
-
-      doc.text(
-        `Total Horas Nocturnas: ${horasNocturnasTotal}`,
-        120,
-        37
-      );
-
-      doc.text(
-        `Total General del Periodo: ${horasTotalesGeneral}`,
-        120,
-        43
-      );
-
-      const columnas = [
-        "Entrada",
-        "Salida",
-        "Objetivo",
-        "Diurnas",
-        "Nocturnas",
-        "Total"
-      ];
-
+      const columnas = ["Entrada", "Salida", "Objetivo", "Diurnas", "Nocturnas", "Total"];
       const datosTabla = [];
-
+      
       filas.forEach(tr => {
-
-        const cols =
-          tr.querySelectorAll('td');
-
+        const cols = tr.querySelectorAll('td');
         datosTabla.push([
           cols[0].innerText,
           cols[1].innerText,
@@ -2466,591 +1118,233 @@
         body: datosTabla,
         startY: 48,
         theme: 'grid',
-        headStyles: {
-          fillColor: [
-            15,
-            23,
-            42
-          ]
-        },
-        styles: {
-          fontSize: 8
-        }
+        headStyles: { fillColor: [15, 23, 42] },
+        styles: { fontSize: 8 }
       });
 
-      doc.save(
-        `Reporte_Horas_Legajo_${legajo}.pdf`
-      );
+      doc.save(`Reporte_Horas_Legajo_${legajo}.pdf`);
     }
 
-    function actualizarMetricasYGraficos(
-      registros
-    ) {
-
-      const hoyStr =
-        new Date()
-          .toISOString()
-          .slice(0, 10);
+    function actualizarMetricasYGraficos(registros) {
+      const ahora = new Date();
+      const hoyStr = obtenerFechaLocalClave(ahora);
 
       let entradasHoy = 0;
       let salidasHoy = 0;
 
-      const estadoUltimoHoy = {};
-
       const diasUltimaSemana = [];
       const conteoPorDia = {};
 
-      for (
-        let i = 6;
-        i >= 0;
-        i--
-      ) {
-
-        const d =
-          new Date();
-
-        d.setDate(
-          d.getDate() - i
-        );
-
-        const fechaKey =
-          d.toISOString()
-            .slice(0, 10);
-
-        diasUltimaSemana.push(
-          fechaKey
-        );
-
-        conteoPorDia[
-          fechaKey
-        ] = {
-          entradas: 0,
-          salidas: 0
-        };
+      // Fechas locales de Argentina/cliente, no UTC, para evitar errores
+      // alrededor de medianoche.
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() - i);
+        const fechaKey = obtenerFechaLocalClave(d);
+        diasUltimaSemana.push(fechaKey);
+        conteoPorDia[fechaKey] = { entradas: 0, salidas: 0 };
       }
 
-      registros.forEach(
-        fila => {
+      // Los contadores de hoy y los gráficos usan todas las fichadas,
+      // independientemente de los filtros aplicados en la tabla.
+      const registrosGlobales = Array.isArray(datosLocales) ? datosLocales : (registros || []);
 
-          if (!fila[0]) return;
+      // Última fichada HISTÓRICA de cada legajo. Esto permite detectar
+      // correctamente a alguien que entró ayer, el mes pasado o incluso
+      // el año anterior y todavía no registró la salida.
+      const ultimaFichadaPorLegajo = {};
 
-          const fechaObj =
-            new Date(fila[0]);
+      registrosGlobales.forEach(fila => {
+        if (!fila || !fila[0]) return;
 
-          const fechaIso =
-            fechaObj
-              .toISOString()
-              .slice(0, 10);
+        const fechaObj = new Date(fila[0]);
+        if (isNaN(fechaObj)) return;
 
-          const legajo =
-            fila[1];
+        const fechaIso = obtenerFechaLocalClave(fechaObj);
+        const legajo = String(fila[1] ?? '').trim();
+        const tipo = String(fila[4] ?? '').trim().toUpperCase();
 
-          const tipo =
-            fila[4];
-
-          if (
-            fechaIso ===
-            hoyStr
-          ) {
-
-            if (
-              tipo === 'ENTRADA'
-            ) {
-              entradasHoy++;
-            }
-
-            if (
-              tipo === 'SALIDA'
-            ) {
-              salidasHoy++;
-            }
-
-            estadoUltimoHoy[
-              legajo
-            ] = tipo;
-          }
-
-          if (
-            conteoPorDia[
-              fechaIso
-            ]
-          ) {
-
-            if (
-              tipo === 'ENTRADA'
-            ) {
-              conteoPorDia[
-                fechaIso
-              ].entradas++;
-            }
-
-            if (
-              tipo === 'SALIDA'
-            ) {
-              conteoPorDia[
-                fechaIso
-              ].salidas++;
-            }
-          }
+        if (fechaIso === hoyStr) {
+          if (tipo === 'ENTRADA') entradasHoy++;
+          if (tipo === 'SALIDA') salidasHoy++;
         }
-      );
 
-      let enPlantaHoy = 0;
-
-      Object.values(
-        estadoUltimoHoy
-      ).forEach(
-        ultimoTipo => {
-
-          if (
-            ultimoTipo ===
-            'ENTRADA'
-          ) {
-            enPlantaHoy++;
-          }
+        if (conteoPorDia[fechaIso]) {
+          if (tipo === 'ENTRADA') conteoPorDia[fechaIso].entradas++;
+          if (tipo === 'SALIDA') conteoPorDia[fechaIso].salidas++;
         }
-      );
 
-      document.getElementById(
-        'kpiEntradasHoy'
-      ).innerText =
-        entradasHoy;
-
-      document.getElementById(
-        'kpiSalidasHoy'
-      ).innerText =
-        salidasHoy;
-
-      document.getElementById(
-        'kpiEnPlanta'
-      ).innerText =
-        enPlantaHoy;
-
-      document.getElementById(
-        'kpiTotalRegistros'
-      ).innerText =
-        registros.length;
-
-      renderizarGraficoDona(
-        enPlantaHoy,
-        salidasHoy
-      );
-
-      renderizarGraficoBarras(
-        diasUltimaSemana,
-        conteoPorDia
-      );
-    }
-
-    function renderizarGraficoDona(
-      enPlanta,
-      salidas
-    ) {
-
-      const ctx =
-        document
-          .getElementById(
-            'chartDonaHoy'
-          )
-          .getContext('2d');
-
-      if (instChartDona) {
-        instChartDona.destroy();
-      }
-
-      instChartDona =
-        new Chart(
-          ctx,
-          {
-            type: 'doughnut',
-
-            data: {
-
-              labels: [
-                'En Planta',
-                'Salidas Registradas'
-              ],
-
-              datasets: [
-                {
-                  data: [
-                    enPlanta,
-                    salidas
-                  ],
-                  backgroundColor: [
-                    '#38bdf8',
-                    '#f43f5e'
-                  ],
-                  borderWidth: 2,
-                  borderColor:
-                    '#1e293b'
-                }
-              ]
-            },
-
-            options: {
-
-              responsive: true,
-
-              maintainAspectRatio:
-                false,
-
-              plugins: {
-
-                legend: {
-
-                  position:
-                    'bottom',
-
-                  labels: {
-                    color:
-                      '#94a3b8',
-
-                    font: {
-                      size: 11
-                    }
-                  }
-                }
-              }
-            }
+        if (legajo) {
+          const anterior = ultimaFichadaPorLegajo[legajo];
+          if (!anterior || fechaObj.getTime() > anterior.fecha.getTime()) {
+            ultimaFichadaPorLegajo[legajo] = {
+              fecha: fechaObj,
+              tipo
+            };
           }
-        );
-    }
-
-    function renderizarGraficoBarras(
-      diasKey,
-      conteoPorDia
-    ) {
-
-      const ctx =
-        document
-          .getElementById(
-            'chartBarrasSemana'
-          )
-          .getContext('2d');
-
-      const labels =
-        diasKey.map(f => {
-
-          const partes =
-            f.split('-');
-
-          return `${partes[2]}/${partes[1]}`;
-        });
-
-      const dataEntradas =
-        diasKey.map(
-          f =>
-            conteoPorDia[
-              f
-            ].entradas
-        );
-
-      const dataSalidas =
-        diasKey.map(
-          f =>
-            conteoPorDia[
-              f
-            ].salidas
-        );
-
-      if (instChartBarras) {
-        instChartBarras.destroy();
-      }
-
-      instChartBarras =
-        new Chart(
-          ctx,
-          {
-
-            type: 'bar',
-
-            data: {
-
-              labels: labels,
-
-              datasets: [
-
-                {
-                  label:
-                    'Entradas',
-
-                  data:
-                    dataEntradas,
-
-                  backgroundColor:
-                    '#10b981',
-
-                  borderRadius:
-                    6
-                },
-
-                {
-                  label:
-                    'Salidas',
-
-                  data:
-                    dataSalidas,
-
-                  backgroundColor:
-                    '#f43f5e',
-
-                  borderRadius:
-                    6
-                }
-              ]
-            },
-
-            options: {
-
-              responsive: true,
-
-              maintainAspectRatio:
-                false,
-
-              scales: {
-
-                x: {
-
-                  ticks: {
-                    color:
-                      '#94a3b8'
-                  },
-
-                  grid: {
-                    display:
-                      false
-                  }
-                },
-
-                y: {
-
-                  ticks: {
-                    color:
-                      '#94a3b8',
-                    precision: 0
-                  },
-
-                  grid: {
-                    color:
-                      '#334155'
-                  }
-                }
-              },
-
-              plugins: {
-
-                legend: {
-
-                  position:
-                    'top',
-
-                  labels: {
-
-                    color:
-                      '#94a3b8',
-
-                    font: {
-                      size: 11
-                    }
-                  }
-                }
-              }
-            }
-          }
-        );
-    }
-
-    function abrirFoto(url) {
-
-      document.getElementById(
-        'imgModal'
-      ).src = url;
-
-      document.getElementById(
-        'modalFoto'
-      ).classList.remove(
-        'hidden'
-      );
-    }
-
-    function cerrarModal() {
-
-      document.getElementById(
-        'modalFoto'
-      ).classList.add(
-        'hidden'
-      );
-
-      document.getElementById(
-        'imgModal'
-      ).src = "";
-    }
-
-    function exportarExcel() {
-
-      if (
-        !datosFiltradosActuales ||
-        datosFiltradosActuales.length === 0
-      ) {
-
-        return alert(
-          "No hay datos visibles para exportar."
-        );
-      }
-
-      const cabeceras = [[
-        "Fecha y Hora",
-        "Legajo",
-        "Nombre",
-        "Objetivo",
-        "Tipo",
-        "Ubicación (Mapa)",
-        "Foto URL"
-      ]];
-
-      const filas =
-        datosFiltradosActuales.map(
-          f => [
-
-            f[0]
-              ? new Date(f[0])
-                  .toLocaleString(
-                    'es-AR',
-                    { hour12: false }
-                  )
-              : '',
-
-            f[1] !== undefined
-              ? String(f[1])
-              : '',
-
-            f[2] || '',
-            f[3] || '',
-            f[4] || '',
-            f[5] || '',
-            f[6] || ''
-          ]
-        );
-
-      const wb =
-        XLSX.utils.book_new();
-
-      const ws =
-        XLSX.utils.aoa_to_sheet([
-          ...cabeceras,
-          ...filas
-        ]);
-
-      XLSX.utils.book_append_sheet(
-        wb,
-        ws,
-        "Marcaciones"
-      );
-
-      XLSX.writeFile(
-        wb,
-        `Reporte_Marcaciones_${new Date().toISOString().slice(0,10)}.xlsx`
-      );
-    }
-
-    function exportarPDF() {
-
-      if (
-        !datosFiltradosActuales ||
-        datosFiltradosActuales.length === 0
-      ) {
-
-        return alert(
-          "No hay datos visibles para exportar."
-        );
-      }
-
-      const { jsPDF } =
-        window.jspdf;
-
-      const doc =
-        new jsPDF();
-
-      doc.setFontSize(16);
-
-      doc.text(
-        "Reporte de Marcaciones de Asistencia",
-        14,
-        15
-      );
-
-      doc.setFontSize(10);
-
-      doc.text(
-        `Generado el: ${new Date().toLocaleString('es-AR', { hour12: false })}`,
-        14,
-        22
-      );
-
-      const columnas = [
-        "Fecha y Hora",
-        "Legajo",
-        "Nombre",
-        "Objetivo",
-        "Tipo"
-      ];
-
-      const filas =
-        datosFiltradosActuales.map(
-          f => [
-
-            f[0]
-              ? new Date(f[0])
-                  .toLocaleString(
-                    'es-AR',
-                    { hour12: false }
-                  )
-              : '',
-
-            f[1] !== undefined
-              ? String(f[1])
-              : '',
-
-            f[2] || '',
-            f[3] || '',
-            f[4] || ''
-          ]
-        );
-
-      doc.autoTable({
-
-        head: [
-          columnas
-        ],
-
-        body:
-          filas,
-
-        startY:
-          28,
-
-        theme:
-          'grid',
-
-        headStyles: {
-          fillColor: [
-            15,
-            23,
-            42
-          ]
-        },
-
-        styles: {
-          fontSize: 8
         }
       });
 
-      doc.save(
-        `Reporte_Marcaciones_${new Date().toISOString().slice(0,10)}.pdf`
-      );
+      const enPlantaHoy = Object.values(ultimaFichadaPorLegajo)
+        .filter(item => item.tipo === 'ENTRADA').length;
+
+      document.getElementById('kpiEntradasHoy').innerText = entradasHoy;
+      document.getElementById('kpiSalidasHoy').innerText = salidasHoy;
+      document.getElementById('kpiEnPlanta').innerText = enPlantaHoy;
+      document.getElementById('kpiTotalRegistros').innerText = (registros || []).length;
+
+      renderizarGraficoDona(enPlantaHoy, salidasHoy);
+      renderizarGraficoBarras(diasUltimaSemana, conteoPorDia);
     }
 
+    function renderizarGraficoDona(enPlanta, salidas) {
+      const ctx = document.getElementById('chartDonaHoy').getContext('2d');
+
+      if (instChartDona) instChartDona.destroy();
+
+      instChartDona = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['En Planta', 'Salidas Registradas'],
+          datasets: [{
+            data: [enPlanta, salidas],
+            backgroundColor: ['#38bdf8', '#f43f5e'],
+            borderWidth: 2,
+            borderColor: '#1e293b'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { color: '#94a3b8', font: { size: 11 } }
+            }
+          }
+        }
+      });
+    }
+
+    function renderizarGraficoBarras(diasKey, conteoPorDia) {
+      const ctx = document.getElementById('chartBarrasSemana').getContext('2d');
+
+      const labels = diasKey.map(f => {
+        const partes = f.split('-');
+        return `${partes[2]}/${partes[1]}`;
+      });
+
+      const dataEntradas = diasKey.map(f => conteoPorDia[f].entradas);
+      const dataSalidas = diasKey.map(f => conteoPorDia[f].salidas);
+
+      if (instChartBarras) instChartBarras.destroy();
+
+      instChartBarras = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Entradas',
+              data: dataEntradas,
+              backgroundColor: '#10b981',
+              borderRadius: 6
+            },
+            {
+              label: 'Salidas',
+              data: dataSalidas,
+              backgroundColor: '#f43f5e',
+              borderRadius: 6
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              ticks: { color: '#94a3b8' },
+              grid: { display: false }
+            },
+            y: {
+              ticks: { color: '#94a3b8', precision: 0 },
+              grid: { color: '#334155' }
+            }
+          },
+          plugins: {
+            legend: {
+              position: 'top',
+              labels: { color: '#94a3b8', font: { size: 11 } }
+            }
+          }
+        }
+      });
+    }
+
+    function abrirFoto(url) {
+      document.getElementById('imgModal').src = url;
+      document.getElementById('modalFoto').classList.remove('hidden');
+    }
+
+    function cerrarModal() {
+      document.getElementById('modalFoto').classList.add('hidden');
+      document.getElementById('imgModal').src = "";
+    }
+
+    function exportarExcel() {
+      if (!datosFiltradosActuales || datosFiltradosActuales.length === 0) {
+        return alert("No hay datos visibles para exportar.");
+      }
+
+      const cabeceras = [["Fecha y Hora", "Legajo", "Nombre", "Objetivo", "Tipo", "Ubicación (Mapa)", "Foto URL"]];
+      const filas = datosFiltradosActuales.map(f => [
+        f[0] ? new Date(f[0]).toLocaleString('es-AR', { hour12: false }) : '',
+        f[1] !== undefined ? String(f[1]) : '',
+        f[2] || '',
+        f[3] || '',
+        f[4] || '',
+        f[5] || '',
+        f[6] || ''
+      ]);
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet([...cabeceras, ...filas]);
+      XLSX.utils.book_append_sheet(wb, ws, "Marcaciones");
+      XLSX.writeFile(wb, `Reporte_Marcaciones_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+
+    function exportarPDF() {
+      if (!datosFiltradosActuales || datosFiltradosActuales.length === 0) {
+        return alert("No hay datos visibles para exportar.");
+      }
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      doc.setFontSize(16);
+      doc.text("Reporte de Marcaciones de Asistencia", 14, 15);
+      doc.setFontSize(10);
+      doc.text(`Generado el: ${new Date().toLocaleString('es-AR', { hour12: false })}`, 14, 22);
+
+      const columnas = ["Fecha y Hora", "Legajo", "Nombre", "Objetivo", "Tipo"];
+      const filas = datosFiltradosActuales.map(f => [
+        f[0] ? new Date(f[0]).toLocaleString('es-AR', { hour12: false }) : '',
+        f[1] !== undefined ? String(f[1]) : '',
+        f[2] || '',
+        f[3] || '',
+        f[4] || ''
+      ]);
+
+      doc.autoTable({
+        head: [columnas],
+        body: filas,
+        startY: 28,
+        theme: 'grid',
+        headStyles: { fillColor: [15, 23, 42] },
+        styles: { fontSize: 8 }
+      });
+
+      doc.save(`Reporte_Marcaciones_${new Date().toISOString().slice(0,10)}.pdf`);
+    }
   </script>
 </body>
 </html>
