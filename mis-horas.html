@@ -212,10 +212,11 @@
     let mapaConfiguracionPersonalVigilador = {};
     let asignacionesTurnosVigilador = [];
 
+    // Variables para control del Botón de Pánico sostenido
     let temporizadorPanico = null;
     let intervaloProgresoPanico = null;
     let tiempoPresionadoMs = 0;
-    const TIEMPO_REQUERIDO_MS = 3000;
+    const TIEMPO_REQUERIDO_MS = 3000; // 3 segundos
 
     function parseFechaSegura(fechaStr) {
       if (!fechaStr) return new Date(NaN);
@@ -427,11 +428,6 @@
           });
         }
 
-        if (!empleadoEncontrado) {
-          alert("❌ El número de legajo o el PIN son incorrectos.");
-          return;
-        }
-
         let misFichadas = [];
         if (fichadasData) {
           Object.values(fichadasData).forEach(f => {
@@ -446,6 +442,11 @@
               });
             }
           });
+        }
+
+        if (misFichadas.length === 0) {
+          alert("No se encontraron registros de fichadas para el legajo ingresado.");
+          return;
         }
 
         sessionStorage.setItem('vigilador_legajo', legajoIngresado);
@@ -629,6 +630,7 @@
       document.getElementById('contenedorTabla').classList.remove('hidden');
     }
 
+    // 🚨 CONFIGURACIÓN DEL BOTÓN DE PÁNICO SOSTENIDO (3 SEGUNDOS)
     function inicializarBotonPanicoSostenido() {
       const btn = document.getElementById('btnPanico');
       
@@ -657,6 +659,7 @@
         document.getElementById('textoPanico').innerText = "MANTÉN PRESIONADO (3s)";
       };
 
+      // Eventos para Desktop y Mobile
       btn.addEventListener('mousedown', iniciarPresion);
       btn.addEventListener('mouseup', cancelarPresion);
       btn.addEventListener('mouseleave', cancelarPresion);
@@ -666,6 +669,7 @@
       btn.addEventListener('touchcancel', cancelarPresion);
     }
 
+    // 🚨 EJECUCIÓN DE LA ALERTA DE PÁNICO CORREGIDA
     function dispararAlertaPanico() {
       const legajo = sessionStorage.getItem('vigilador_legajo');
       const nombreVigilador = sessionStorage.getItem('vigilador_nombre') || `Legajo ${legajo}`;
@@ -689,7 +693,7 @@
       }
 
       if (!enServicio) {
-        alert("❌ No se puede enviar la alerta de pánico: Se encuentra fuera de servicio.");
+        alert("❌ No se puede enviar la alerta de pánico: Se encuentra fuera de servicio (requiere tener una Entrada activa).");
         return;
       }
 
@@ -725,19 +729,20 @@
           })
           .then(res => res.json())
           .then(() => {
-            alert("🚨 ¡ALERTA DE PÁNICO ENVIADA A LA CENTRAL!");
+            alert("🚨 ¡ALERTA DE PÁNICO ENVIADA A LA CENTRAL. EL PERSONAL OPERATIVO HA SIDO NOTIFICADO!");
           })
           .catch(error => {
             alert("Error al enviar alerta de pánico: " + error.toString());
           });
         },
         function(error) {
-          alert("Error: Es obligatorio permitir el acceso al GPS.");
+          alert("Error: Es obligatorio permitir el acceso al GPS para activar la alerta de pánico.");
         },
         { enableHighAccuracy: true }
       );
     }
 
+    // 📝 ENVÍO DE NOVEDAD A FIREBASE
     function enviarNovedadPortal() {
       const legajo = sessionStorage.getItem('vigilador_legajo');
       const nombreVigilador = sessionStorage.getItem('vigilador_nombre') || `Legajo ${legajo}`;
@@ -764,7 +769,7 @@
       }
 
       if (!enServicio) {
-        alert("❌ No se puede enviar el informe: Se encuentra fuera de servicio.");
+        alert("❌ No se puede enviar el informe: Actualmente se encuentra fuera de servicio (debe tener una Entrada activa / En Turno).");
         return;
       }
 
@@ -794,7 +799,7 @@
           }
         },
         function(error) {
-          alert("Error: Es necesario activar el GPS.");
+          alert("Error: Es necesario activar el GPS para enviar novedades.");
         },
         { enableHighAccuracy: true }
       );
