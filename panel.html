@@ -105,6 +105,11 @@
       </div>
       
       <div class="flex items-center gap-3">
+        <button onclick="abrirModalAlertasTardanzaArchivadas()" class="relative bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold px-3 py-2 rounded-xl text-sm transition border border-slate-600 flex items-center gap-2" title="Ver alertas archivadas">
+          <i class="fa-solid fa-box-archive text-amber-400"></i>
+          <span class="hidden sm:inline">Alertas archivadas</span>
+          <span id="badgeAlertasTardanzaArchivadas" class="hidden items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-amber-500 text-slate-950 text-[10px] font-black">0</span>
+        </button>
         <button onclick="cargarDatos()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
           <i class="fa-solid fa-rotate-right" id="icono-reload"></i> Actualizar
         </button>
@@ -144,6 +149,7 @@
         <div>
           <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">En Planta Hoy</p>
           <h2 id="kpiEnPlanta" class="text-2xl font-black text-sky-400 mt-1">0</h2>
+          <p id="detalleEnPlantaKpi" class="text-[10px] text-slate-500 mt-1 leading-tight"></p>
         </div>
         <div class="w-12 h-12 bg-sky-500/10 border border-sky-500/20 rounded-xl flex items-center justify-center text-sky-400 text-xl">
           <i class="fa-solid fa-user-check"></i>
@@ -341,6 +347,25 @@
 
   </div>
 
+  <!-- MODAL ALERTAS TARDANZA ARCHIVADAS -->
+  <div id="modalAlertasTardanzaArchivadas" class="fixed inset-0 bg-slate-950/90 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5 md:p-6 max-w-3xl w-full max-h-[85vh] overflow-hidden shadow-2xl relative">
+      <button onclick="cerrarModalAlertasTardanzaArchivadas()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl" title="Cerrar">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <div class="flex items-center gap-3 pr-8 mb-4">
+        <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+          <i class="fa-solid fa-box-archive"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-white text-lg">Alertas de llegada tardía archivadas</h3>
+          <p class="text-xs text-slate-400">Las alertas cerradas por el supervisor se conservan aquí.</p>
+        </div>
+      </div>
+      <div id="listaAlertasTardanzaArchivadas" class="space-y-3 overflow-y-auto max-h-[65vh] pr-1"></div>
+    </div>
+  </div>
+
   <!-- MODAL FOTO -->
   <div id="modalFoto" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
     <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4 max-w-lg w-full relative space-y-4">
@@ -382,6 +407,7 @@
     }
 
     async function mostrarPanel() {
+      cargarArchivadasDesdeStorage();
       document.getElementById('pantallaLogin').classList.add('hidden');
       document.getElementById('contenidoPanel').classList.remove('hidden');
 
@@ -417,6 +443,177 @@
     let asignacionesTurnosPanel = [];
     const alertasTardiasMostradas = new Set();
     let intervaloActualizacionPanel = null;
+
+    // Historial local de alertas de llegada tardía archivadas por el supervisor.
+    let alertasArchivadasCache = [];
+    const CLAVE_STORAGE_ARCHIVADAS = 'alertasTardanzaArchivadas';
+
+    function cargarArchivadasDesdeStorage() {
+      try {
+        const guardadas = JSON.parse(localStorage.getItem(CLAVE_STORAGE_ARCHIVADAS) || '[]');
+        alertasArchivadasCache = Array.isArray(guardadas) ? guardadas : [];
+      } catch (e) {
+        alertasArchivadasCache = [];
+      }
+      actualizarBadgeAlertasArchivadas();
+    }
+
+    function guardarArchivadasEnStorage() {
+      try {
+        localStorage.setItem(CLAVE_STORAGE_ARCHIVADAS, JSON.stringify(alertasArchivadasCache));
+      } catch (e) {
+        console.warn('No se pudo guardar el historial local de alertas archivadas:', e);
+      }
+      actualizarBadgeAlertasArchivadas();
+    }
+
+    function obtenerClaveAlertaArchivada(entrada, firebaseId = '') {
+      return firebaseId
+        ? `FIREBASE|${firebaseId}`
+        : `${entrada?.[1] || ''}|${entrada?.[0] || ''}|${entrada?.[3] || ''}`;
+    }
+
+    function actualizarBadgeAlertasArchivadas() {
+      const badge = document.getElementById('badgeAlertasTardanzaArchivadas');
+      if (!badge) return;
+      const cantidad = alertasArchivadasCache.length;
+      badge.innerText = cantidad > 99 ? '99+' : String(cantidad);
+      badge.classList.toggle('hidden', cantidad === 0);
+      badge.classList.toggle('flex', cantidad > 0);
+    }
+
+    function abrirModalAlertasTardanzaArchivadas() {
+      renderizarAlertasArchivadas();
+      const modal = document.getElementById('modalAlertasTardanzaArchivadas');
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      }
+      cargarAlertasTardanzaFirebase();
+    }
+
+    function cerrarModalAlertasTardanzaArchivadas() {
+      const modal = document.getElementById('modalAlertasTardanzaArchivadas');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+    }
+
+    function renderizarAlertasArchivadas() {
+      const contenedor = document.getElementById('listaAlertasTardanzaArchivadas');
+      if (!contenedor) return;
+
+      if (!alertasArchivadasCache.length) {
+        contenedor.innerHTML = `
+          <div class="p-8 text-center text-slate-400 border border-slate-700 rounded-xl bg-slate-900/60">
+            <i class="fa-solid fa-box-open text-2xl mb-2 text-slate-500"></i>
+            <p class="text-sm">No hay alertas archivadas.</p>
+          </div>`;
+        return;
+      }
+
+      const ordenadas = [...alertasArchivadasCache].sort((a,b) =>
+        new Date(b.archivadoEn || b.entrada?.[0] || 0) - new Date(a.archivadoEn || a.entrada?.[0] || 0)
+      );
+
+      contenedor.innerHTML = ordenadas.map((a, index) => {
+        const entrada = a.entrada || [];
+        const fecha = entrada[0] ? new Date(entrada[0]).toLocaleString('es-AR', { hour12: false }) : '-';
+        const nombre = entrada[2] || `Legajo ${entrada[1] || '-'}`;
+        const legajo = entrada[1] || '-';
+        const objetivo = entrada[3] || '-';
+        const minutos = Number(a.minutosTarde) || 0;
+        const indiceReal = alertasArchivadasCache.indexOf(a);
+
+        return `
+          <div class="border border-slate-700 rounded-xl p-4 bg-slate-900/70">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div>
+                <div class="font-bold text-white flex items-center gap-2">
+                  <i class="fa-solid fa-triangle-exclamation text-rose-400"></i> ${nombre}
+                </div>
+                <div class="text-xs text-slate-400 mt-1">Legajo ${legajo} · Objetivo: ${objetivo}</div>
+                <div class="text-xs text-slate-500 mt-1">Fichada: ${fecha} · ${minutos} min después del comienzo del turno</div>
+              </div>
+              <button type="button" onclick="restaurarAlertaArchivada(${indiceReal})" class="text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-lg transition">
+                <i class="fa-solid fa-rotate-left"></i> Restaurar alerta
+              </button>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    async function archivarAlertaTardanza(btn, firebaseId = '', entradaJson = '', minutosTarde = 0, horarioJson = '') {
+      let entrada = [];
+      let horario = null;
+      try { entrada = entradaJson ? JSON.parse(decodeURIComponent(entradaJson)) : []; } catch (e) {}
+      try { horario = horarioJson ? JSON.parse(decodeURIComponent(horarioJson)) : null; } catch (e) {}
+
+      const clave = obtenerClaveAlertaArchivada(entrada, firebaseId);
+      const registro = {
+        clave,
+        firebaseId: firebaseId || '',
+        entrada,
+        minutosTarde: Number(minutosTarde) || 0,
+        horario: horario || null,
+        archivadoEn: new Date().toISOString()
+      };
+
+      const yaExiste = alertasArchivadasCache.some(a => a.clave === clave || (firebaseId && a.firebaseId === firebaseId));
+      if (!yaExiste) alertasArchivadasCache.push(registro);
+      guardarArchivadasEnStorage();
+
+      if (firebaseId) {
+        try {
+          await fetch(`${URL_ALERTAS_TARDANZA.replace('.json','')}/${firebaseId}.json`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ archivadoSupervisor: true, archivadoSupervisorEn: new Date().toISOString() })
+          });
+        } catch (e) {
+          console.warn('No se pudo marcar la alerta como archivada en Firebase:', e);
+        }
+      }
+
+      if (btn) {
+        const tarjeta = btn.closest('[data-alerta-tardanza]');
+        if (tarjeta) tarjeta.remove();
+      }
+
+      const contenedor = document.getElementById('contenedorAlertasTardanza');
+      if (contenedor && !contenedor.querySelector('[data-alerta-tardanza]')) contenedor.classList.add('hidden');
+    }
+
+    async function restaurarAlertaArchivada(indice) {
+      const alerta = alertasArchivadasCache[indice];
+      if (!alerta) return;
+
+      if (alerta.firebaseId) {
+        try {
+          await fetch(`${URL_ALERTAS_TARDANZA.replace('.json','')}/${alerta.firebaseId}.json`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ archivadoSupervisor: false, archivadoSupervisorEn: null })
+          });
+        } catch (e) {
+          console.warn('No se pudo restaurar la alerta en Firebase:', e);
+        }
+      }
+
+      alertasArchivadasCache.splice(indice, 1);
+      guardarArchivadasEnStorage();
+      cerrarModalAlertasTardanzaArchivadas();
+      alertasTardiasMostradas.delete(alerta.clave);
+
+      if (alerta.entrada) {
+        mostrarAlertaTardanza(alerta.entrada, {
+          estado: 'TARDE',
+          minutosTarde: Number(alerta.minutosTarde) || 0,
+          horario: alerta.horario || null
+        }, alerta.firebaseId || '');
+      }
+    }
 
     let instChartDona = null;
     let instChartBarras = null;
@@ -506,8 +703,11 @@
         const data = await res.json();
         if (!data) return;
 
+        let cacheCambio = false;
+
         Object.entries(data).forEach(([firebaseId, alerta]) => {
           if (!alerta || String(alerta.tipoAlerta || '') !== 'LLEGADA_TARDE') return;
+
           const entrada = [
             alerta.fechaHora || alerta.fechaHoraDispositivo,
             alerta.legajo,
@@ -515,6 +715,26 @@
             alerta.objetivo,
             'ENTRADA'
           ];
+
+          const clave = obtenerClaveAlertaArchivada(entrada, firebaseId);
+
+          // Si Firebase informa que el supervisor la archivó, mantenerla en historial local.
+          if (alerta.archivadoSupervisor === true) {
+            const existe = alertasArchivadasCache.some(a => a.firebaseId === firebaseId || a.clave === clave);
+            if (!existe) {
+              alertasArchivadasCache.push({
+                clave,
+                firebaseId,
+                entrada,
+                minutosTarde: Number(alerta.minutosTarde) || 0,
+                horario: alerta.horario || null,
+                archivadoEn: alerta.archivadoSupervisorEn || new Date().toISOString()
+              });
+              cacheCambio = true;
+            }
+            return;
+          }
+
           mostrarAlertaTardanza(entrada, {
             estado: 'TARDE',
             minutosTarde: Number(alerta.minutosTarde) || 0,
@@ -525,6 +745,11 @@
             } : null
           }, firebaseId);
         });
+
+        if (cacheCambio) {
+          guardarArchivadasEnStorage();
+          renderizarAlertasArchivadas();
+        }
       } catch (err) {
         console.warn('No se pudieron cargar las alertas de llegada tardía:', err);
       }
@@ -557,18 +782,28 @@
 
     function mostrarAlertaTardanza(entrada, estadoInfo, firebaseId = '') {
       if (!entrada || estadoInfo.estado !== 'TARDE') return;
+
       const fechaKey = String(entrada[0] || '');
-      const clave = firebaseId ? `FIREBASE|${firebaseId}` : `${entrada[1] || ''}|${fechaKey}|${entrada[3] || ''}`;
+      const clave = obtenerClaveAlertaArchivada(entrada, firebaseId);
+
+      // Las alertas que ya fueron archivadas no vuelven al panel activo.
+      if (alertasArchivadasCache.some(a => a.clave === clave || (firebaseId && a.firebaseId === firebaseId))) return;
       if (alertasTardiasMostradas.has(clave)) return;
       alertasTardiasMostradas.add(clave);
 
       const contenedor = document.getElementById('contenedorAlertasTardanza');
       if (!contenedor) return;
+
       const hora = new Date(entrada[0]).toLocaleString('es-AR', { hour12: false });
       const nombre = entrada[2] || `Legajo ${entrada[1] || '-'}`;
       const objetivo = entrada[3] || '-';
+      const entradaJson = encodeURIComponent(JSON.stringify(entrada));
+      const horarioJson = encodeURIComponent(JSON.stringify(estadoInfo.horario || null));
+
       contenedor.classList.remove('hidden');
       const alerta = document.createElement('div');
+      alerta.dataset.alertaTardanza = 'true';
+      alerta.dataset.alertaClave = clave;
       alerta.className = 'bg-rose-950/70 border border-rose-500/60 text-rose-100 rounded-xl p-4 shadow-lg flex flex-col md:flex-row md:items-center md:justify-between gap-3';
       alerta.innerHTML = `
         <div>
@@ -576,7 +811,7 @@
           <div class="text-xs mt-1">${nombre} · Legajo ${entrada[1] || '-'} · Objetivo: ${objetivo}</div>
           <div class="text-xs text-rose-200/80">Fichada: ${hora} · ${estadoInfo.minutosTarde} min después del comienzo del turno</div>
         </div>
-        <button type="button" class="text-xs font-bold bg-rose-600 hover:bg-rose-500 px-3 py-2 rounded-lg" onclick="this.closest('div.bg-rose-950\\/70').remove();">Cerrar</button>`;
+        <button type="button" class="text-xs font-bold bg-rose-600 hover:bg-rose-500 px-3 py-2 rounded-lg" onclick="archivarAlertaTardanza(this, '${firebaseId}', '${entradaJson}', '${Number(estadoInfo.minutosTarde) || 0}', '${horarioJson}')"><i class="fa-solid fa-box-archive"></i> Cerrar y archivar</button>`;
       contenedor.prepend(alerta);
     }
 
@@ -621,7 +856,8 @@
           : { estado: 'NORMAL', minutosTarde: 0, horario: null };
         const badgeColor = obtenerClasesFichada(tipo, estadoEntrada.estado);
         if (tipo === 'ENTRADA' && estadoEntrada.estado === 'TARDE') {
-          mostrarAlertaTardanza(fila, estadoEntrada);
+          const firebaseIdAlerta = firebaseKeysMap[JSON.stringify(fila)] || '';
+          mostrarAlertaTardanza(fila, estadoEntrada, firebaseIdAlerta);
         }
         const etiquetaEntrada = tipo === 'ENTRADA'
           ? (estadoEntrada.estado === 'TARDE'
@@ -991,11 +1227,47 @@
       const valDesde = document.getElementById('supFechaDesde').value;
       const valHasta = document.getElementById('supFechaHasta').value;
 
-      const servicios = obtenerServiciosSupervisor(datosSupervisorGlobal);
-      const filtrados = servicios.filter(servicio =>
-        servicioCoincideFiltrosSupervisor(servicio, mesFiltro, valDesde, valHasta)
-      );
+      let filtrados = [...datosSupervisorGlobal];
 
+      if (mesFiltro !== 'todos') {
+        filtrados = filtrados.filter(f => {
+          const d = new Date(f[0]);
+          if (isNaN(d.getTime())) return false;
+          const anio = d.getFullYear();
+          const mes = String(d.getMonth() + 1).padStart(2, '0');
+          return `${anio}-${mes}` === mesFiltro;
+        });
+      }
+
+      if (valDesde || valHasta) {
+        filtrados = filtrados.filter(f => {
+          if (!f[0]) return false;
+          const fechaIsoFila = obtenerFechaLocalClave(new Date(f[0]));
+          if (valDesde && fechaIsoFila < valDesde) return false;
+          if (valHasta && fechaIsoFila > valHasta) return false;
+          return true;
+        });
+      }
+
+      // IMPORTANTE: si una ENTRADA y su SALIDA forman un servicio continuo que
+      // cruza medianoche, mes o año, incluimos ambos extremos del par aunque uno
+      // quede fuera del filtro. Así un 31/08 19:00 -> 01/09 07:00 sigue siendo un servicio.
+      const ordenGlobal = [...datosSupervisorGlobal].sort((a, b) => new Date(a[0]) - new Date(b[0]));
+      const incluir = new Set(filtrados);
+
+      ordenGlobal.forEach((fila, i) => {
+        if (fila[4] === 'ENTRADA') {
+          const siguiente = ordenGlobal[i + 1];
+          if (siguiente && siguiente[4] === 'SALIDA') {
+            if (incluir.has(fila) || incluir.has(siguiente)) {
+              incluir.add(fila);
+              incluir.add(siguiente);
+            }
+          }
+        }
+      });
+
+      filtrados = Array.from(incluir).sort((a, b) => new Date(a[0]) - new Date(b[0]));
       procesarYRenderizarSupervisor(filtrados);
     }
 
@@ -1125,6 +1397,21 @@
       doc.save(`Reporte_Horas_Legajo_${legajo}.pdf`);
     }
 
+    function normalizarLegajoPanel(valor) {
+      const texto = String(valor ?? '').trim().toUpperCase();
+      if (!texto) return '';
+      return texto.replace(/^0+(?=\d)/, '');
+    }
+
+    function normalizarNombrePanel(valor) {
+      return String(valor ?? '')
+        .trim()
+        .toUpperCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ');
+    }
+
     function actualizarMetricasYGraficos(registros) {
       const ahora = new Date();
       const hoyStr = obtenerFechaLocalClave(ahora);
@@ -1135,8 +1422,6 @@
       const diasUltimaSemana = [];
       const conteoPorDia = {};
 
-      // Fechas locales de Argentina/cliente, no UTC, para evitar errores
-      // alrededor de medianoche.
       for (let i = 6; i >= 0; i--) {
         const d = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() - i);
         const fechaKey = obtenerFechaLocalClave(d);
@@ -1144,25 +1429,49 @@
         conteoPorDia[fechaKey] = { entradas: 0, salidas: 0 };
       }
 
-      // Los contadores de hoy y los gráficos usan todas las fichadas,
-      // independientemente de los filtros aplicados en la tabla.
       const registrosGlobales = Array.isArray(datosLocales) ? datosLocales : (registros || []);
 
-      // Última fichada HISTÓRICA de cada legajo. Esto permite detectar
-      // correctamente a alguien que entró ayer, el mes pasado o incluso
-      // el año anterior y todavía no registró la salida.
-      const ultimaFichadaPorLegajo = {};
+      /*
+       * EN PLANTA:
+       * Se toma exclusivamente la última fichada histórica de cada legajo
+       * perteneciente a una persona ACTIVA.
+       *
+       * La normalización de legajo evita duplicados como 12 / 012 / 00012.
+       * No se cuentan fechas futuras.
+       */
+      const personasActivas = new Map();
+      Object.values(mapaConfiguracionPersonalPanel || {}).forEach(persona => {
+        if (!persona) return;
+
+        const estado = String(persona.estado ?? '').trim().toUpperCase();
+        const legajoOriginal = String(persona.legajo ?? '').trim();
+        const legajoClave = normalizarLegajoPanel(legajoOriginal);
+
+        if (estado !== 'ACTIVO' || !legajoClave) return;
+
+        if (!personasActivas.has(legajoClave)) {
+          personasActivas.set(legajoClave, {
+            legajo: legajoOriginal,
+            nombre: String(persona.nombre ?? '').trim(),
+            firebaseId: persona.firebaseId || ''
+          });
+        }
+      });
+
+      const ultimaFichadaPorLegajo = new Map();
 
       registrosGlobales.forEach(fila => {
         if (!fila || !fila[0]) return;
 
         const fechaObj = new Date(fila[0]);
-        if (isNaN(fechaObj)) return;
+        if (isNaN(fechaObj.getTime())) return;
 
         const fechaIso = obtenerFechaLocalClave(fechaObj);
-        const legajo = String(fila[1] ?? '').trim();
+        const legajoFicha = String(fila[1] ?? '').trim();
+        const legajoClave = normalizarLegajoPanel(legajoFicha);
         const tipo = String(fila[4] ?? '').trim().toUpperCase();
 
+        // Entradas y salidas de HOY: no dependen del estado de planta.
         if (fechaIso === hoyStr) {
           if (tipo === 'ENTRADA') entradasHoy++;
           if (tipo === 'SALIDA') salidasHoy++;
@@ -1173,24 +1482,75 @@
           if (tipo === 'SALIDA') conteoPorDia[fechaIso].salidas++;
         }
 
-        if (legajo) {
-          const anterior = ultimaFichadaPorLegajo[legajo];
-          if (!anterior || fechaObj.getTime() > anterior.fecha.getTime()) {
-            ultimaFichadaPorLegajo[legajo] = {
-              fecha: fechaObj,
-              tipo
-            };
-          }
+        // Para "En Planta" solo interesan fichadas válidas de personal activo.
+        if (!legajoClave || !personasActivas.has(legajoClave)) return;
+        if (tipo !== 'ENTRADA' && tipo !== 'SALIDA') return;
+        if (fechaObj.getTime() > ahora.getTime()) return;
+
+        const anterior = ultimaFichadaPorLegajo.get(legajoClave);
+        if (
+          !anterior ||
+          fechaObj.getTime() > anterior.fecha.getTime() ||
+          (
+            fechaObj.getTime() === anterior.fecha.getTime() &&
+            tipo === 'SALIDA' &&
+            anterior.tipo !== 'SALIDA'
+          )
+        ) {
+          ultimaFichadaPorLegajo.set(legajoClave, {
+            fecha: fechaObj,
+            tipo,
+            legajo: legajoFicha,
+            nombreFicha: String(fila[2] ?? '').trim(),
+            objetivo: String(fila[3] ?? '').trim()
+          });
         }
       });
 
-      const enPlantaHoy = Object.values(ultimaFichadaPorLegajo)
-        .filter(item => item.tipo === 'ENTRADA').length;
+      const personasEnPlanta = Array.from(ultimaFichadaPorLegajo.entries())
+        .filter(([, item]) => item.tipo === 'ENTRADA')
+        .map(([legajoClave, item]) => {
+          const persona = personasActivas.get(legajoClave) || {};
+          return {
+            legajoClave,
+            legajo: persona.legajo || item.legajo || legajoClave,
+            nombre: persona.nombre || item.nombreFicha || `Legajo ${item.legajo || legajoClave}`,
+            entrada: item.fecha,
+            objetivo: item.objetivo || '-'
+          };
+        })
+        .sort((a, b) => a.entrada - b.entrada);
+
+      const enPlantaHoy = personasEnPlanta.length;
 
       document.getElementById('kpiEntradasHoy').innerText = entradasHoy;
       document.getElementById('kpiSalidasHoy').innerText = salidasHoy;
       document.getElementById('kpiEnPlanta').innerText = enPlantaHoy;
       document.getElementById('kpiTotalRegistros').innerText = (registros || []).length;
+
+      // Detalle visible para verificar exactamente qué personas está contando el KPI.
+      const detalleKpi = document.getElementById('detalleEnPlantaKpi');
+      if (detalleKpi) {
+        if (personasEnPlanta.length === 0) {
+          detalleKpi.textContent = 'Sin fichadas abiertas';
+        } else {
+          detalleKpi.textContent = personasEnPlanta
+            .map(p => `${p.legajo} · ${p.nombre}`)
+            .join(' | ');
+        }
+        detalleKpi.title = personasEnPlanta.map(p =>
+          `${p.legajo} · ${p.nombre} · Entrada ${p.entrada.toLocaleString('es-AR', { hour12: false })} · ${p.objetivo}`
+        ).join('\n');
+      }
+
+      console.groupCollapsed(`[Panel] En Planta = ${enPlantaHoy}`);
+      console.table(personasEnPlanta.map(p => ({
+        legajo: p.legajo,
+        nombre: p.nombre,
+        entrada: p.entrada.toLocaleString('es-AR', { hour12: false }),
+        objetivo: p.objetivo
+      })));
+      console.groupEnd();
 
       renderizarGraficoDona(enPlantaHoy, salidasHoy);
       renderizarGraficoBarras(diasUltimaSemana, conteoPorDia);
