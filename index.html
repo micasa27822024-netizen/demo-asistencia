@@ -87,6 +87,8 @@
         <select id="objetivo" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500">
           <option value="">Cargando objetivos...</option>
         </select>
+        <p id="objetivo-status" class="text-[11px] mt-1 text-slate-500"></p>
+        <p id="turno-status" class="text-[11px] mt-1 hidden"></p>
       </div>
 
       <!-- CÁMARA Y RECONOCIMIENTO FACIAL -->
@@ -124,6 +126,9 @@
     let resultadoSimilitudGlobal = "NO_EVALUADO";
     let sospechaFraudeGlobal = false;
     let motivoSospechaGlobal = "";
+    let personalActualGlobal = null;
+    let turnoProgramadoGlobal = null;
+    let objetivoAutorizadoIdsGlobal = [];
 
     window.onload = async function() {
       iniciarCamaraSegura();
@@ -221,47 +226,74 @@
     }
 
     function cargarObjetivos() {
-      const selectObj = document.getElementById('objetivo');
-      let objetivosGuardados = JSON.parse(localStorage.getItem('demo_lista_objetivos') || '[]');
-
-      if (objetivosGuardados.length > 0) {
-        objetivosDetalleGlobal = objetivosGuardados.map(item =>
-          typeof item === 'string' ? { nombre: item } : item
-        );
-        poblarSelectObjetivos(objetivosDetalleGlobal);
-      }
-
+      const objetivosGuardados = JSON.parse(localStorage.getItem('demo_lista_objetivos') || '[]');
+      if (objetivosGuardados.length > 0) objetivosDetalleGlobal = objetivosGuardados.map(item => typeof item === 'string' ? { nombre: item } : item);
       if (navigator.onLine) {
-        fetch(`${URL_FIREBASE}/objetivos.json`)
+        fetch(`${URL_FIREBASE}/objetivos.json?ts=${Date.now()}`, { cache: 'no-store' })
           .then(res => res.json())
           .then(data => {
-            if (data) {
-              const listaNuevos = Object.values(data)
-                .filter(item => item && (item.nombre || item.codigo))
-                .map(item => ({
-                  nombre: item.nombre || item.codigo,
-                  codigo: item.codigo || '',
-                  latitud: item.latitud ?? item.lat ?? item.latitude ?? null,
-                  longitud: item.longitud ?? item.lng ?? item.lon ?? item.longitude ?? null,
-                  radioPermitido: normalizarRadioObjetivo(item)
-                }));
-
-              if (listaNuevos.length > 0) {
-                localStorage.setItem('demo_lista_objetivos', JSON.stringify(listaNuevos));
-                objetivosDetalleGlobal = listaNuevos;
-                poblarSelectObjetivos(listaNuevos);
-              }
-            }
-          })
-          .catch(err => console.warn("No se pudieron actualizar los objetivos desde Firebase:", err));
-      } else if (objetivosGuardados.length === 0) {
-        const offline = [
-          { nombre: "Objetivo Principal", radioPermitido: RADIO_OBJETIVO_DEFAULT_METROS },
-          { nombre: "Puesto General", radioPermitido: RADIO_OBJETIVO_DEFAULT_METROS }
-        ];
-        objetivosDetalleGlobal = offline;
-        selectObj.innerHTML = '<option value="Objetivo Principal">Objetivo Principal (Modo Offline)</option><option value="Puesto General">Puesto General</option>';
+            if (!data) return;
+            const listaNuevos = Object.entries(data).filter(([id,item]) => item && (item.nombre || item.codigo)).map(([id,item]) => ({
+              id, nombre:item.nombre||item.codigo, codigo:item.codigo||'', latitud:item.latitud??item.lat??item.latitude??null, longitud:item.longitud??item.lng??item.lon??item.longitude??null, radioPermitido:normalizarRadioObjetivo(item)
+            }));
+            if (listaNuevos.length) { localStorage.setItem('demo_lista_objetivos',JSON.stringify(listaNuevos)); objetivosDetalleGlobal=listaNuevos; if(personalActualGlobal) aplicarConfiguracionVigilador(personalActualGlobal); }
+          }).catch(err=>console.warn('No se pudieron actualizar los objetivos desde Firebase:',err));
       }
+    }
+
+    function normalizarObjetivosAsignados(personal) {
+      const raw = personal?.objetivosAsignados;
+      if (Array.isArray(raw)) return raw.filter(x => x && (x.id || x.firebaseId || x.nombre)).map(x => ({ id:String(x.id||x.firebaseId||''), nombre:String(x.nombre||'') }));
+      if (raw && typeof raw === 'object') return Object.entries(raw).map(([id,x]) => ({id:String(x?.id||id),nombre:String(x?.nombre||x||'')}));
+      return [];
+    }
+
+    function formatearHorarioTurno(inicio, fin) { return inicio && fin ? `${inicio} → ${fin}` : 'Sin horario programado'; }
+
+    function obtenerFechaLocalISO() {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,'0');
+      const day = String(d.getDate()).padStart(2,'0');
+      return `${y}-${m}-${day}`;
+    }
+
+    async function obtenerTurnoProgramadoParaFecha(legajo, fecha) {
+      if (!navigator.onLine) return null;
+      try {
+        const res=await fetch(`${URL_FIREBASE}/asignacionesTurnos.json?ts=${Date.now()}`,{cache:'no-store'}); const data=await res.json();
+        if(!data)return null;
+        const lista=Object.entries(data).map(([id,d])=>({...d,id})).filter(d=>String(d.legajo||'').trim()===String(legajo).trim() && String(d.fecha||'')===String(fecha));
+        lista.sort((a,b)=>String(b.actualizadoEn||'').localeCompare(String(a.actualizadoEn||'')));
+        return lista[0]||null;
+      }catch(e){console.warn('No se pudo obtener la asignación del turno:',e);return null;}
+    }
+
+    async function aplicarConfiguracionVigilador(personal) {
+      personalActualGlobal=personal||null;
+      if(!personal)return;
+      localStorage.setItem('personal_config_fichada',JSON.stringify(personal));
+      const asignadosRaw=normalizarObjetivosAsignados(personal);
+      const asignados=asignadosRaw.map(x=>{
+        const detalle=objetivosDetalleGlobal.find(o=>String(o.id||'')===String(x.id||''));
+        return { ...x, nombre: detalle?.nombre || x.nombre };
+      });
+      objetivoAutorizadoIdsGlobal=asignados.map(x=>x.id).filter(Boolean);
+      const fecha=obtenerFechaLocalISO();
+      turnoProgramadoGlobal=await obtenerTurnoProgramadoParaFecha(personal.legajo,fecha);
+      let permitidos=asignados;
+      if(turnoProgramadoGlobal?.objetivoId){
+        const objetivoTurno = objetivosDetalleGlobal.find(o=>String(o.id||'')===String(turnoProgramadoGlobal.objetivoId));
+        permitidos = [{ id:String(turnoProgramadoGlobal.objetivoId), nombre:objetivoTurno?.nombre || turnoProgramadoGlobal.objetivoNombre || '' }];
+        objetivoAutorizadoIdsGlobal = permitidos.map(x=>x.id);
+      }
+      const select=document.getElementById('objetivo'); select.innerHTML='<option value="">Seleccione su puesto asignado</option>';
+      permitidos.forEach(o=>select.insertAdjacentHTML('beforeend',`<option value="${String(o.nombre||'').replace(/"/g,'&quot;')}" data-objetivo-id="${String(o.id||'')}">${String(o.nombre||o.id||'')}</option>`));
+      const objStatus=document.getElementById('objetivo-status'); const turnoStatus=document.getElementById('turno-status');
+      objStatus.className='text-[11px] mt-1 text-slate-500'; objStatus.innerText=permitidos.length ? `✓ ${permitidos.length} objetivo(s) autorizado(s) para este vigilador.` : '⚠️ No tiene objetivos autorizados. Debe configurarlos el administrador.';
+      turnoStatus.classList.remove('hidden'); turnoStatus.className='text-[11px] mt-1 '+(turnoProgramadoGlobal?'text-sky-300':'text-slate-400');
+      turnoStatus.innerText=turnoProgramadoGlobal ? `📅 Turno asignado para hoy: ${formatearHorarioTurno(turnoProgramadoGlobal.horaInicio,turnoProgramadoGlobal.horaFin)} · ${turnoProgramadoGlobal.objetivoNombre||''}` : (personal.horarioHabitual?.inicio&&personal.horarioHabitual?.fin ? `🕒 Horario habitual: ${formatearHorarioTurno(personal.horarioHabitual.inicio,personal.horarioHabitual.fin)}` : '⚠️ No hay horario programado para hoy.');
+      if(permitidos.length===1) select.value=permitidos[0].nombre||'';
     }
 
     function poblarSelectObjetivos(lista) {
@@ -514,6 +546,9 @@
           statusLbl.className = "text-xs mt-1 text-rose-400 block";
           statusLbl.innerText = "❌ Legajo no encontrado en el sistema.";
         }
+
+        if (encontrado) { aplicarConfiguracionVigilador(encontrado); }
+        else { personalActualGlobal = null; turnoProgramadoGlobal = null; document.getElementById('objetivo').innerHTML = '<option value="">Legajo no autorizado</option>'; document.getElementById('objetivo-status').innerText = ''; document.getElementById('turno-status').classList.add('hidden'); }
 
         let ultimaFichadaTipo = "";
         let timestampUltimo = 0;
@@ -814,6 +849,18 @@
         return;
       }
 
+      const opcionObjetivo = document.getElementById('objetivo').selectedOptions[0];
+      const objetivoIdSeleccionado = opcionObjetivo ? opcionObjetivo.dataset.objetivoId : '';
+      if (!personalActualGlobal || String(personalActualGlobal.legajo||'').trim() !== String(legajo).trim()) {
+        alert('❌ No se pudo validar la configuración del vigilador. Ingrese nuevamente su legajo.'); return;
+      }
+      if (!objetivoIdSeleccionado || !objetivoAutorizadoIdsGlobal.includes(String(objetivoIdSeleccionado))) {
+        alert('❌ FICHADA BLOQUEADA. Ese objetivo no está autorizado para este vigilador.'); return;
+      }
+      if (!turnoProgramadoGlobal && (!personalActualGlobal.horarioHabitual?.inicio || !personalActualGlobal.horarioHabitual?.fin)) {
+        alert('❌ FICHADA BLOQUEADA. No hay un horario programado para este vigilador. El administrador debe asignar un horario.'); return;
+      }
+
       if (ultimoTipoFichadaGlobal === "ENTRADA" && tipo === "ENTRADA") {
         alert("⚠️ Acción bloqueada: Ya registraste una ENTRADA previa. No puedes volver a fichar entrada hasta registrar tu SALIDA.");
         const divRes = document.getElementById('resultado');
@@ -905,7 +952,14 @@
         radioPermitidoMetros: validacionUbicacion ? validacionUbicacion.radioPermitido : RADIO_OBJETIVO_DEFAULT_METROS,
         precisionGPSMetros: Number.isFinite(precisionGPS) ? Math.round(precisionGPS) : null,
         latitudObjetivo: validacionUbicacion ? validacionUbicacion.latObjetivo : null,
-        longitudObjetivo: validacionUbicacion ? validacionUbicacion.lngObjetivo : null
+        longitudObjetivo: validacionUbicacion ? validacionUbicacion.lngObjetivo : null,
+
+        // Configuración laboral vigente al momento de la fichada.
+        horarioProgramadoInicio: turnoProgramadoGlobal?.horaInicio || personalActualGlobal?.horarioHabitual?.inicio || null,
+        horarioProgramadoFin: turnoProgramadoGlobal?.horaFin || personalActualGlobal?.horarioHabitual?.fin || null,
+        horarioProgramadoOrigen: turnoProgramadoGlobal ? 'ASIGNACION_FECHA' : 'HORARIO_HABITUAL',
+        asignacionTurnoId: turnoProgramadoGlobal?.id || null,
+        objetivoAutorizadoId: document.getElementById('objetivo').selectedOptions[0]?.dataset?.objetivoId || null
       };
 
       const divResultado = document.getElementById('resultado');
