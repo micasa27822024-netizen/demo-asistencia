@@ -837,6 +837,94 @@
       preview.classList.remove('hidden');
     }
 
+    // ==========================================
+    // CONTROL DE HORARIO: TOLERANCIA DE ENTRADA Y SALIDA
+    // ==========================================
+    const TOLERANCIA_ENTRADA_MINUTOS = 15;
+    const TOLERANCIA_SALIDA_MINUTOS = 30;
+
+    function construirFechaHoraTurno(baseDate, horaTexto, permiteDiaSiguiente = false) {
+      if (!baseDate || !horaTexto) return null;
+      const partes = String(horaTexto).split(':').map(Number);
+      if (partes.length < 2 || !Number.isFinite(partes[0]) || !Number.isFinite(partes[1])) return null;
+      const d = new Date(baseDate);
+      d.setHours(partes[0], partes[1], 0, 0);
+      if (permiteDiaSiguiente) d.setDate(d.getDate() + 1);
+      return d;
+    }
+
+    function obtenerVentanaTurno(fechaHoraFichada, inicioTexto, finTexto) {
+      if (!inicioTexto || !finTexto || !fechaHoraFichada) return null;
+      const base = new Date(fechaHoraFichada);
+      const inicio = construirFechaHoraTurno(base, inicioTexto, false);
+      let fin = construirFechaHoraTurno(base, finTexto, false);
+      if (!inicio || !fin) return null;
+      if (fin <= inicio) fin.setDate(fin.getDate() + 1);
+      return { inicio, fin };
+    }
+
+    function evaluarHorarioFichada(tipo, fechaHora, turno) {
+      if (!turno?.horaInicio || !turno?.horaFin || !fechaHora) {
+        return { estado: 'SIN_HORARIO', minutosTardanza: 0, minutosAnticipacion: 0, minutosExtra: 0 };
+      }
+
+      const ahora = new Date(fechaHora);
+      const ventana = obtenerVentanaTurno(ahora, turno.horaInicio, turno.horaFin);
+      if (!ventana) return { estado: 'SIN_HORARIO', minutosTardanza: 0, minutosAnticipacion: 0, minutosExtra: 0 };
+
+      if (tipo === 'ENTRADA') {
+        const diferenciaMin = Math.floor((ahora - ventana.inicio) / 60000);
+        if (diferenciaMin <= 0) {
+          return { estado: 'A_TIEMPO', minutosTardanza: 0, minutosAnticipacion: Math.max(0, -diferenciaMin), minutosExtra: 0 };
+        }
+        if (diferenciaMin <= TOLERANCIA_ENTRADA_MINUTOS) {
+          return { estado: 'TARDANZA_TOLERANCIA', minutosTardanza: diferenciaMin, minutosAnticipacion: 0, minutosExtra: 0 };
+        }
+        return { estado: 'TARDANZA_ALERTA', minutosTardanza: diferenciaMin, minutosAnticipacion: 0, minutosExtra: 0 };
+      }
+
+      const diferenciaFin = Math.floor((ahora - ventana.fin) / 60000);
+      return {
+        estado: diferenciaFin > TOLERANCIA_SALIDA_MINUTOS ? 'SALIDA_CON_EXTRA' : 'SALIDA_TOLERANCIA',
+        minutosTardanza: 0,
+        minutosAnticipacion: 0,
+        minutosExtra: diferenciaFin > TOLERANCIA_SALIDA_MINUTOS ? Math.max(0, diferenciaFin) : 0
+      };
+    }
+
+    async function registrarAlertaTardanzaEntrada(datos) {
+      const alerta = {
+        tipoAlerta: 'FICHADA_TARDIA_ENTRADA',
+        estado: 'NUEVA',
+        legajo: datos.legajo,
+        nombre: datos.nombre || `Legajo ${datos.legajo}`,
+        objetivo: datos.objetivo || 'Sin objetivo',
+        tipoFichada: 'ENTRADA',
+        fechaHora: datos.fechaHoraDispositivo,
+        horaInicioProgramada: datos.horarioProgramadoInicio || null,
+        minutosTardanza: datos.minutosTardanza || 0,
+        toleranciaMinutos: TOLERANCIA_ENTRADA_MINUTOS,
+        mensaje: `Entrada fuera de tolerancia: ${datos.minutosTardanza || 0} minutos después del inicio del turno.`
+      };
+      if (!navigator.onLine) {
+        const pendientes = JSON.parse(localStorage.getItem('alertas_fichadas_pendientes') || '[]');
+        pendientes.push(alerta);
+        localStorage.setItem('alertas_fichadas_pendientes', JSON.stringify(pendientes));
+        return;
+      }
+      try {
+        const res = await fetch(`${URL_FIREBASE}/alertasFichadas.json`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(alerta)
+        });
+        if (!res.ok) throw new Error('No se pudo registrar la alerta de tardanza.');
+      } catch (e) {
+        console.warn('No se pudo enviar la alerta de tardanza; queda pendiente.', e);
+        const pendientes = JSON.parse(localStorage.getItem('alertas_fichadas_pendientes') || '[]');
+        pendientes.push(alerta);
+        localStorage.setItem('alertas_fichadas_pendientes', JSON.stringify(pendientes));
+      }
+    }
+
     function procesarEnvio(tipoRecibido) {
       const tipo = String(tipoRecibido).trim().toUpperCase();
       const legajo = document.getElementById('legajo').value.trim();
@@ -930,7 +1018,7 @@
       );
     }
 
-    function ejecutarPeticionFichada(tipo, lat, lng, legajo, pin, nombre, objetivo, validacionUbicacion, precisionGPS) {
+    async function ejecutarPeticionFichada(tipo, lat, lng, legajo, pin, nombre, objetivo, validacionUbicacion, precisionGPS) {
       const datos = {
         legajo: legajo,
         pin: pin,
@@ -962,6 +1050,22 @@
         objetivoAutorizadoId: document.getElementById('objetivo').selectedOptions[0]?.dataset?.objetivoId || null
       };
 
+      // Evaluamos la puntualidad antes de guardar la fichada. La hora real se conserva para auditoría.
+      const evaluacionHorario = evaluarHorarioFichada(tipo, datos.fechaHoraDispositivo, {
+        horaInicio: datos.horarioProgramadoInicio,
+        horaFin: datos.horarioProgramadoFin
+      });
+      datos.estadoHorario = evaluacionHorario.estado;
+      datos.minutosTardanza = evaluacionHorario.minutosTardanza;
+      datos.minutosAnticipacion = evaluacionHorario.minutosAnticipacion;
+      datos.minutosExtra = evaluacionHorario.minutosExtra;
+      datos.toleranciaEntradaMinutos = TOLERANCIA_ENTRADA_MINUTOS;
+      datos.toleranciaSalidaMinutos = TOLERANCIA_SALIDA_MINUTOS;
+
+      if (tipo === 'ENTRADA' && evaluacionHorario.estado === 'TARDANZA_ALERTA') {
+        await registrarAlertaTardanzaEntrada(datos);
+      }
+
       const divResultado = document.getElementById('resultado');
 
       if (!navigator.onLine) {
@@ -984,8 +1088,22 @@
       })
       .then(respuesta => {
         if (respuesta && respuesta.name) {
-          divResultado.className = "p-3 rounded-xl text-xs text-center bg-emerald-950 text-emerald-200 border border-emerald-500";
-          divResultado.innerText = `✓ ¡Fichada de ${tipo} registrada con éxito!`;
+          if (datos.estadoHorario === 'TARDANZA_ALERTA') {
+            divResultado.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
+            divResultado.innerText = `⚠️ Fichada registrada. Llegaste ${datos.minutosTardanza} minutos después del inicio; se notificó al supervisor.`;
+          } else if (datos.estadoHorario === 'TARDANZA_TOLERANCIA') {
+            divResultado.className = "p-3 rounded-xl text-xs text-center bg-amber-950 text-amber-200 border border-amber-500";
+            divResultado.innerText = `⚠️ Fichada registrada dentro de la tolerancia: ${datos.minutosTardanza} min de demora.`;
+          } else if (datos.estadoHorario === 'SALIDA_TOLERANCIA') {
+            divResultado.className = "p-3 rounded-xl text-xs text-center bg-amber-950 text-amber-200 border border-amber-500";
+            divResultado.innerText = `✓ Salida registrada. Dentro de los ${TOLERANCIA_SALIDA_MINUTOS} minutos de tolerancia.`;
+          } else if (datos.estadoHorario === 'SALIDA_CON_EXTRA') {
+            divResultado.className = "p-3 rounded-xl text-xs text-center bg-sky-950 text-sky-200 border border-sky-500";
+            divResultado.innerText = `✓ Salida registrada. Tiempo extra contabilizable: ${datos.minutosExtra} min.`;
+          } else {
+            divResultado.className = "p-3 rounded-xl text-xs text-center bg-emerald-950 text-emerald-200 border border-emerald-500";
+            divResultado.innerText = `✓ ¡Fichada de ${tipo} registrada con éxito!`;
+          }
           
           ultimoTipoFichadaGlobal = tipo;
           limpiarFormularioExitoso();
