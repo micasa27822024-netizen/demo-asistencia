@@ -7,7 +7,6 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
   <style>
-    /* Desactivar selección de texto en el botón de pánico para evitar interferencias al mantener presionado */
     .no-select {
       -webkit-touch-callout: none;
       -webkit-user-select: none;
@@ -107,14 +106,13 @@
           <span id="textoPanico">MANTÉN PRESIONADO (3s)</span>
         </button>
 
-        <!-- Barra de Progreso de la Presión -->
         <div class="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden border border-rose-900/50">
           <div id="barraProgresoPanico" class="bg-rose-500 h-full w-0 transition-all duration-75"></div>
         </div>
       </div>
     </div>
 
-    <!-- FILTROS DE FECHA (MES Y DÍA) -->
+    <!-- FILTROS DE FECHA -->
     <div id="seccionFiltros" class="hidden bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-wrap items-center justify-between gap-4">
       <div class="flex items-center gap-3 flex-wrap">
         <div class="flex items-center gap-2">
@@ -170,7 +168,7 @@
       </div>
     </div>
 
-    <!-- MÓDULO DE NOVEDADES E INCIDENCIAS -->
+    <!-- MÓDULO DE NOVEDADES -->
     <div id="seccionNovedades" class="hidden bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
       <h3 class="text-lg font-bold text-white flex items-center gap-2">
         <i class="fa-solid fa-triangle-exclamation text-amber-400"></i> Reportar Novedad o Incidencia
@@ -212,11 +210,10 @@
     let mapaConfiguracionPersonalVigilador = {};
     let asignacionesTurnosVigilador = [];
 
-    // Variables para control del Botón de Pánico sostenido
     let temporizadorPanico = null;
     let intervaloProgresoPanico = null;
     let tiempoPresionadoMs = 0;
-    const TIEMPO_REQUERIDO_MS = 3000; // 3 segundos
+    const TIEMPO_REQUERIDO_MS = 3000;
 
     function parseFechaSegura(fechaStr) {
       if (!fechaStr) return new Date(NaN);
@@ -249,14 +246,12 @@
       const legajoStr = String(legajo || '').trim();
       const objetivoStr = String(objetivoNombre || '').trim().toLowerCase();
 
-      // Primero: turno puntual asignado desde ADMIN para esa fecha.
       const turnosFecha = asignacionesTurnosVigilador.filter(t =>
         String(t.legajo || '').trim() === legajoStr && String(t.fecha || '') === fechaClave
       );
 
       let turno = null;
       if (turnosFecha.length) {
-        // Si hay más de un turno, priorizar el objetivo de la fichada.
         turno = turnosFecha.find(t => {
           const nombre = String(t.objetivoNombre || t.objetivo || '').trim().toLowerCase();
           return objetivoStr && nombre && (
@@ -275,7 +270,6 @@
         };
       }
 
-      // Segundo: horario habitual configurado en ADMIN para ese vigilador.
       const persona = Object.values(mapaConfiguracionPersonalVigilador).find(p =>
         String(p.legajo || '').trim() === legajoStr
       );
@@ -300,8 +294,6 @@
         return { d: 0, n: 0, t: 0, entradaComputable: inicioReal, ajusteMinutos: 0 };
       }
 
-      // La fichada real NO se modifica. Solo se modifica el punto desde el cual
-      // se calculan las horas trabajadas cuando hubo llegada anticipada.
       let inicioComputable = new Date(inicioReal.getTime());
       let ajusteMinutos = 0;
 
@@ -317,8 +309,6 @@
             0
           );
 
-          // Ejemplo: turno 19:00, entrada 18:30 -> computar desde 19:00.
-          // Si entra 19:20 -> se mantiene 19:20.
           if (inicioTurno > inicioComputable) {
             inicioComputable = inicioTurno;
             ajusteMinutos = Math.round((inicioComputable - inicioReal) / 60000);
@@ -419,13 +409,15 @@
         asignacionesTurnosVigilador = turnosData
           ? Object.entries(turnosData).map(([id, d]) => ({ ...d, id }))
           : [];
+
         let empleadoEncontrado = null;
         let nombreEmpleado = `Legajo ${legajoIngresado}`;
 
         if (personalData) {
           Object.values(personalData).forEach(p => {
             const pLegajo = String(p.legajo || "").trim();
-            if (pLegajo === legajoIngresado || parseInt(pLegajo, 10) === parseInt(legajoIngresado, 10)) {
+            const coincideLegajo = (pLegajo === legajoIngresado || parseInt(pLegajo, 10) === parseInt(legajoIngresado, 10));
+            if (coincideLegajo) {
               const pPin = String(p.pin || p.clave || "").trim();
               if (!pPin || pPin === pinIngresado) {
                 empleadoEncontrado = p;
@@ -433,6 +425,11 @@
               }
             }
           });
+        }
+
+        if (!empleadoEncontrado) {
+          alert("❌ El número de legajo o el PIN son incorrectos.");
+          return;
         }
 
         let misFichadas = [];
@@ -449,11 +446,6 @@
               });
             }
           });
-        }
-
-        if (misFichadas.length === 0) {
-          alert("No se encontraron registros de fichadas para el legajo ingresado.");
-          return;
         }
 
         sessionStorage.setItem('vigilador_legajo', legajoIngresado);
@@ -637,7 +629,6 @@
       document.getElementById('contenedorTabla').classList.remove('hidden');
     }
 
-    // 🚨 CONFIGURACIÓN DEL BOTÓN DE PÁNICO SOSTENIDO (3 SEGUNDOS)
     function inicializarBotonPanicoSostenido() {
       const btn = document.getElementById('btnPanico');
       
@@ -666,7 +657,6 @@
         document.getElementById('textoPanico').innerText = "MANTÉN PRESIONADO (3s)";
       };
 
-      // Eventos para Desktop y Mobile
       btn.addEventListener('mousedown', iniciarPresion);
       btn.addEventListener('mouseup', cancelarPresion);
       btn.addEventListener('mouseleave', cancelarPresion);
@@ -676,7 +666,6 @@
       btn.addEventListener('touchcancel', cancelarPresion);
     }
 
-    // 🚨 EJECUCIÓN DE LA ALERTA DE PÁNICO CORREGIDA
     function dispararAlertaPanico() {
       const legajo = sessionStorage.getItem('vigilador_legajo');
       const nombreVigilador = sessionStorage.getItem('vigilador_nombre') || `Legajo ${legajo}`;
@@ -700,7 +689,7 @@
       }
 
       if (!enServicio) {
-        alert("❌ No se puede enviar la alerta de pánico: Se encuentra fuera de servicio (requiere tener una Entrada activa).");
+        alert("❌ No se puede enviar la alerta de pánico: Se encuentra fuera de servicio.");
         return;
       }
 
@@ -715,7 +704,6 @@
           const lon = position.coords.longitude;
           const fechaActual = new Date().toISOString();
 
-          // Payload estandarizado incluyendo 'fechaHora' para que el panel lo lea correctamente
           const payloadPanico = {
             tipo: "PANICO",
             legajo: String(legajo),
@@ -737,20 +725,19 @@
           })
           .then(res => res.json())
           .then(() => {
-            alert("🚨 ¡ALERTA DE PÁNICO ENVIADA A LA CENTRAL. EL PERSONAL OPERATIVO HA SIDO NOTIFICADO!");
+            alert("🚨 ¡ALERTA DE PÁNICO ENVIADA A LA CENTRAL!");
           })
           .catch(error => {
             alert("Error al enviar alerta de pánico: " + error.toString());
           });
         },
         function(error) {
-          alert("Error: Es obligatorio permitir el acceso al GPS para activar la alerta de pánico.");
+          alert("Error: Es obligatorio permitir el acceso al GPS.");
         },
         { enableHighAccuracy: true }
       );
     }
 
-    // 📝 ENVÍO DE NOVEDAD A FIREBASE
     function enviarNovedadPortal() {
       const legajo = sessionStorage.getItem('vigilador_legajo');
       const nombreVigilador = sessionStorage.getItem('vigilador_nombre') || `Legajo ${legajo}`;
@@ -777,7 +764,7 @@
       }
 
       if (!enServicio) {
-        alert("❌ No se puede enviar el informe: Actualmente se encuentra fuera de servicio (debe tener una Entrada activa / En Turno).");
+        alert("❌ No se puede enviar el informe: Se encuentra fuera de servicio.");
         return;
       }
 
@@ -807,7 +794,7 @@
           }
         },
         function(error) {
-          alert("Error: Es necesario activar el GPS para enviar novedades.");
+          alert("Error: Es necesario activar el GPS.");
         },
         { enableHighAccuracy: true }
       );
