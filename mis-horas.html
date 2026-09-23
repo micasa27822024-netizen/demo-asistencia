@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -6,8 +7,9 @@
   <title>Demo Asistencia- Mi Historial de Horas y Marcaciones</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
   <style>
-    /* Desactivar selección de texto en el botón de pánico para evitar interferencias al mantener presionado */
+    /* Desactivar selección de texto en el botón de pánico */
     .no-select {
       -webkit-touch-callout: none;
       -webkit-user-select: none;
@@ -18,912 +20,3895 @@
     }
   </style>
 </head>
+
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
 
   <!-- ENCABEZADO Y MENÚ CORPORATIVO -->
   <header class="bg-slate-900 border-b border-slate-800 shadow-md">
     <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-4">
+
       <div class="flex items-center space-x-3">
         <div class="w-10 h-10 bg-slate-800 border border-emerald-500/30 rounded-xl flex items-center justify-center overflow-hidden shadow-inner p-1">
-          <img src="https://i.ibb.co/qYcVxcTH/Chat-GPT-Image-3-sept-2026-13-19-18.png" alt="Logo VGA Security" class="w-full h-full object-contain">
+          <img
+            src="https://i.ibb.co/qYcVxcTH/Chat-GPT-Image-3-sept-2026-13-19-18.png"
+            alt="Logo VGA Security"
+            class="w-full h-full object-contain">
         </div>
+
         <div>
-          <span class="text-[10px] font-extrabold tracking-widest text-emerald-400 uppercase block">VGA Security 24 S.A.</span>
-          <h1 class="text-lg font-bold text-white tracking-wide">Portal del Vigilador</h1>
+          <span class="text-[10px] font-extrabold tracking-widest text-emerald-400 uppercase block">
+            VGA Security 24 S.A.
+          </span>
+          <h1 class="text-lg font-bold text-white tracking-wide">
+            Portal del Vigilador
+          </h1>
         </div>
       </div>
 
       <nav class="flex flex-wrap justify-center items-center gap-1 bg-slate-800/80 p-1.5 rounded-xl border border-slate-700/60">
-        <a href="index.html" class="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition flex items-center space-x-1.5">
+
+        <a href="index.html"
+           class="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition flex items-center space-x-1.5">
           <i class="fa-solid fa-camera-retro text-emerald-400"></i>
           <span>Fichadas</span>
         </a>
-        <a href="admin.html" class="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition flex items-center space-x-1.5">
+
+        <a href="admin.html"
+           class="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition flex items-center space-x-1.5">
           <i class="fa-solid fa-building-shield text-emerald-400"></i>
           <span>Centro de Operaciones</span>
         </a>
-        <a href="panel.html" class="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition flex items-center space-x-1.5">
+
+        <a href="panel.html"
+           class="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition flex items-center space-x-1.5">
           <i class="fa-solid fa-chart-line text-emerald-400"></i>
           <span>Control en Tiempo Real</span>
         </a>
-        <a href="mis-horas.html" class="px-3 py-1.5 text-xs font-medium text-white bg-slate-700 rounded-lg transition flex items-center space-x-1.5 shadow-sm">
+
+        <a href="mis-horas.html"
+           class="px-3 py-1.5 text-xs font-medium text-white bg-slate-700 rounded-lg transition flex items-center space-x-1.5 shadow-sm">
           <i class="fa-solid fa-clock text-emerald-400"></i>
           <span>Control de Mis Horas</span>
         </a>
+
       </nav>
     </div>
   </header>
 
+
   <!-- CONTENIDO PRINCIPAL -->
   <main class="max-w-4xl mx-auto space-y-6 p-4 md:p-8 flex-grow w-full">
-    
+
+    <!-- LOGIN -->
     <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
+
       <div class="flex justify-between items-center">
+
         <h2 class="text-xl font-bold text-white flex items-center gap-2">
-          <i class="fa-solid fa-user-clock text-emerald-500"></i> Mi Consulta de Horas
+          <i class="fa-solid fa-user-clock text-emerald-500"></i>
+          Mi Consulta de Horas
         </h2>
-        <button id="btnCerrarSesion" onclick="cerrarSesionVigilador()" class="hidden text-xs text-rose-400 hover:text-rose-300 font-semibold flex items-center gap-1 bg-rose-500/10 border border-rose-500/20 px-3 py-1.5 rounded-lg transition">
-          <i class="fa-solid fa-right-from-bracket"></i> Salir de mi cuenta
+
+        <button
+          id="btnCerrarSesion"
+          onclick="cerrarSesionVigilador()"
+          class="hidden text-xs text-rose-400 hover:text-rose-300 font-semibold flex items-center gap-1 bg-rose-500/10 border border-rose-500/20 px-3 py-1.5 rounded-lg transition">
+          <i class="fa-solid fa-right-from-bracket"></i>
+          Salir de mi cuenta
         </button>
+
       </div>
 
-      <!-- Formulario de Login -->
-      <form id="formLoginVigilador" onsubmit="event.preventDefault(); buscarMisHoras();" class="grid grid-cols-1 md:grid-cols-3 gap-3">
+
+      <form
+        id="formLoginVigilador"
+        onsubmit="event.preventDefault(); buscarMisHoras();"
+        class="grid grid-cols-1 md:grid-cols-3 gap-3">
+
         <div class="relative">
           <i class="fa-solid fa-id-badge absolute left-3 top-3 text-slate-400 text-sm"></i>
-          <input type="text" id="legajoInput" placeholder="Número de Legajo..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+
+          <input
+            type="text"
+            id="legajoInput"
+            placeholder="Número de Legajo..."
+            class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
         </div>
+
         <div class="relative">
           <i class="fa-solid fa-key absolute left-3 top-3 text-slate-400 text-sm"></i>
-          <input type="password" id="pinInput" placeholder="PIN de seguridad..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+
+          <input
+            type="password"
+            id="pinInput"
+            placeholder="PIN de seguridad..."
+            class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
         </div>
-        <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-2 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
-          <i class="fa-solid fa-lock-open"></i> Verificar e Ingresar
+
+        <button
+          type="submit"
+          class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-2 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
+          <i class="fa-solid fa-lock-open"></i>
+          Verificar e Ingresar
         </button>
+
       </form>
 
-      <!-- Indicador de Sesión Activa -->
-      <div id="infoSesionActiva" class="hidden flex flex-col md:flex-row items-center justify-between bg-slate-900/60 border border-emerald-500/30 px-4 py-2.5 rounded-xl text-xs gap-2">
+
+      <!-- SESIÓN -->
+      <div
+        id="infoSesionActiva"
+        class="hidden flex flex-col md:flex-row items-center justify-between bg-slate-900/60 border border-emerald-500/30 px-4 py-2.5 rounded-xl text-xs gap-2">
+
         <span class="text-emerald-400 font-medium flex items-center gap-2">
-          <i class="fa-solid fa-circle-check"></i> Sesión activa para el Vigilador: <strong id="lblNombreActivo" class="text-white"></strong> (<span id="lblLegajoActivo"></span>)
+          <i class="fa-solid fa-circle-check"></i>
+          Sesión activa para el Vigilador:
+          <strong id="lblNombreActivo" class="text-white"></strong>
+          (<span id="lblLegajoActivo"></span>)
         </span>
-        <span class="text-slate-400"><i class="fa-solid fa-shield-halved text-emerald-400"></i> Bloqueo por inactividad (3 min)</span>
+
+        <span class="text-slate-400">
+          <i class="fa-solid fa-shield-halved text-emerald-400"></i>
+          Bloqueo por inactividad (3 min)
+        </span>
+
       </div>
+
     </div>
 
-    <!-- MÓDULO DE BOTÓN DE PÁNICO EN VIVO -->
-    <div id="seccionPanico" class="hidden bg-rose-950/40 border-2 border-rose-600/60 p-6 rounded-2xl shadow-2xl text-center space-y-4">
+
+    <!-- ========================================================= -->
+    <!-- BOTÓN DE PÁNICO -->
+    <!-- ========================================================= -->
+
+    <div
+      id="seccionPanico"
+      class="hidden bg-rose-950/40 border-2 border-rose-600/60 p-6 rounded-2xl shadow-2xl text-center space-y-4">
+
       <div class="flex items-center justify-center gap-2 text-rose-500 font-black tracking-wider text-xs uppercase">
-        <i class="fa-solid fa-triangle-exclamation animate-pulse text-lg"></i> Alerta de Emergencia Operativa
+
+        <i class="fa-solid fa-triangle-exclamation animate-pulse text-lg"></i>
+
+        Alerta de Emergencia Operativa
+
       </div>
-      <h3 class="text-lg font-extrabold text-white">¿Enfrentas una situación de peligro inminente?</h3>
+
+
+      <h3 class="text-lg font-extrabold text-white">
+        ¿Enfrentas una situación de peligro inminente?
+      </h3>
+
+
       <p class="text-xs text-slate-300 max-w-lg mx-auto">
-        Mantén presionado el botón durante <strong>3 segundos</strong> para enviar una señal crítica con tu ubicación GPS a la Central.
+
+        Mantén presionado el botón durante
+        <strong>3 segundos</strong>
+        para enviar una señal crítica con tu ubicación GPS a la Central.
+
+        <br>
+
+        <span class="text-amber-400 font-semibold">
+          La alerta también puede activarse sin Internet.
+        </span>
+
       </p>
 
+
       <div class="max-w-md mx-auto space-y-2">
-        <button id="btnPanico" class="no-select w-full bg-rose-600 hover:bg-rose-700 text-white font-black py-4 px-6 rounded-2xl text-base tracking-wide transition transform active:scale-95 shadow-lg shadow-rose-600/40 flex items-center justify-center gap-3 border border-rose-400/30 cursor-pointer">
+
+        <button
+          id="btnPanico"
+          class="no-select w-full bg-rose-600 hover:bg-rose-700 text-white font-black py-4 px-6 rounded-2xl text-base tracking-wide transition transform active:scale-95 shadow-lg shadow-rose-600/40 flex items-center justify-center gap-3 border border-rose-400/30 cursor-pointer">
+
           <i class="fa-solid fa-shield-cat text-2xl animate-bounce"></i>
-          <span id="textoPanico">MANTÉN PRESIONADO (3s)</span>
+
+          <span id="textoPanico">
+            MANTÉN PRESIONADO (3s)
+          </span>
+
         </button>
 
-        <!-- Barra de Progreso de la Presión -->
+
+        <!-- BARRA -->
         <div class="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden border border-rose-900/50">
-          <div id="barraProgresoPanico" class="bg-rose-500 h-full w-0 transition-all duration-75"></div>
+
+          <div
+            id="barraProgresoPanico"
+            class="bg-rose-500 h-full w-0 transition-all duration-75">
+          </div>
+
         </div>
+
+
+        <!-- ESTADO OFFLINE -->
+        <div
+          id="estadoConexionPanico"
+          class="text-[11px] text-slate-400 flex items-center justify-center gap-2">
+
+          <span
+            id="indicadorConexionPanico"
+            class="w-2 h-2 rounded-full bg-emerald-500 inline-block">
+          </span>
+
+          <span id="textoConexionPanico">
+            Conexión disponible
+          </span>
+
+        </div>
+
+
+        <!-- ALERTAS PENDIENTES -->
+        <div
+          id="alertasPanicoPendientes"
+          class="hidden text-[11px] text-amber-300 bg-amber-950/30 border border-amber-500/20 rounded-lg px-3 py-2">
+
+          <i class="fa-solid fa-clock"></i>
+
+          <span id="textoAlertasPanicoPendientes">
+            Hay alertas pendientes de enviar.
+          </span>
+
+        </div>
+
       </div>
+
     </div>
 
-    <!-- FILTROS DE FECHA (MES Y DÍA) -->
-    <div id="seccionFiltros" class="hidden bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-wrap items-center justify-between gap-4">
+
+    <!-- FILTROS -->
+    <div
+      id="seccionFiltros"
+      class="hidden bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-wrap items-center justify-between gap-4">
+
       <div class="flex items-center gap-3 flex-wrap">
+
         <div class="flex items-center gap-2">
-          <label class="text-xs text-slate-400 font-semibold"><i class="fa-solid fa-calendar-days text-emerald-400"></i> Mes:</label>
-          <select id="filtroMes" onchange="aplicarFiltros()" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500">
-            <option value="todos">Todos los meses</option>
+
+          <label class="text-xs text-slate-400 font-semibold">
+            <i class="fa-solid fa-calendar-days text-emerald-400"></i>
+            Mes:
+          </label>
+
+          <select
+            id="filtroMes"
+            onchange="aplicarFiltros()"
+            class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500">
+
+            <option value="todos">
+              Todos los meses
+            </option>
+
           </select>
+
         </div>
+
 
         <div class="flex items-center gap-2">
-          <label class="text-xs text-slate-400 font-semibold"><i class="fa-solid fa-filter text-emerald-400"></i> Día específico:</label>
-          <input type="date" id="filtroDia" onchange="aplicarFiltros()" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500">
+
+          <label class="text-xs text-slate-400 font-semibold">
+            <i class="fa-solid fa-filter text-emerald-400"></i>
+            Día específico:
+          </label>
+
+          <input
+            type="date"
+            id="filtroDia"
+            onchange="aplicarFiltros()"
+            class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500">
+
         </div>
+
       </div>
 
-      <button onclick="limpiarFiltros()" class="text-xs text-slate-400 hover:text-white bg-slate-700/50 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition">
-        <i class="fa-solid fa-rotate-right"></i> Limpiar filtros
+
+      <button
+        onclick="limpiarFiltros()"
+        class="text-xs text-slate-400 hover:text-white bg-slate-700/50 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition">
+
+        <i class="fa-solid fa-rotate-right"></i>
+        Limpiar filtros
+
       </button>
+
     </div>
 
-    <!-- TARJETAS DE RESUMEN -->
-    <div id="resumenHoras" class="hidden grid grid-cols-1 md:grid-cols-3 gap-4">
+
+    <!-- RESUMEN -->
+    <div
+      id="resumenHoras"
+      class="hidden grid grid-cols-1 md:grid-cols-3 gap-4">
+
       <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
-        <p class="text-xs text-slate-400 font-semibold">HORAS DIURNAS (06-21hs)</p>
-        <p id="horasDiurnas" class="text-2xl font-bold text-amber-400 mt-1">00:00 hs</p>
+
+        <p class="text-xs text-slate-400 font-semibold">
+          HORAS DIURNAS (06-21hs)
+        </p>
+
+        <p
+          id="horasDiurnas"
+          class="text-2xl font-bold text-amber-400 mt-1">
+          00:00 hs
+        </p>
+
       </div>
+
+
       <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
-        <p class="text-xs text-slate-400 font-semibold">HORAS NOCTURNAS (21-06hs)</p>
-        <p id="horasNocturnas" class="text-2xl font-bold text-indigo-400 mt-1">00:00 hs</p>
+
+        <p class="text-xs text-slate-400 font-semibold">
+          HORAS NOCTURNAS (21-06hs)
+        </p>
+
+        <p
+          id="horasNocturnas"
+          class="text-2xl font-bold text-indigo-400 mt-1">
+          00:00 hs
+        </p>
+
       </div>
+
+
       <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
-        <p class="text-xs text-slate-400 font-semibold">TOTAL TRABAJADO</p>
-        <p id="horasTotales" class="text-2xl font-bold text-emerald-400 mt-1">00:00 hs</p>
+
+        <p class="text-xs text-slate-400 font-semibold">
+          TOTAL TRABAJADO
+        </p>
+
+        <p
+          id="horasTotales"
+          class="text-2xl font-bold text-emerald-400 mt-1">
+          00:00 hs
+        </p>
+
       </div>
+
     </div>
 
-    <!-- TABLA DE DETALLE -->
-    <div id="contenedorTabla" class="hidden bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
+
+    <!-- TABLA -->
+    <div
+      id="contenedorTabla"
+      class="hidden bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
+
       <div class="overflow-x-auto">
+
         <table class="w-full text-left text-sm text-slate-300">
+
           <thead class="bg-slate-950 text-slate-400 uppercase text-xs border-b border-slate-700">
+
             <tr>
+
               <th class="p-4">Entrada</th>
               <th class="p-4">Salida</th>
               <th class="p-4">Objetivo</th>
               <th class="p-4 text-center">Diurnas</th>
               <th class="p-4 text-center">Nocturnas</th>
               <th class="p-4 text-center">Total</th>
+
             </tr>
+
           </thead>
-          <tbody id="cuerpoDetalle" class="divide-y divide-slate-700/50"></tbody>
+
+          <tbody
+            id="cuerpoDetalle"
+            class="divide-y divide-slate-700/50">
+          </tbody>
+
         </table>
+
       </div>
+
     </div>
 
-    <!-- MÓDULO DE NOVEDADES E INCIDENCIAS -->
-    <div id="seccionNovedades" class="hidden bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
+
+    <!-- NOVEDADES -->
+    <div
+      id="seccionNovedades"
+      class="hidden bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
+
       <h3 class="text-lg font-bold text-white flex items-center gap-2">
-        <i class="fa-solid fa-triangle-exclamation text-amber-400"></i> Reportar Novedad o Incidencia
+
+        <i class="fa-solid fa-triangle-exclamation text-amber-400"></i>
+
+        Reportar Novedad o Incidencia
+
       </h3>
-      
+
+
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1">Tipo de Incidencia:</label>
-          <select id="tipoIncidencia" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-sm text-white focus:outline-none focus:border-emerald-500">
-            <option value="Novedad de Guardia">Novedad de Guardia / Operativa</option>
-            <option value="Mantenimiento">Mantenimiento / Instalaciones</option>
-            <option value="Visita Autorizada">Visita / Proveedor</option>
-            <option value="Urgencia">Urgencia / Emergencia</option>
-          </select>
-        </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1">Adjuntar Foto (Opcional):</label>
-          <input type="file" id="fotoNovedadInput" accept="image/*" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-1.5 text-xs text-slate-300 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500 cursor-pointer">
+
+          <label class="block text-xs font-semibold text-slate-300 mb-1">
+            Tipo de Incidencia:
+          </label>
+
+          <select
+            id="tipoIncidencia"
+            class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+
+            <option value="Novedad de Guardia">
+              Novedad de Guardia / Operativa
+            </option>
+
+            <option value="Mantenimiento">
+              Mantenimiento / Instalaciones
+            </option>
+
+            <option value="Visita Autorizada">
+              Visita / Proveedor
+            </option>
+
+            <option value="Urgencia">
+              Urgencia / Emergencia
+            </option>
+
+          </select>
+
         </div>
+
+
+        <div>
+
+          <label class="block text-xs font-semibold text-slate-300 mb-1">
+            Adjuntar Foto (Opcional):
+          </label>
+
+          <input
+            type="file"
+            id="fotoNovedadInput"
+            accept="image/*"
+            class="w-full bg-slate-900 border border-slate-700 rounded-xl p-1.5 text-xs text-slate-300 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500 cursor-pointer">
+
+        </div>
+
       </div>
+
 
       <div>
-        <label class="block text-xs font-semibold text-slate-300 mb-1">Descripción del evento:</label>
-        <textarea id="descNovedad" rows="3" placeholder="Detalle lo sucedido en el servicio..." class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-emerald-500"></textarea>
+
+        <label class="block text-xs font-semibold text-slate-300 mb-1">
+          Descripción del evento:
+        </label>
+
+        <textarea
+          id="descNovedad"
+          rows="3"
+          placeholder="Detalle lo sucedido en el servicio..."
+          class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-emerald-500"></textarea>
+
       </div>
 
-      <button onclick="enviarNovedadPortal()" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-2.5 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
-        <i class="fa-solid fa-paper-plane"></i> Enviar Novedad a la Central
+
+      <button
+        onclick="enviarNovedadPortal()"
+        class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-2.5 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
+
+        <i class="fa-solid fa-paper-plane"></i>
+
+        Enviar Novedad a la Central
+
       </button>
+
     </div>
 
   </main>
 
-  <script>
-    const URL_FIREBASE = "https://fir-asistencia-fad12-default-rtdb.firebaseio.com";
-    let temporizadorInactividad;
-    let datosVigiladorGlobal = [];
-    let mapaConfiguracionPersonalVigilador = {};
-    let asignacionesTurnosVigilador = [];
 
-    // Variables para control del Botón de Pánico sostenido
-    let temporizadorPanico = null;
-    let intervaloProgresoPanico = null;
-    let tiempoPresionadoMs = 0;
-    const TIEMPO_REQUERIDO_MS = 3000; // 3 segundos
+<script>
 
-    function parseFechaSegura(fechaStr) {
-      if (!fechaStr) return new Date(NaN);
-      let d = new Date(fechaStr);
-      if (!isNaN(d.getTime())) return d;
-      d = new Date(String(fechaStr).replace(/-/g, '/'));
-      return d;
+const URL_FIREBASE =
+  "https://fir-asistencia-fad12-default-rtdb.firebaseio.com";
+
+
+/* ============================================================
+   VARIABLES GENERALES
+============================================================ */
+
+let temporizadorInactividad;
+
+let datosVigiladorGlobal = [];
+
+let mapaConfiguracionPersonalVigilador = {};
+
+let asignacionesTurnosVigilador = [];
+
+
+/* ============================================================
+   BOTÓN DE PÁNICO
+============================================================ */
+
+let temporizadorPanico = null;
+
+let intervaloProgresoPanico = null;
+
+let tiempoPresionadoMs = 0;
+
+const TIEMPO_REQUERIDO_MS = 3000;
+
+
+/* ============================================================
+   COLA OFFLINE DE ALERTAS DE PÁNICO
+============================================================ */
+
+/*
+   Esta clave almacena las alertas que todavía no pudieron
+   enviarse a Firebase.
+
+   IMPORTANTE:
+
+   La hora se guarda en el momento EXACTO en que se dispara
+   la alerta y NO cuando vuelve Internet.
+*/
+
+const CLAVE_COLA_PANICO =
+  'vga_security_panicos_pendientes';
+
+
+function obtenerColaPanicosOffline() {
+
+  try {
+
+    const datos =
+      localStorage.getItem(CLAVE_COLA_PANICO);
+
+    if (!datos) {
+      return [];
     }
 
-    function minutosDesdeMedianoche(hora) {
-      if (!hora || !/^\d{1,2}:\d{2}$/.test(String(hora))) return null;
-      const [h, m] = String(hora).split(':').map(Number);
-      if (h < 0 || h > 23 || m < 0 || m > 59) return null;
-      return h * 60 + m;
-    }
+    const parsed = JSON.parse(datos);
 
-    function obtenerFechaLocalClave(fecha) {
-      if (!(fecha instanceof Date) || isNaN(fecha.getTime())) return '';
-      const y = fecha.getFullYear();
-      const m = String(fecha.getMonth() + 1).padStart(2, '0');
-      const d = String(fecha.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
-    }
+    return Array.isArray(parsed)
+      ? parsed
+      : [];
 
-    function obtenerHorarioProgramado(entrada, legajo, objetivoNombre) {
-      const fechaEntrada = parseFechaSegura(entrada);
-      if (isNaN(fechaEntrada.getTime())) return null;
+  } catch (error) {
 
-      const fechaClave = obtenerFechaLocalClave(fechaEntrada);
-      const legajoStr = String(legajo || '').trim();
-      const objetivoStr = String(objetivoNombre || '').trim().toLowerCase();
+    console.error(
+      "Error leyendo cola offline de pánicos:",
+      error
+    );
 
-      // Primero: turno puntual asignado desde ADMIN para esa fecha.
-      const turnosFecha = asignacionesTurnosVigilador.filter(t =>
-        String(t.legajo || '').trim() === legajoStr && String(t.fecha || '') === fechaClave
+    return [];
+  }
+}
+
+
+function guardarColaPanicosOffline(cola) {
+
+  try {
+
+    localStorage.setItem(
+      CLAVE_COLA_PANICO,
+      JSON.stringify(cola)
+    );
+
+  } catch (error) {
+
+    console.error(
+      "No se pudo guardar la cola offline:",
+      error
+    );
+
+    alert(
+      "No se pudo guardar localmente la alerta de pánico."
+    );
+  }
+}
+
+
+/* ============================================================
+   GENERAR ID ÚNICO
+============================================================ */
+
+function generarIdPanicoOffline() {
+
+  return 'PANICO_' +
+    Date.now() +
+    '_' +
+    Math.random()
+      .toString(36)
+      .substring(2, 10);
+
+}
+
+
+/* ============================================================
+   ACTUALIZAR INDICADOR DE CONEXIÓN
+============================================================ */
+
+function actualizarEstadoConexionPanico() {
+
+  const indicador =
+    document.getElementById(
+      'indicadorConexionPanico'
+    );
+
+  const texto =
+    document.getElementById(
+      'textoConexionPanico'
+    );
+
+  if (!indicador || !texto) {
+    return;
+  }
+
+
+  if (navigator.onLine) {
+
+    indicador.className =
+      "w-2 h-2 rounded-full bg-emerald-500 inline-block";
+
+    texto.innerText =
+      "Conexión disponible";
+
+  } else {
+
+    indicador.className =
+      "w-2 h-2 rounded-full bg-amber-400 inline-block";
+
+    texto.innerText =
+      "Sin Internet · las alertas se guardarán localmente";
+
+  }
+
+  actualizarContadorPanicosPendientes();
+}
+
+
+/* ============================================================
+   MOSTRAR ALERTAS PENDIENTES
+============================================================ */
+
+function actualizarContadorPanicosPendientes() {
+
+  const contenedor =
+    document.getElementById(
+      'alertasPanicoPendientes'
+    );
+
+  const texto =
+    document.getElementById(
+      'textoAlertasPanicoPendientes'
+    );
+
+  if (!contenedor || !texto) {
+    return;
+  }
+
+
+  const cola =
+    obtenerColaPanicosOffline();
+
+
+  if (cola.length === 0) {
+
+    contenedor.classList.add('hidden');
+
+    return;
+
+  }
+
+
+  contenedor.classList.remove('hidden');
+
+  texto.innerText =
+    cola.length === 1
+      ? "Hay 1 alerta de pánico pendiente de enviar."
+      : `Hay ${cola.length} alertas de pánico pendientes de enviar.`;
+
+}
+
+
+/* ============================================================
+   GUARDAR ALERTA DE PÁNICO EN COLA OFFLINE
+============================================================ */
+
+function guardarPanicoEnCola(payload) {
+
+  const cola =
+    obtenerColaPanicosOffline();
+
+
+  /*
+     Evitamos insertar accidentalmente
+     el mismo ID dos veces.
+  */
+
+  const yaExiste =
+    cola.some(
+      alerta => alerta.idLocal === payload.idLocal
+    );
+
+
+  if (!yaExiste) {
+
+    cola.push(payload);
+
+    guardarColaPanicosOffline(cola);
+
+  }
+
+
+  actualizarContadorPanicosPendientes();
+
+}
+
+
+/* ============================================================
+   ENVIAR UNA ALERTA A FIREBASE
+============================================================ */
+
+async function enviarPanicoFirebase(payload) {
+
+  try {
+
+    const respuesta =
+      await fetch(
+        `${URL_FIREBASE}/panicos.json`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        }
       );
 
-      let turno = null;
-      if (turnosFecha.length) {
-        // Si hay más de un turno, priorizar el objetivo de la fichada.
-        turno = turnosFecha.find(t => {
-          const nombre = String(t.objetivoNombre || t.objetivo || '').trim().toLowerCase();
-          return objetivoStr && nombre && (
+
+    if (!respuesta.ok) {
+
+      throw new Error(
+        `HTTP ${respuesta.status}`
+      );
+
+    }
+
+
+    const resultado =
+      await respuesta.json();
+
+
+    return {
+      ok: true,
+      firebaseKey: resultado?.name || null
+    };
+
+
+  } catch (error) {
+
+    console.error(
+      "No se pudo enviar el pánico:",
+      error
+    );
+
+    return {
+      ok: false,
+      error
+    };
+
+  }
+
+}
+
+
+/* ============================================================
+   PROCESAR COLA CUANDO VUELVE INTERNET
+============================================================ */
+
+async function enviarPanicosPendientes() {
+
+  /*
+     Si el navegador informa que está offline,
+     no intentamos enviar nada.
+  */
+
+  if (!navigator.onLine) {
+
+    actualizarEstadoConexionPanico();
+
+    return;
+
+  }
+
+
+  let cola =
+    obtenerColaPanicosOffline();
+
+
+  if (cola.length === 0) {
+
+    actualizarContadorPanicosPendientes();
+
+    return;
+
+  }
+
+
+  /*
+     Trabajamos con una copia.
+
+     Esto permite que si falla una alerta,
+     permanezca en la cola junto con las siguientes.
+  */
+
+  const pendientes =
+    [...cola];
+
+
+  for (const alerta of pendientes) {
+
+    /*
+       Si mientras estamos enviando se pierde
+       Internet, detenemos el proceso.
+    */
+
+    if (!navigator.onLine) {
+      break;
+    }
+
+
+    const resultado =
+      await enviarPanicoFirebase(alerta);
+
+
+    if (resultado.ok) {
+
+      /*
+         Eliminamos SOLO la alerta que Firebase
+         confirmó correctamente.
+      */
+
+      cola =
+        cola.filter(
+          item =>
+            item.idLocal !== alerta.idLocal
+        );
+
+
+      guardarColaPanicosOffline(cola);
+
+      actualizarContadorPanicosPendientes();
+
+    } else {
+
+      /*
+         Si falla, no borramos la alerta.
+
+         Queda almacenada para el próximo intento.
+      */
+
+      break;
+
+    }
+
+  }
+
+
+  actualizarContadorPanicosPendientes();
+
+}
+
+
+/* ============================================================
+   ESCUCHAR VUELTA DE INTERNET
+============================================================ */
+
+window.addEventListener(
+  'online',
+  function() {
+
+    actualizarEstadoConexionPanico();
+
+    /*
+       Esperamos un pequeño momento para que
+       la conexión realmente esté disponible.
+    */
+
+    setTimeout(
+      enviarPanicosPendientes,
+      1500
+    );
+
+  }
+);
+
+
+window.addEventListener(
+  'offline',
+  function() {
+
+    actualizarEstadoConexionPanico();
+
+  }
+);
+
+
+/* ============================================================
+   FECHAS
+============================================================ */
+
+function parseFechaSegura(fechaStr) {
+
+  if (!fechaStr)
+    return new Date(NaN);
+
+
+  let d =
+    new Date(fechaStr);
+
+
+  if (!isNaN(d.getTime()))
+    return d;
+
+
+  d =
+    new Date(
+      String(fechaStr)
+        .replace(/-/g, '/')
+    );
+
+
+  return d;
+
+}
+
+
+function minutosDesdeMedianoche(hora) {
+
+  if (
+    !hora ||
+    !/^\d{1,2}:\d{2}$/.test(
+      String(hora)
+    )
+  ) {
+    return null;
+  }
+
+
+  const [h, m] =
+    String(hora)
+      .split(':')
+      .map(Number);
+
+
+  if (
+    h < 0 ||
+    h > 23 ||
+    m < 0 ||
+    m > 59
+  ) {
+    return null;
+  }
+
+
+  return h * 60 + m;
+
+}
+
+
+function obtenerFechaLocalClave(fecha) {
+
+  if (
+    !(fecha instanceof Date) ||
+    isNaN(fecha.getTime())
+  ) {
+    return '';
+  }
+
+
+  const y =
+    fecha.getFullYear();
+
+  const m =
+    String(
+      fecha.getMonth() + 1
+    ).padStart(2, '0');
+
+  const d =
+    String(
+      fecha.getDate()
+    ).padStart(2, '0');
+
+
+  return `${y}-${m}-${d}`;
+
+}
+
+
+/* ============================================================
+   HORARIOS
+============================================================ */
+
+function obtenerHorarioProgramado(
+  entrada,
+  legajo,
+  objetivoNombre
+) {
+
+  const fechaEntrada =
+    parseFechaSegura(entrada);
+
+
+  if (
+    isNaN(
+      fechaEntrada.getTime()
+    )
+  ) {
+    return null;
+  }
+
+
+  const fechaClave =
+    obtenerFechaLocalClave(
+      fechaEntrada
+    );
+
+
+  const legajoStr =
+    String(
+      legajo || ''
+    ).trim();
+
+
+  const objetivoStr =
+    String(
+      objetivoNombre || ''
+    )
+      .trim()
+      .toLowerCase();
+
+
+  const turnosFecha =
+    asignacionesTurnosVigilador.filter(
+      t =>
+        String(
+          t.legajo || ''
+        ).trim() === legajoStr &&
+        String(
+          t.fecha || ''
+        ) === fechaClave
+    );
+
+
+  let turno = null;
+
+
+  if (turnosFecha.length) {
+
+    turno =
+      turnosFecha.find(t => {
+
+        const nombre =
+          String(
+            t.objetivoNombre ||
+            t.objetivo ||
+            ''
+          )
+            .trim()
+            .toLowerCase();
+
+
+        return objetivoStr &&
+          nombre &&
+          (
             nombre === objetivoStr ||
             nombre.includes(objetivoStr) ||
             objetivoStr.includes(nombre)
           );
-        }) || turnosFecha[0];
-      }
 
-      if (turno && (turno.horaInicio || turno.horaFin)) {
-        return {
-          inicio: turno.horaInicio || '',
-          fin: turno.horaFin || '',
-          origen: 'Turno asignado'
-        };
-      }
+      }) ||
+      turnosFecha[0];
 
-      // Segundo: horario habitual configurado en ADMIN para ese vigilador.
-      const persona = Object.values(mapaConfiguracionPersonalVigilador).find(p =>
-        String(p.legajo || '').trim() === legajoStr
-      );
-      const h = persona?.horarioHabitual || {};
+  }
 
-      if (h.inicio || h.fin) {
-        return {
-          inicio: h.inicio || '',
-          fin: h.fin || '',
-          origen: 'Horario habitual'
-        };
-      }
 
-      return null;
-    }
+  if (
+    turno &&
+    (
+      turno.horaInicio ||
+      turno.horaFin
+    )
+  ) {
 
-    function evaluarEstadoEntradaVigilador(fechaEntrada, horarioProgramado) {
-      const fecha = parseFechaSegura(fechaEntrada);
-      if (isNaN(fecha.getTime()) || !horarioProgramado?.inicio) {
-        return { estado: 'NORMAL', minutosTarde: 0 };
-      }
+    return {
 
-      const minutosTurno = minutosDesdeMedianoche(horarioProgramado.inicio);
-      if (minutosTurno === null) return { estado: 'NORMAL', minutosTarde: 0 };
+      inicio:
+        turno.horaInicio || '',
 
-      const inicioTurno = new Date(fecha.getTime());
-      inicioTurno.setHours(Math.floor(minutosTurno / 60), minutosTurno % 60, 0, 0);
-      const diferenciaMin = Math.floor((fecha - inicioTurno) / 60000);
+      fin:
+        turno.horaFin || '',
 
-      if (diferenciaMin < 0) return { estado: 'NORMAL', minutosTarde: 0 };
-      if (diferenciaMin <= 15) return { estado: 'TOLERANCIA', minutosTarde: diferenciaMin };
-      return { estado: 'TARDE', minutosTarde: diferenciaMin };
-    }
+      origen:
+        'Turno asignado'
 
-    function calcularHoras(f1, f2, horarioProgramado = null) {
-      const inicioReal = parseFechaSegura(f1);
-      const fin = parseFechaSegura(f2);
-
-      if (isNaN(inicioReal.getTime()) || isNaN(fin.getTime()) || fin <= inicioReal) {
-        return { d: 0, n: 0, t: 0, entradaComputable: inicioReal, ajusteMinutos: 0, minutosExtra: 0 };
-      }
-
-      // La fichada real NO se modifica. Solo se modifica el punto desde el cual
-      // se calculan las horas trabajadas cuando hubo llegada anticipada.
-      let inicioComputable = new Date(inicioReal.getTime());
-      let ajusteMinutos = 0;
-
-      if (horarioProgramado?.inicio) {
-        const minutosTurno = minutosDesdeMedianoche(horarioProgramado.inicio);
-
-        if (minutosTurno !== null) {
-          const inicioTurno = new Date(inicioReal.getTime());
-          inicioTurno.setHours(
-            Math.floor(minutosTurno / 60),
-            minutosTurno % 60,
-            0,
-            0
-          );
-
-          // Ejemplo: turno 19:00, entrada 18:30 -> computar desde 19:00.
-          // Si entra 19:20 -> se mantiene 19:20.
-          if (inicioTurno > inicioComputable) {
-            inicioComputable = inicioTurno;
-            ajusteMinutos = Math.round((inicioComputable - inicioReal) / 60000);
-          }
-        }
-      }
-
-      // Tolerancia de salida: los primeros 30 minutos posteriores al fin del turno
-      // no se consideran extra. Si la salida supera el minuto 30, se contabiliza
-      // todo el tiempo desde el fin programado, incluidos esos 30 minutos.
-      let finComputable = new Date(fin.getTime());
-      let minutosExtra = 0;
-
-      if (horarioProgramado?.fin) {
-        const minutosFinTurno = minutosDesdeMedianoche(horarioProgramado.fin);
-        if (minutosFinTurno !== null) {
-          const finTurno = new Date(inicioReal.getTime());
-          finTurno.setHours(Math.floor(minutosFinTurno / 60), minutosFinTurno % 60, 0, 0);
-
-          // Turnos que cruzan medianoche, por ejemplo 19:00 - 07:00.
-          if (horarioProgramado.inicio) {
-            const minutosInicioTurno = minutosDesdeMedianoche(horarioProgramado.inicio);
-            if (minutosInicioTurno !== null && minutosFinTurno <= minutosInicioTurno) {
-              finTurno.setDate(finTurno.getDate() + 1);
-            }
-          }
-
-          const limiteTolerancia = new Date(finTurno.getTime() + 30 * 60000);
-          if (fin > limiteTolerancia) {
-            minutosExtra = Math.max(0, Math.round((fin - finTurno) / 60000));
-            finComputable = fin;
-          } else if (fin > finTurno) {
-            // Salida dentro de la tolerancia: se computa solamente hasta el fin del turno.
-            finComputable = finTurno;
-          }
-        }
-      }
-
-      if (inicioComputable >= finComputable) {
-        return { d: 0, n: 0, t: 0, entradaComputable: inicioComputable, ajusteMinutos, minutosExtra: 0 };
-      }
-
-      let diurnas = 0;
-      let nocturnas = 0;
-      let cur = new Date(inicioComputable.getTime());
-
-      while (cur < finComputable) {
-        let siguiente = new Date(cur.getTime() + 60000);
-        if (siguiente > finComputable) siguiente = new Date(finComputable.getTime());
-
-        const h = cur.getHours();
-        const minutos = (siguiente - cur) / 60000;
-
-        if (h >= 6 && h < 21) diurnas += minutos / 60;
-        else nocturnas += minutos / 60;
-
-        cur = siguiente;
-      }
-
-      return {
-        d: diurnas,
-        n: nocturnas,
-        t: diurnas + nocturnas,
-        entradaComputable: inicioComputable,
-        ajusteMinutos,
-        minutosExtra
-      };
-    }
-
-    function reiniciarTemporizador() {
-      clearTimeout(temporizadorInactividad);
-      temporizadorInactividad = setTimeout(() => {
-        if (sessionStorage.getItem('vigilador_legajo')) {
-          cerrarSesionVigilador();
-          alert("Sesión cerrada automáticamente por 3 minutos de inactividad.");
-        }
-      }, 180000); 
-    }
-
-    window.onload = function() {
-      const legajoGuardado = sessionStorage.getItem('vigilador_legajo');
-      const nombreGuardado = sessionStorage.getItem('vigilador_nombre');
-      if (legajoGuardado) {
-        document.getElementById('legajoInput').value = legajoGuardado;
-        document.getElementById('formLoginVigilador').classList.add('hidden');
-        document.getElementById('infoSesionActiva').classList.remove('hidden');
-        document.getElementById('lblLegajoActivo').innerText = legajoGuardado;
-        document.getElementById('lblNombreActivo').innerText = nombreGuardado || `Legajo ${legajoGuardado}`;
-        document.getElementById('btnCerrarSesion').classList.remove('hidden');
-        document.getElementById('seccionPanico').classList.remove('hidden');
-        document.getElementById('seccionNovedades').classList.remove('hidden'); 
-        
-        ejecutarConsulta(legajoGuardado);
-        activarEscuchasInactividad();
-        reiniciarTemporizador();
-      }
-
-      inicializarBotonPanicoSostenido();
     };
 
-    function activarEscuchasInactividad() {
-      window.addEventListener('mousemove', reiniciarTemporizador);
-      window.addEventListener('mousedown', reiniciarTemporizador);
-      window.addEventListener('keypress', reiniciarTemporizador);
-      window.addEventListener('touchstart', reiniciarTemporizador);
-    }
+  }
 
-    
 
-    function formatearAHorasReloj(horasDecimales) {
-      if (isNaN(horasDecimales) || horasDecimales <= 0) return "00:00 hs";
-      const horas = Math.floor(horasDecimales);
-      const minutos = Math.round((horasDecimales - horas) * 60);
-      return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')} hs`;
-    }
+  const persona =
+    Object.values(
+      mapaConfiguracionPersonalVigilador
+    ).find(
+      p =>
+        String(
+          p.legajo || ''
+        ).trim() === legajoStr
+    );
 
-    function buscarMisHoras() {
-      const legajoIngresado = document.getElementById('legajoInput').value.trim();
-      const pinIngresado = document.getElementById('pinInput').value.trim();
 
-      if (!legajoIngresado || !pinIngresado) {
-        return alert("Por favor ingresa tu número de legajo y tu PIN de seguridad.");
+  const h =
+    persona?.horarioHabitual || {};
+
+
+  if (h.inicio || h.fin) {
+
+    return {
+
+      inicio:
+        h.inicio || '',
+
+      fin:
+        h.fin || '',
+
+      origen:
+        'Horario habitual'
+
+    };
+
+  }
+
+
+  return null;
+
+}
+
+
+/* ============================================================
+   ESTADO DE ENTRADA
+============================================================ */
+
+function evaluarEstadoEntradaVigilador(
+  fechaEntrada,
+  horarioProgramado
+) {
+
+  const fecha =
+    parseFechaSegura(
+      fechaEntrada
+    );
+
+
+  if (
+    isNaN(fecha.getTime()) ||
+    !horarioProgramado?.inicio
+  ) {
+
+    return {
+      estado: 'NORMAL',
+      minutosTarde: 0
+    };
+
+  }
+
+
+  const minutosTurno =
+    minutosDesdeMedianoche(
+      horarioProgramado.inicio
+    );
+
+
+  if (
+    minutosTurno === null
+  ) {
+
+    return {
+      estado: 'NORMAL',
+      minutosTarde: 0
+    };
+
+  }
+
+
+  const inicioTurno =
+    new Date(
+      fecha.getTime()
+    );
+
+
+  inicioTurno.setHours(
+    Math.floor(
+      minutosTurno / 60
+    ),
+    minutosTurno % 60,
+    0,
+    0
+  );
+
+
+  const diferenciaMin =
+    Math.floor(
+      (
+        fecha -
+        inicioTurno
+      ) / 60000
+    );
+
+
+  if (diferenciaMin < 0) {
+
+    return {
+      estado: 'NORMAL',
+      minutosTarde: 0
+    };
+
+  }
+
+
+  if (diferenciaMin <= 15) {
+
+    return {
+      estado: 'TOLERANCIA',
+      minutosTarde: diferenciaMin
+    };
+
+  }
+
+
+  return {
+    estado: 'TARDE',
+    minutosTarde: diferenciaMin
+  };
+
+}
+
+
+/* ============================================================
+   CALCULAR HORAS
+============================================================ */
+
+function calcularHoras(
+  f1,
+  f2,
+  horarioProgramado = null
+) {
+
+  const inicioReal =
+    parseFechaSegura(f1);
+
+  const fin =
+    parseFechaSegura(f2);
+
+
+  if (
+    isNaN(inicioReal.getTime()) ||
+    isNaN(fin.getTime()) ||
+    fin <= inicioReal
+  ) {
+
+    return {
+      d: 0,
+      n: 0,
+      t: 0,
+      entradaComputable: inicioReal,
+      ajusteMinutos: 0,
+      minutosExtra: 0
+    };
+
+  }
+
+
+  let inicioComputable =
+    new Date(
+      inicioReal.getTime()
+    );
+
+
+  let ajusteMinutos = 0;
+
+
+  if (
+    horarioProgramado?.inicio
+  ) {
+
+    const minutosTurno =
+      minutosDesdeMedianoche(
+        horarioProgramado.inicio
+      );
+
+
+    if (
+      minutosTurno !== null
+    ) {
+
+      const inicioTurno =
+        new Date(
+          inicioReal.getTime()
+        );
+
+
+      inicioTurno.setHours(
+        Math.floor(
+          minutosTurno / 60
+        ),
+        minutosTurno % 60,
+        0,
+        0
+      );
+
+
+      if (
+        inicioTurno >
+        inicioComputable
+      ) {
+
+        inicioComputable =
+          inicioTurno;
+
+
+        ajusteMinutos =
+          Math.round(
+            (
+              inicioComputable -
+              inicioReal
+            ) / 60000
+          );
+
       }
 
-      Promise.all([
-        fetch(`${URL_FIREBASE}/personal.json?ts=${Date.now()}`, { cache: 'no-store' }).then(res => res.json()),
-        fetch(`${URL_FIREBASE}/fichadas.json?ts=${Date.now()}`, { cache: 'no-store' }).then(res => res.json()),
-        fetch(`${URL_FIREBASE}/asignacionesTurnos.json?ts=${Date.now()}`, { cache: 'no-store' }).then(res => res.json())
-      ])
-      .then(([personalData, fichadasData, turnosData]) => {
-        mapaConfiguracionPersonalVigilador = personalData || {};
-        asignacionesTurnosVigilador = turnosData
-          ? Object.entries(turnosData).map(([id, d]) => ({ ...d, id }))
+    }
+
+  }
+
+
+  let finComputable =
+    new Date(
+      fin.getTime()
+    );
+
+
+  let minutosExtra = 0;
+
+
+  if (
+    horarioProgramado?.fin
+  ) {
+
+    const minutosFinTurno =
+      minutosDesdeMedianoche(
+        horarioProgramado.fin
+      );
+
+
+    if (
+      minutosFinTurno !== null
+    ) {
+
+      const finTurno =
+        new Date(
+          inicioReal.getTime()
+        );
+
+
+      finTurno.setHours(
+        Math.floor(
+          minutosFinTurno / 60
+        ),
+        minutosFinTurno % 60,
+        0,
+        0
+      );
+
+
+      if (
+        horarioProgramado.inicio
+      ) {
+
+        const minutosInicioTurno =
+          minutosDesdeMedianoche(
+            horarioProgramado.inicio
+          );
+
+
+        if (
+          minutosInicioTurno !== null &&
+          minutosFinTurno <=
+            minutosInicioTurno
+        ) {
+
+          finTurno.setDate(
+            finTurno.getDate() + 1
+          );
+
+        }
+
+      }
+
+
+      const limiteTolerancia =
+        new Date(
+          finTurno.getTime() +
+          30 * 60000
+        );
+
+
+      if (
+        fin >
+        limiteTolerancia
+      ) {
+
+        minutosExtra =
+          Math.max(
+            0,
+            Math.round(
+              (
+                fin -
+                finTurno
+              ) / 60000
+            )
+          );
+
+        finComputable =
+          fin;
+
+      } else if (
+        fin >
+        finTurno
+      ) {
+
+        finComputable =
+          finTurno;
+
+      }
+
+    }
+
+  }
+
+
+  if (
+    inicioComputable >=
+    finComputable
+  ) {
+
+    return {
+      d: 0,
+      n: 0,
+      t: 0,
+      entradaComputable:
+        inicioComputable,
+      ajusteMinutos,
+      minutosExtra: 0
+    };
+
+  }
+
+
+  let diurnas = 0;
+
+  let nocturnas = 0;
+
+
+  let cur =
+    new Date(
+      inicioComputable.getTime()
+    );
+
+
+  while (
+    cur <
+    finComputable
+  ) {
+
+    let siguiente =
+      new Date(
+        cur.getTime() +
+        60000
+      );
+
+
+    if (
+      siguiente >
+      finComputable
+    ) {
+
+      siguiente =
+        new Date(
+          finComputable.getTime()
+        );
+
+    }
+
+
+    const h =
+      cur.getHours();
+
+
+    const minutos =
+      (
+        siguiente -
+        cur
+      ) / 60000;
+
+
+    if (
+      h >= 6 &&
+      h < 21
+    ) {
+
+      diurnas +=
+        minutos / 60;
+
+    } else {
+
+      nocturnas +=
+        minutos / 60;
+
+    }
+
+
+    cur =
+      siguiente;
+
+  }
+
+
+  return {
+
+    d: diurnas,
+
+    n: nocturnas,
+
+    t:
+      diurnas +
+      nocturnas,
+
+    entradaComputable:
+      inicioComputable,
+
+    ajusteMinutos,
+
+    minutosExtra
+
+  };
+
+}
+
+
+/* ============================================================
+   SESIÓN
+============================================================ */
+
+function reiniciarTemporizador() {
+
+  clearTimeout(
+    temporizadorInactividad
+  );
+
+
+  temporizadorInactividad =
+    setTimeout(
+      () => {
+
+        if (
+          sessionStorage.getItem(
+            'vigilador_legajo'
+          )
+        ) {
+
+          cerrarSesionVigilador();
+
+          alert(
+            "Sesión cerrada automáticamente por 3 minutos de inactividad."
+          );
+
+        }
+
+      },
+      180000
+    );
+
+}
+
+
+/* ============================================================
+   ONLOAD
+============================================================ */
+
+window.onload = function() {
+
+  const legajoGuardado =
+    sessionStorage.getItem(
+      'vigilador_legajo'
+    );
+
+
+  const nombreGuardado =
+    sessionStorage.getItem(
+      'vigilador_nombre'
+    );
+
+
+  if (legajoGuardado) {
+
+    document
+      .getElementById(
+        'legajoInput'
+      )
+      .value =
+      legajoGuardado;
+
+
+    document
+      .getElementById(
+        'formLoginVigilador'
+      )
+      .classList.add(
+        'hidden'
+      );
+
+
+    document
+      .getElementById(
+        'infoSesionActiva'
+      )
+      .classList.remove(
+        'hidden'
+      );
+
+
+    document
+      .getElementById(
+        'lblLegajoActivo'
+      )
+      .innerText =
+      legajoGuardado;
+
+
+    document
+      .getElementById(
+        'lblNombreActivo'
+      )
+      .innerText =
+      nombreGuardado ||
+      `Legajo ${legajoGuardado}`;
+
+
+    document
+      .getElementById(
+        'btnCerrarSesion'
+      )
+      .classList.remove(
+        'hidden'
+      );
+
+
+    document
+      .getElementById(
+        'seccionPanico'
+      )
+      .classList.remove(
+        'hidden'
+      );
+
+
+    document
+      .getElementById(
+        'seccionNovedades'
+      )
+      .classList.remove(
+        'hidden'
+      );
+
+
+    ejecutarConsulta(
+      legajoGuardado
+    );
+
+
+    activarEscuchasInactividad();
+
+    reiniciarTemporizador();
+
+  }
+
+
+  inicializarBotonPanicoSostenido();
+
+
+  /*
+     Actualizar estado inmediatamente.
+  */
+
+  actualizarEstadoConexionPanico();
+
+
+  /*
+     Si ya había alertas pendientes
+     y hay Internet, intentamos enviarlas.
+  */
+
+  setTimeout(
+    enviarPanicosPendientes,
+    1000
+  );
+
+};
+
+
+/* ============================================================
+   INACTIVIDAD
+============================================================ */
+
+function activarEscuchasInactividad() {
+
+  window.addEventListener(
+    'mousemove',
+    reiniciarTemporizador
+  );
+
+  window.addEventListener(
+    'mousedown',
+    reiniciarTemporizador
+  );
+
+  window.addEventListener(
+    'keypress',
+    reiniciarTemporizador
+  );
+
+  window.addEventListener(
+    'touchstart',
+    reiniciarTemporizador
+  );
+
+}
+
+
+/* ============================================================
+   FORMATO HORAS
+============================================================ */
+
+function formatearAHorasReloj(
+  horasDecimales
+) {
+
+  if (
+    isNaN(horasDecimales) ||
+    horasDecimales <= 0
+  ) {
+
+    return "00:00 hs";
+
+  }
+
+
+  const horas =
+    Math.floor(
+      horasDecimales
+    );
+
+
+  const minutos =
+    Math.round(
+      (
+        horasDecimales -
+        horas
+      ) * 60
+    );
+
+
+  return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')} hs`;
+
+}
+
+
+/* ============================================================
+   BUSCAR HORAS
+============================================================ */
+
+function buscarMisHoras() {
+
+  const legajoIngresado =
+    document
+      .getElementById(
+        'legajoInput'
+      )
+      .value
+      .trim();
+
+
+  const pinIngresado =
+    document
+      .getElementById(
+        'pinInput'
+      )
+      .value
+      .trim();
+
+
+  if (
+    !legajoIngresado ||
+    !pinIngresado
+  ) {
+
+    return alert(
+      "Por favor ingresa tu número de legajo y tu PIN de seguridad."
+    );
+
+  }
+
+
+  Promise.all([
+
+    fetch(
+      `${URL_FIREBASE}/personal.json?ts=${Date.now()}`,
+      {
+        cache: 'no-store'
+      }
+    ).then(
+      res => res.json()
+    ),
+
+    fetch(
+      `${URL_FIREBASE}/fichadas.json?ts=${Date.now()}`,
+      {
+        cache: 'no-store'
+      }
+    ).then(
+      res => res.json()
+    ),
+
+    fetch(
+      `${URL_FIREBASE}/asignacionesTurnos.json?ts=${Date.now()}`,
+      {
+        cache: 'no-store'
+      }
+    ).then(
+      res => res.json()
+    )
+
+  ])
+
+  .then(
+    ([
+      personalData,
+      fichadasData,
+      turnosData
+    ]) => {
+
+      mapaConfiguracionPersonalVigilador =
+        personalData || {};
+
+
+      asignacionesTurnosVigilador =
+        turnosData
+          ? Object.entries(
+              turnosData
+            ).map(
+              ([id, d]) =>
+                ({
+                  ...d,
+                  id
+                })
+            )
           : [];
-        let empleadoEncontrado = null;
-        let nombreEmpleado = `Legajo ${legajoIngresado}`;
 
-        if (personalData) {
-          Object.values(personalData).forEach(p => {
-            const pLegajo = String(p.legajo || "").trim();
-            if (pLegajo === legajoIngresado || parseInt(pLegajo, 10) === parseInt(legajoIngresado, 10)) {
-              const pPin = String(p.pin || p.clave || "").trim();
-              if (!pPin || pPin === pinIngresado) {
-                empleadoEncontrado = p;
-                if (p.nombre) nombreEmpleado = p.nombre;
+
+      let empleadoEncontrado =
+        null;
+
+
+      let nombreEmpleado =
+        `Legajo ${legajoIngresado}`;
+
+
+      if (personalData) {
+
+        Object
+          .values(personalData)
+          .forEach(p => {
+
+            const pLegajo =
+              String(
+                p.legajo || ""
+              ).trim();
+
+
+            if (
+              pLegajo ===
+                legajoIngresado ||
+              parseInt(
+                pLegajo,
+                10
+              ) ===
+                parseInt(
+                  legajoIngresado,
+                  10
+                )
+            ) {
+
+              const pPin =
+                String(
+                  p.pin ||
+                  p.clave ||
+                  ""
+                ).trim();
+
+
+              if (
+                !pPin ||
+                pPin ===
+                  pinIngresado
+              ) {
+
+                empleadoEncontrado =
+                  p;
+
+
+                if (p.nombre)
+                  nombreEmpleado =
+                    p.nombre;
+
               }
-            }
-          });
-        }
 
-        let misFichadas = [];
-        if (fichadasData) {
-          Object.values(fichadasData).forEach(f => {
-            const fLegajo = String(f.legajo || "").trim();
-            const coincideLegajo = (fLegajo === legajoIngresado || parseInt(fLegajo, 10) === parseInt(legajoIngresado, 10));
-            if (coincideLegajo) {
+            }
+
+          });
+
+      }
+
+
+      let misFichadas = [];
+
+
+      if (fichadasData) {
+
+        Object
+          .values(fichadasData)
+          .forEach(f => {
+
+            const fLegajo =
+              String(
+                f.legajo || ""
+              ).trim();
+
+
+            const coincideLegajo =
+              (
+                fLegajo ===
+                  legajoIngresado ||
+                parseInt(
+                  fLegajo,
+                  10
+                ) ===
+                  parseInt(
+                    legajoIngresado,
+                    10
+                  )
+              );
+
+
+            if (
+              coincideLegajo
+            ) {
+
               misFichadas.push({
-                fecha: f.fechaHoraDispositivo || f.fecha,
-                legajo: f.legajo,
-                objetivo: f.objetivo || 'Objetivo General',
-                tipo: String(f.tipo || "").toUpperCase()
+
+                fecha:
+                  f.fechaHoraDispositivo ||
+                  f.fecha,
+
+                legajo:
+                  f.legajo,
+
+                objetivo:
+                  f.objetivo ||
+                  'Objetivo General',
+
+                tipo:
+                  String(
+                    f.tipo || ""
+                  ).toUpperCase()
+
               });
+
             }
+
           });
-        }
 
-        if (misFichadas.length === 0) {
-          alert("No se encontraron registros de fichadas para el legajo ingresado.");
-          return;
-        }
+      }
 
-        sessionStorage.setItem('vigilador_legajo', legajoIngresado);
-        sessionStorage.setItem('vigilador_nombre', nombreEmpleado);
-        datosVigiladorGlobal = misFichadas;
 
-        document.getElementById('formLoginVigilador').classList.add('hidden');
-        document.getElementById('infoSesionActiva').classList.remove('hidden');
-        document.getElementById('lblLegajoActivo').innerText = legajoIngresado;
-        document.getElementById('lblNombreActivo').innerText = nombreEmpleado;
-        document.getElementById('btnCerrarSesion').classList.remove('hidden');
-        document.getElementById('seccionPanico').classList.remove('hidden');
-        document.getElementById('seccionNovedades').classList.remove('hidden'); 
+      if (
+        misFichadas.length === 0
+      ) {
 
-        poblarSelectMeses(datosVigiladorGlobal);
-        procesarYRenderizar(datosVigiladorGlobal);
-        activarEscuchasInactividad();
-        reiniciarTemporizador();
-      })
-      .catch(err => {
-        console.error(err);
-        alert("Ocurrió un error al consultar Firebase.");
-      });
+        alert(
+          "No se encontraron registros de fichadas para el legajo ingresado."
+        );
+
+        return;
+
+      }
+
+
+      sessionStorage.setItem(
+        'vigilador_legajo',
+        legajoIngresado
+      );
+
+
+      sessionStorage.setItem(
+        'vigilador_nombre',
+        nombreEmpleado
+      );
+
+
+      datosVigiladorGlobal =
+        misFichadas;
+
+
+      document
+        .getElementById(
+          'formLoginVigilador'
+        )
+        .classList.add(
+          'hidden'
+        );
+
+
+      document
+        .getElementById(
+          'infoSesionActiva'
+        )
+        .classList.remove(
+          'hidden'
+        );
+
+
+      document
+        .getElementById(
+          'lblLegajoActivo'
+        )
+        .innerText =
+        legajoIngresado;
+
+
+      document
+        .getElementById(
+          'lblNombreActivo'
+        )
+        .innerText =
+        nombreEmpleado;
+
+
+      document
+        .getElementById(
+          'btnCerrarSesion'
+        )
+        .classList.remove(
+          'hidden'
+        );
+
+
+      document
+        .getElementById(
+          'seccionPanico'
+        )
+        .classList.remove(
+          'hidden'
+        );
+
+
+      document
+        .getElementById(
+          'seccionNovedades'
+        )
+        .classList.remove(
+          'hidden'
+        );
+
+
+      poblarSelectMeses(
+        datosVigiladorGlobal
+      );
+
+
+      procesarYRenderizar(
+        datosVigiladorGlobal
+      );
+
+
+      activarEscuchasInactividad();
+
+      reiniciarTemporizador();
+
+    }
+  )
+
+  .catch(
+    err => {
+
+      console.error(err);
+
+      alert(
+        "Ocurrió un error al consultar Firebase."
+      );
+
+    }
+  );
+
+}
+
+
+/* ============================================================
+   EJECUTAR CONSULTA
+============================================================ */
+
+function ejecutarConsulta(
+  legajo
+) {
+
+  Promise.all([
+
+    fetch(
+      `${URL_FIREBASE}/fichadas.json?ts=${Date.now()}`,
+      {
+        cache: 'no-store'
+      }
+    ).then(
+      res => res.json()
+    ),
+
+    fetch(
+      `${URL_FIREBASE}/personal.json?ts=${Date.now()}`,
+      {
+        cache: 'no-store'
+      }
+    ).then(
+      res => res.json()
+    ),
+
+    fetch(
+      `${URL_FIREBASE}/asignacionesTurnos.json?ts=${Date.now()}`,
+      {
+        cache: 'no-store'
+      }
+    ).then(
+      res => res.json()
+    )
+
+  ])
+
+  .then(
+    ([
+      fichadasData,
+      personalData,
+      turnosData
+    ]) => {
+
+      mapaConfiguracionPersonalVigilador =
+        personalData || {};
+
+
+      asignacionesTurnosVigilador =
+        turnosData
+          ? Object.entries(
+              turnosData
+            ).map(
+              ([id, d]) =>
+                ({
+                  ...d,
+                  id
+                })
+            )
+          : [];
+
+
+      let misFichadas = [];
+
+
+      if (fichadasData) {
+
+        Object
+          .values(fichadasData)
+          .forEach(f => {
+
+            const fLegajo =
+              String(
+                f.legajo || ''
+              ).trim();
+
+
+            if (
+              fLegajo === legajo ||
+              parseInt(
+                fLegajo,
+                10
+              ) ===
+                parseInt(
+                  legajo,
+                  10
+                )
+            ) {
+
+              misFichadas.push({
+
+                fecha:
+                  f.fechaHoraDispositivo ||
+                  f.fecha,
+
+                legajo:
+                  f.legajo,
+
+                objetivo:
+                  f.objetivo ||
+                  'Objetivo General',
+
+                tipo:
+                  String(
+                    f.tipo || ''
+                  ).toUpperCase()
+
+              });
+
+            }
+
+          });
+
+      }
+
+
+      if (
+        misFichadas.length > 0
+      ) {
+
+        datosVigiladorGlobal =
+          misFichadas;
+
+
+        poblarSelectMeses(
+          datosVigiladorGlobal
+        );
+
+
+        aplicarFiltros();
+
+      }
+
+    }
+  )
+
+  .catch(
+    err =>
+      console.error(err)
+  );
+
+}
+
+
+/* ============================================================
+   MESES
+============================================================ */
+
+function poblarSelectMeses(
+  datos
+) {
+
+  const selectMes =
+    document.getElementById(
+      'filtroMes'
+    );
+
+
+  const mesActualSeleccionado =
+    selectMes.value;
+
+
+  const mesesSet =
+    new Set();
+
+
+  datos.forEach(f => {
+
+    if (f.fecha) {
+
+      const d =
+        parseFechaSegura(
+          f.fecha
+        );
+
+
+      if (
+        !isNaN(
+          d.getTime()
+        )
+      ) {
+
+        const anio =
+          d.getFullYear();
+
+
+        const mes =
+          String(
+            d.getMonth() + 1
+          ).padStart(
+            2,
+            '0'
+          );
+
+
+        mesesSet.add(
+          `${anio}-${mes}`
+        );
+
+      }
+
     }
 
-    function ejecutarConsulta(legajo) {
-      Promise.all([
-        fetch(`${URL_FIREBASE}/fichadas.json?ts=${Date.now()}`, { cache: 'no-store' }).then(res => res.json()),
-        fetch(`${URL_FIREBASE}/personal.json?ts=${Date.now()}`, { cache: 'no-store' }).then(res => res.json()),
-        fetch(`${URL_FIREBASE}/asignacionesTurnos.json?ts=${Date.now()}`, { cache: 'no-store' }).then(res => res.json())
-      ])
-        .then(([fichadasData, personalData, turnosData]) => {
-          mapaConfiguracionPersonalVigilador = personalData || {};
-          asignacionesTurnosVigilador = turnosData
-            ? Object.entries(turnosData).map(([id, d]) => ({ ...d, id }))
-            : [];
+  });
 
-          let misFichadas = [];
 
-          if (fichadasData) {
-            Object.values(fichadasData).forEach(f => {
-              const fLegajo = String(f.legajo || '').trim();
-              if (fLegajo === legajo || parseInt(fLegajo, 10) === parseInt(legajo, 10)) {
-                misFichadas.push({
-                  fecha: f.fechaHoraDispositivo || f.fecha,
-                  legajo: f.legajo,
-                  objetivo: f.objetivo || 'Objetivo General',
-                  tipo: String(f.tipo || '').toUpperCase()
-                });
-              }
-            });
+  const mesesOrdenados =
+    Array.from(
+      mesesSet
+    )
+    .sort()
+    .reverse();
+
+
+  selectMes.innerHTML =
+    `<option value="todos">Todos los meses</option>`;
+
+
+  const nombresMeses = [
+    "Enero",
+    "Febrero",
+    "Marzo",
+    "Abril",
+    "Mayo",
+    "Junio",
+    "Julio",
+    "Agosto",
+    "Septiembre",
+    "Octubre",
+    "Noviembre",
+    "Diciembre"
+  ];
+
+
+  mesesOrdenados.forEach(
+    m => {
+
+      const [
+        anio,
+        mesNum
+      ] =
+        m.split('-');
+
+
+      const nombreMesTexto =
+        `${nombresMeses[parseInt(mesNum, 10) - 1]} ${anio}`;
+
+
+      const opt =
+        document.createElement(
+          'option'
+        );
+
+
+      opt.value =
+        m;
+
+
+      opt.innerText =
+        nombreMesTexto;
+
+
+      selectMes.appendChild(
+        opt
+      );
+
+    }
+  );
+
+
+  if (
+    mesesOrdenados.includes(
+      mesActualSeleccionado
+    )
+  ) {
+
+    selectMes.value =
+      mesActualSeleccionado;
+
+  }
+
+}
+
+
+/* ============================================================
+   FILTROS
+============================================================ */
+
+function aplicarFiltros() {
+
+  const mesFiltro =
+    document.getElementById(
+      'filtroMes'
+    ).value;
+
+
+  const diaFiltro =
+    document.getElementById(
+      'filtroDia'
+    ).value;
+
+
+  let filtrados =
+    datosVigiladorGlobal;
+
+
+  if (
+    mesFiltro !== 'todos'
+  ) {
+
+    filtrados =
+      filtrados.filter(
+        f => {
+
+          const d =
+            parseFechaSegura(
+              f.fecha
+            );
+
+
+          if (
+            isNaN(
+              d.getTime()
+            )
+          ) {
+            return false;
           }
 
-          if (misFichadas.length > 0) {
-            datosVigiladorGlobal = misFichadas;
-            poblarSelectMeses(datosVigiladorGlobal);
-            aplicarFiltros();
-          }
-        })
-        .catch(err => console.error(err));
-    }
 
-    function poblarSelectMeses(datos) {
-      const selectMes = document.getElementById('filtroMes');
-      const mesActualSeleccionado = selectMes.value;
-      
-      const mesesSet = new Set();
-      datos.forEach(f => {
-        if(f.fecha) {
-          const d = parseFechaSegura(f.fecha);
-          if(!isNaN(d.getTime())) {
-            const anio = d.getFullYear();
-            const mes = String(d.getMonth() + 1).padStart(2, '0');
-            mesesSet.add(`${anio}-${mes}`);
-          }
+          const anio =
+            d.getFullYear();
+
+
+          const mes =
+            String(
+              d.getMonth() + 1
+            ).padStart(
+              2,
+              '0'
+            );
+
+
+          return (
+            `${anio}-${mes}` ===
+            mesFiltro
+          );
+
         }
-      });
+      );
 
-      const mesesOrdenados = Array.from(mesesSet).sort().reverse();
+  }
 
-      selectMes.innerHTML = `<option value="todos">Todos los meses</option>`;
-      const nombresMeses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
-      mesesOrdenados.forEach(m => {
-        const [anio, mesNum] = m.split('-');
-        const nombreMesTexto = `${nombresMeses[parseInt(mesNum, 10) - 1]} ${anio}`;
-        const opt = document.createElement('option');
-        opt.value = m;
-        opt.innerText = nombreMesTexto;
-        selectMes.appendChild(opt);
-      });
+  if (diaFiltro) {
 
-      if (mesesOrdenados.includes(mesActualSeleccionado)) {
-        selectMes.value = mesActualSeleccionado;
-      }
-    }
+    filtrados =
+      filtrados.filter(
+        f => {
 
-    function aplicarFiltros() {
-      const mesFiltro = document.getElementById('filtroMes').value;
-      const diaFiltro = document.getElementById('filtroDia').value;
+          const d =
+            parseFechaSegura(
+              f.fecha
+            );
 
-      let filtrados = datosVigiladorGlobal;
 
-      if (mesFiltro !== 'todos') {
-        filtrados = filtrados.filter(f => {
-          const d = parseFechaSegura(f.fecha);
-          if (isNaN(d.getTime())) return false;
-          const anio = d.getFullYear();
-          const mes = String(d.getMonth() + 1).padStart(2, '0');
-          return `${anio}-${mes}` === mesFiltro;
-        });
-      }
+          if (
+            isNaN(
+              d.getTime()
+            )
+          ) {
+            return false;
+          }
 
-      if (diaFiltro) {
-        filtrados = filtrados.filter(f => {
-          const d = parseFechaSegura(f.fecha);
-          if (isNaN(d.getTime())) return false;
-          const anio = d.getFullYear();
-          const mes = String(d.getMonth() + 1).padStart(2, '0');
-          const dia = String(d.getDate()).padStart(2, '0');
-          return `${anio}-${mes}-${dia}` === diaFiltro;
-        });
-      }
 
-      procesarYRenderizar(filtrados);
-    }
+          const anio =
+            d.getFullYear();
 
-    function limpiarFiltros() {
-      document.getElementById('filtroMes').value = 'todos';
-      document.getElementById('filtroDia').value = '';
-      procesarYRenderizar(datosVigiladorGlobal);
-    }
 
-    function procesarYRenderizar(marcacionesVigilador) {
-      marcacionesVigilador.sort((a, b) => parseFechaSegura(a.fecha) - parseFechaSegura(b.fecha));
+          const mes =
+            String(
+              d.getMonth() + 1
+            ).padStart(
+              2,
+              '0'
+            );
 
-      let totalD = 0, totalN = 0, totalT = 0;
-      const tabla = document.getElementById('cuerpoDetalle');
-      tabla.innerHTML = "";
 
-      for (let i = 0; i < marcacionesVigilador.length; i++) {
-        if (marcacionesVigilador[i].tipo === 'ENTRADA') {
-          let entrada = marcacionesVigilador[i];
-          let salida = marcacionesVigilador[i + 1] && marcacionesVigilador[i + 1].tipo === 'SALIDA' ? marcacionesVigilador[i + 1] : null;
+          const dia =
+            String(
+              d.getDate()
+            ).padStart(
+              2,
+              '0'
+            );
 
-          let objetivoNombre = entrada.objetivo || (salida && salida.objetivo) || '-';
-          const horarioProgramado = obtenerHorarioProgramado(entrada.fecha, entrada.legajo, objetivoNombre);
-          let horas = salida
-            ? calcularHoras(entrada.fecha, salida.fecha, horarioProgramado)
-            : { d: 0, n: 0, t: 0, ajusteMinutos: 0 };
 
-          totalD += horas.d;
-          totalN += horas.n;
-          totalT += horas.t;
+          return (
+            `${anio}-${mes}-${dia}` ===
+            diaFiltro
+          );
 
-          const fEntrada = parseFechaSegura(entrada.fecha);
-          const fSalida = salida ? parseFechaSegura(salida.fecha) : null;
-
-          const estadoEntrada = evaluarEstadoEntradaVigilador(entrada.fecha, horarioProgramado);
-          const estadoTexto = estadoEntrada.estado === 'TARDE'
-            ? `<span class="inline-block mt-1 px-2 py-0.5 rounded-full bg-red-500/15 text-red-300 border border-red-500/40 text-[10px] font-bold">🔴 LLEGADA TARDE · ${estadoEntrada.minutosTarde} MIN</span>`
-            : estadoEntrada.estado === 'TOLERANCIA'
-              ? `<span class="inline-block mt-1 px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-300 border border-orange-500/40 text-[10px] font-bold">🟠 TOLERANCIA · ${estadoEntrada.minutosTarde} MIN</span>`
-              : '';
-
-          const tr = document.createElement('tr');
-          tr.className = estadoEntrada.estado === 'TARDE'
-            ? "hover:bg-red-950/30 transition bg-red-950/20"
-            : estadoEntrada.estado === 'TOLERANCIA'
-              ? "hover:bg-orange-950/20 transition bg-orange-950/10"
-              : "hover:bg-slate-700/30 transition";
-          tr.innerHTML = `
-            <td class="p-4 text-xs font-mono">${!isNaN(fEntrada.getTime()) ? fEntrada.toLocaleString('es-AR', { hour12: false }) : entrada.fecha}${estadoTexto}</td>
-            <td class="p-4 text-xs font-mono">${salida ? (!isNaN(fSalida.getTime()) ? fSalida.toLocaleString('es-AR', { hour12: false }) : salida.fecha) : '<span class="text-amber-400">En Turno</span>'}</td>
-            <td class="p-4 text-xs text-slate-300 font-medium">${objetivoNombre}
-              <div class="text-[10px] text-slate-500 mt-1">${horarioProgramado ? `Turno ${horarioProgramado.inicio || '--:--'} - ${horarioProgramado.fin || '--:--'} · ${horarioProgramado.origen}` : 'Sin horario configurado'}${horas.ajusteMinutos > 0 ? ` · ${horas.ajusteMinutos} min anticipados no computados` : ''}${horas.minutosExtra > 0 ? ` · ${horas.minutosExtra} min extra` : ''}</div>
-            </td>
-            <td class="p-4 text-center text-xs font-semibold text-amber-400">${formatearAHorasReloj(horas.d)}</td>
-            <td class="p-4 text-center text-xs font-semibold text-indigo-400">${formatearAHorasReloj(horas.n)}</td>
-            <td class="p-4 text-center text-xs font-bold text-emerald-400">${formatearAHorasReloj(horas.t)}</td>
-          `;
-          tabla.appendChild(tr);
         }
-      }
+      );
 
-      document.getElementById('horasDiurnas').innerText = formatearAHorasReloj(totalD);
-      document.getElementById('horasNocturnas').innerText = formatearAHorasReloj(totalN);
-      document.getElementById('horasTotales').innerText = formatearAHorasReloj(totalT);
+  }
 
-      document.getElementById('seccionFiltros').classList.remove('hidden');
-      document.getElementById('resumenHoras').classList.remove('hidden');
-      document.getElementById('contenedorTabla').classList.remove('hidden');
+
+  procesarYRenderizar(
+    filtrados
+  );
+
+}
+
+
+/* ============================================================
+   LIMPIAR FILTROS
+============================================================ */
+
+function limpiarFiltros() {
+
+  document.getElementById(
+    'filtroMes'
+  ).value =
+    'todos';
+
+
+  document.getElementById(
+    'filtroDia'
+  ).value =
+    '';
+
+
+  procesarYRenderizar(
+    datosVigiladorGlobal
+  );
+
+}
+
+
+/* ============================================================
+   RENDER HORAS
+============================================================ */
+
+function procesarYRenderizar(
+  marcacionesVigilador
+) {
+
+  marcacionesVigilador.sort(
+    (a, b) =>
+      parseFechaSegura(a.fecha) -
+      parseFechaSegura(b.fecha)
+  );
+
+
+  let totalD = 0;
+
+  let totalN = 0;
+
+  let totalT = 0;
+
+
+  const tabla =
+    document.getElementById(
+      'cuerpoDetalle'
+    );
+
+
+  tabla.innerHTML = "";
+
+
+  for (
+    let i = 0;
+    i < marcacionesVigilador.length;
+    i++
+  ) {
+
+    if (
+      marcacionesVigilador[i].tipo ===
+      'ENTRADA'
+    ) {
+
+      let entrada =
+        marcacionesVigilador[i];
+
+
+      let salida =
+        marcacionesVigilador[i + 1] &&
+        marcacionesVigilador[i + 1].tipo ===
+        'SALIDA'
+          ? marcacionesVigilador[i + 1]
+          : null;
+
+
+      let objetivoNombre =
+        entrada.objetivo ||
+        (salida && salida.objetivo) ||
+        '-';
+
+
+      const horarioProgramado =
+        obtenerHorarioProgramado(
+          entrada.fecha,
+          entrada.legajo,
+          objetivoNombre
+        );
+
+
+      let horas =
+        salida
+          ? calcularHoras(
+              entrada.fecha,
+              salida.fecha,
+              horarioProgramado
+            )
+          : {
+              d: 0,
+              n: 0,
+              t: 0,
+              ajusteMinutos: 0
+            };
+
+
+      totalD += horas.d;
+
+      totalN += horas.n;
+
+      totalT += horas.t;
+
+
+      const fEntrada =
+        parseFechaSegura(
+          entrada.fecha
+        );
+
+
+      const fSalida =
+        salida
+          ? parseFechaSegura(
+              salida.fecha
+            )
+          : null;
+
+
+      const estadoEntrada =
+        evaluarEstadoEntradaVigilador(
+          entrada.fecha,
+          horarioProgramado
+        );
+
+
+      const estadoTexto =
+        estadoEntrada.estado ===
+        'TARDE'
+
+          ? `<span class="inline-block mt-1 px-2 py-0.5 rounded-full bg-red-500/15 text-red-300 border border-red-500/40 text-[10px] font-bold">🔴 LLEGADA TARDE · ${estadoEntrada.minutosTarde} MIN</span>`
+
+          : estadoEntrada.estado ===
+            'TOLERANCIA'
+
+            ? `<span class="inline-block mt-1 px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-300 border border-orange-500/40 text-[10px] font-bold">🟠 TOLERANCIA · ${estadoEntrada.minutosTarde} MIN</span>`
+
+            : '';
+
+
+      const tr =
+        document.createElement(
+          'tr'
+        );
+
+
+      tr.className =
+        estadoEntrada.estado ===
+        'TARDE'
+
+          ? "hover:bg-red-950/30 transition bg-red-950/20"
+
+          : estadoEntrada.estado ===
+            'TOLERANCIA'
+
+            ? "hover:bg-orange-950/20 transition bg-orange-950/10"
+
+            : "hover:bg-slate-700/30 transition";
+
+
+      tr.innerHTML = `
+
+        <td class="p-4 text-xs font-mono">
+
+          ${
+            !isNaN(
+              fEntrada.getTime()
+            )
+              ? fEntrada.toLocaleString(
+                  'es-AR',
+                  {
+                    hour12: false
+                  }
+                )
+              : entrada.fecha
+          }
+
+          ${estadoTexto}
+
+        </td>
+
+
+        <td class="p-4 text-xs font-mono">
+
+          ${
+            salida
+              ? (
+                  !isNaN(
+                    fSalida.getTime()
+                  )
+                    ? fSalida.toLocaleString(
+                        'es-AR',
+                        {
+                          hour12: false
+                        }
+                      )
+                    : salida.fecha
+                )
+              : '<span class="text-amber-400">En Turno</span>'
+          }
+
+        </td>
+
+
+        <td class="p-4 text-xs text-slate-300 font-medium">
+
+          ${objetivoNombre}
+
+          <div class="text-[10px] text-slate-500 mt-1">
+
+            ${
+              horarioProgramado
+                ? `Turno ${horarioProgramado.inicio || '--:--'} - ${horarioProgramado.fin || '--:--'} · ${horarioProgramado.origen}`
+                : 'Sin horario configurado'
+            }
+
+            ${
+              horas.ajusteMinutos > 0
+                ? ` · ${horas.ajusteMinutos} min anticipados no computados`
+                : ''
+            }
+
+            ${
+              horas.minutosExtra > 0
+                ? ` · ${horas.minutosExtra} min extra`
+                : ''
+            }
+
+          </div>
+
+        </td>
+
+
+        <td class="p-4 text-center text-xs font-semibold text-amber-400">
+
+          ${formatearAHorasReloj(horas.d)}
+
+        </td>
+
+
+        <td class="p-4 text-center text-xs font-semibold text-indigo-400">
+
+          ${formatearAHorasReloj(horas.n)}
+
+        </td>
+
+
+        <td class="p-4 text-center text-xs font-bold text-emerald-400">
+
+          ${formatearAHorasReloj(horas.t)}
+
+        </td>
+
+      `;
+
+
+      tabla.appendChild(
+        tr
+      );
+
     }
 
-    // 🚨 CONFIGURACIÓN DEL BOTÓN DE PÁNICO SOSTENIDO (3 SEGUNDOS)
-    function inicializarBotonPanicoSostenido() {
-      const btn = document.getElementById('btnPanico');
-      
-      const iniciarPresion = (e) => {
-        e.preventDefault();
-        tiempoPresionadoMs = 0;
-        document.getElementById('textoPanico').innerText = "MANTÉN PRESIONADO...";
-        
-        intervaloProgresoPanico = setInterval(() => {
-          tiempoPresionadoMs += 50;
-          let porcentaje = Math.min((tiempoPresionadoMs / TIEMPO_REQUERIDO_MS) * 100, 100);
-          document.getElementById('barraProgresoPanico').style.width = `${porcentaje}%`;
-        }, 50);
+  }
 
-        temporizadorPanico = setTimeout(() => {
-          cancelarPresion();
-          dispararAlertaPanico();
-        }, TIEMPO_REQUERIDO_MS);
+
+  document.getElementById(
+    'horasDiurnas'
+  ).innerText =
+    formatearAHorasReloj(
+      totalD
+    );
+
+
+  document.getElementById(
+    'horasNocturnas'
+  ).innerText =
+    formatearAHorasReloj(
+      totalN
+    );
+
+
+  document.getElementById(
+    'horasTotales'
+  ).innerText =
+    formatearAHorasReloj(
+      totalT
+    );
+
+
+  document.getElementById(
+    'seccionFiltros'
+  ).classList.remove(
+    'hidden'
+  );
+
+
+  document.getElementById(
+    'resumenHoras'
+  ).classList.remove(
+    'hidden'
+  );
+
+
+  document.getElementById(
+    'contenedorTabla'
+  ).classList.remove(
+    'hidden'
+  );
+
+}
+
+
+/* ============================================================
+   BOTÓN DE PÁNICO SOSTENIDO
+============================================================ */
+
+function inicializarBotonPanicoSostenido() {
+
+  const btn =
+    document.getElementById(
+      'btnPanico'
+    );
+
+
+  if (!btn) {
+    return;
+  }
+
+
+  const iniciarPresion =
+    (e) => {
+
+      e.preventDefault();
+
+
+      /*
+         Evitamos iniciar dos temporizadores
+         simultáneos.
+      */
+
+      if (temporizadorPanico) {
+        return;
+      }
+
+
+      tiempoPresionadoMs = 0;
+
+
+      document.getElementById(
+        'textoPanico'
+      ).innerText =
+        "MANTÉN PRESIONADO...";
+
+
+      intervaloProgresoPanico =
+        setInterval(
+          () => {
+
+            tiempoPresionadoMs += 50;
+
+
+            let porcentaje =
+              Math.min(
+                (
+                  tiempoPresionadoMs /
+                  TIEMPO_REQUERIDO_MS
+                ) * 100,
+                100
+              );
+
+
+            document.getElementById(
+              'barraProgresoPanico'
+            ).style.width =
+              `${porcentaje}%`;
+
+          },
+          50
+        );
+
+
+      temporizadorPanico =
+        setTimeout(
+          () => {
+
+            cancelarPresion();
+
+            /*
+               AQUÍ se dispara la alerta.
+
+               La función toma inmediatamente
+               la hora real del dispositivo.
+            */
+
+            dispararAlertaPanico();
+
+          },
+          TIEMPO_REQUERIDO_MS
+        );
+
+    };
+
+
+  const cancelarPresion =
+    () => {
+
+      clearTimeout(
+        temporizadorPanico
+      );
+
+
+      clearInterval(
+        intervaloProgresoPanico
+      );
+
+
+      temporizadorPanico =
+        null;
+
+
+      intervaloProgresoPanico =
+        null;
+
+
+      tiempoPresionadoMs =
+        0;
+
+
+      document.getElementById(
+        'barraProgresoPanico'
+      ).style.width =
+        '0%';
+
+
+      document.getElementById(
+        'textoPanico'
+      ).innerText =
+        "MANTÉN PRESIONADO (3s)";
+
+    };
+
+
+  btn.addEventListener(
+    'mousedown',
+    iniciarPresion
+  );
+
+
+  btn.addEventListener(
+    'mouseup',
+    cancelarPresion
+  );
+
+
+  btn.addEventListener(
+    'mouseleave',
+    cancelarPresion
+  );
+
+
+  btn.addEventListener(
+    'touchstart',
+    iniciarPresion,
+    {
+      passive: false
+    }
+  );
+
+
+  btn.addEventListener(
+    'touchend',
+    cancelarPresion
+  );
+
+
+  btn.addEventListener(
+    'touchcancel',
+    cancelarPresion
+  );
+
+}
+
+
+/* ============================================================
+   DISPARAR ALERTA DE PÁNICO
+============================================================ */
+
+function dispararAlertaPanico() {
+
+  const legajo =
+    sessionStorage.getItem(
+      'vigilador_legajo'
+    );
+
+
+  const nombreVigilador =
+    sessionStorage.getItem(
+      'vigilador_nombre'
+    ) ||
+    `Legajo ${legajo}`;
+
+
+  if (!legajo) {
+
+    alert(
+      "Debe iniciar sesión para emitir una alerta."
+    );
+
+    return;
+
+  }
+
+
+  let enServicio = false;
+
+  let objetivoActual =
+    "Objetivo Asignado";
+
+
+  if (
+    datosVigiladorGlobal.length > 0
+  ) {
+
+    let ordenadas =
+      [
+        ...datosVigiladorGlobal
+      ].sort(
+        (a, b) =>
+          parseFechaSegura(a.fecha) -
+          parseFechaSegura(b.fecha)
+      );
+
+
+    let ultimaMar =
+      ordenadas[
+        ordenadas.length - 1
+      ];
+
+
+    if (
+      ultimaMar &&
+      ultimaMar.tipo ===
+        'ENTRADA'
+    ) {
+
+      enServicio =
+        true;
+
+
+      if (
+        ultimaMar.objetivo
+      ) {
+
+        objetivoActual =
+          ultimaMar.objetivo;
+
+      }
+
+    }
+
+  }
+
+
+  if (!enServicio) {
+
+    alert(
+      "❌ No se puede enviar la alerta de pánico: Se encuentra fuera de servicio (requiere tener una Entrada activa)."
+    );
+
+    return;
+
+  }
+
+
+  if (!navigator.geolocation) {
+
+    alert(
+      "Tu dispositivo no soporta geolocalización."
+    );
+
+    return;
+
+  }
+
+
+  /*
+     =========================================================
+     MUY IMPORTANTE
+     =========================================================
+
+     Capturamos la hora AQUÍ.
+
+     Esto ocurre justo después de completar los 3 segundos.
+
+     NO esperamos a:
+       - obtener GPS
+       - recuperar Internet
+       - enviar Firebase
+
+     Por eso esta será la hora real del pánico.
+  */
+
+  const fechaHoraPanico =
+    new Date().toISOString();
+
+
+  const idLocal =
+    generarIdPanicoOffline();
+
+
+  /*
+     Intentamos obtener GPS.
+
+     El GPS puede funcionar incluso sin Internet
+     si el dispositivo tiene ubicación disponible.
+  */
+
+  navigator.geolocation.getCurrentPosition(
+
+    function(position) {
+
+      const lat =
+        position.coords.latitude;
+
+
+      const lon =
+        position.coords.longitude;
+
+
+      /*
+         Creamos el payload.
+
+         fechaHora = MOMENTO REAL DEL PÁNICO.
+      */
+
+      const payloadPanico = {
+
+        idLocal:
+
+          idLocal,
+
+
+        tipo:
+          "PANICO",
+
+
+        legajo:
+          String(legajo),
+
+
+        nombre:
+          nombreVigilador,
+
+
+        objetivo:
+          objetivoActual,
+
+
+        latitud:
+          lat,
+
+
+        longitud:
+          lon,
+
+
+        mapa:
+          `https://www.google.com/maps?q=${lat},${lon}`,
+
+
+        /*
+           ESTA ES LA HORA REAL
+           EN QUE SE ACTIVÓ EL PÁNICO.
+        */
+
+        fechaHora:
+          fechaHoraPanico,
+
+
+        fechaHoraDispositivo:
+          fechaHoraPanico,
+
+
+        estado:
+          "PENDIENTE",
+
+
+        atendido:
+          false,
+
+
+        /*
+           Información adicional útil
+           para administración.
+        */
+
+        origen:
+          navigator.onLine
+            ? "ONLINE"
+            : "OFFLINE",
+
+
+        guardadoOffline:
+          !navigator.onLine
+
       };
 
-      const cancelarPresion = () => {
-        clearTimeout(temporizadorPanico);
-        clearInterval(intervaloProgresoPanico);
-        tiempoPresionadoMs = 0;
-        document.getElementById('barraProgresoPanico').style.width = '0%';
-        document.getElementById('textoPanico').innerText = "MANTÉN PRESIONADO (3s)";
+
+      /*
+         =====================================================
+         SI HAY INTERNET
+         =====================================================
+      */
+
+      if (
+        navigator.onLine
+      ) {
+
+        enviarPanicoFirebase(
+          payloadPanico
+        )
+        .then(
+          resultado => {
+
+            if (
+              resultado.ok
+            ) {
+
+              alert(
+                "🚨 ¡ALERTA DE PÁNICO ENVIADA A LA CENTRAL!"
+              );
+
+            } else {
+
+              /*
+                 Aunque parecía haber Internet,
+                 el envío falló.
+
+                 Guardamos la alerta.
+              */
+
+              guardarPanicoEnCola(
+                payloadPanico
+              );
+
+
+              alert(
+                "🚨 ALERTA DE PÁNICO REGISTRADA.\n\nNo se pudo contactar con la Central en este momento. Será enviada automáticamente cuando vuelva la conexión."
+              );
+
+            }
+
+          }
+        );
+
+      } else {
+
+        /*
+           ==================================================
+           SIN INTERNET
+           ==================================================
+
+           NO INTENTAMOS ENVIAR.
+
+           La guardamos directamente.
+        */
+
+        guardarPanicoEnCola(
+          payloadPanico
+        );
+
+
+        alert(
+          "🚨 ALERTA DE PÁNICO REGISTRADA SIN INTERNET.\n\nLa alerta quedó almacenada en el dispositivo y será enviada automáticamente a la Central cuando vuelva la conexión.\n\nLa hora registrada corresponde al momento en que activaste el botón."
+        );
+
+      }
+
+
+      actualizarEstadoConexionPanico();
+
+    },
+
+
+    function(error) {
+
+      /*
+         Incluso si no podemos obtener GPS,
+         la alerta sigue siendo importante.
+
+         Creamos la alerta con latitud/longitud
+         vacías y conservamos igualmente
+         la hora real de activación.
+      */
+
+      const payloadSinGPS = {
+
+        idLocal:
+
+          idLocal,
+
+
+        tipo:
+          "PANICO",
+
+
+        legajo:
+          String(legajo),
+
+
+        nombre:
+          nombreVigilador,
+
+
+        objetivo:
+          objetivoActual,
+
+
+        latitud:
+          null,
+
+
+        longitud:
+          null,
+
+
+        mapa:
+          "",
+
+
+        /*
+           Hora exacta de activación.
+        */
+
+        fechaHora:
+          fechaHoraPanico,
+
+
+        fechaHoraDispositivo:
+          fechaHoraPanico,
+
+
+        estado:
+          "PENDIENTE",
+
+
+        atendido:
+          false,
+
+
+        origen:
+          navigator.onLine
+            ? "ONLINE_SIN_GPS"
+            : "OFFLINE_SIN_GPS",
+
+
+        guardadoOffline:
+          true,
+
+
+        errorGPS:
+          error?.message ||
+          "No se pudo obtener la ubicación GPS"
+
       };
 
-      // Eventos para Desktop y Mobile
-      btn.addEventListener('mousedown', iniciarPresion);
-      btn.addEventListener('mouseup', cancelarPresion);
-      btn.addEventListener('mouseleave', cancelarPresion);
 
-      btn.addEventListener('touchstart', iniciarPresion);
-      btn.addEventListener('touchend', cancelarPresion);
-      btn.addEventListener('touchcancel', cancelarPresion);
+      /*
+         Guardamos la alerta aunque no haya GPS.
+      */
+
+      guardarPanicoEnCola(
+        payloadSinGPS
+      );
+
+
+      alert(
+        "🚨 ALERTA DE PÁNICO REGISTRADA.\n\nNo se pudo obtener la ubicación GPS, pero la alerta fue guardada con la hora exacta de activación y será enviada a la Central cuando haya conexión."
+      );
+
+
+      actualizarEstadoConexionPanico();
+
+    },
+
+    {
+      enableHighAccuracy: true,
+
+      /*
+         Damos unos segundos para obtener
+         la ubicación disponible.
+      */
+
+      timeout: 10000,
+
+      maximumAge: 0
+
     }
 
-    // 🚨 EJECUCIÓN DE LA ALERTA DE PÁNICO CORREGIDA
-    function dispararAlertaPanico() {
-      const legajo = sessionStorage.getItem('vigilador_legajo');
-      const nombreVigilador = sessionStorage.getItem('vigilador_nombre') || `Legajo ${legajo}`;
+  );
 
-      if (!legajo) {
-        alert("Debe iniciar sesión para emitir una alerta.");
-        return;
+}
+
+
+/* ============================================================
+   NOVEDADES
+============================================================ */
+
+function enviarNovedadPortal() {
+
+  const legajo =
+    sessionStorage.getItem(
+      'vigilador_legajo'
+    );
+
+
+  const nombreVigilador =
+    sessionStorage.getItem(
+      'vigilador_nombre'
+    ) ||
+    `Legajo ${legajo}`;
+
+
+  const tipoIncidencia =
+    document.getElementById(
+      'tipoIncidencia'
+    ).value;
+
+
+  const descripcion =
+    document.getElementById(
+      'descNovedad'
+    ).value.trim();
+
+
+  const inputArchivo =
+    document.getElementById(
+      'fotoNovedadInput'
+    );
+
+
+  if (!legajo) {
+
+    alert(
+      "Debe iniciar sesión para enviar una novedad."
+    );
+
+    return;
+
+  }
+
+
+  let enServicio = false;
+
+  let objetivoActual =
+    "Objetivo Asignado";
+
+
+  if (
+    datosVigiladorGlobal.length > 0
+  ) {
+
+    let ordenadas =
+      [
+        ...datosVigiladorGlobal
+      ].sort(
+        (a, b) =>
+          parseFechaSegura(a.fecha) -
+          parseFechaSegura(b.fecha)
+      );
+
+
+    let ultimaMar =
+      ordenadas[
+        ordenadas.length - 1
+      ];
+
+
+    if (
+      ultimaMar &&
+      ultimaMar.tipo ===
+        'ENTRADA'
+    ) {
+
+      enServicio =
+        true;
+
+
+      if (
+        ultimaMar.objetivo
+      ) {
+
+        objetivoActual =
+          ultimaMar.objetivo;
+
       }
 
-      let enServicio = false;
-      let objetivoActual = "Objetivo Asignado";
+    }
 
-      if (datosVigiladorGlobal.length > 0) {
-        let ordenadas = [...datosVigiladorGlobal].sort((a, b) => parseFechaSegura(a.fecha) - parseFechaSegura(b.fecha));
-        let ultimaMar = ordenadas[ordenadas.length - 1];
-        
-        if (ultimaMar && ultimaMar.tipo === 'ENTRADA') {
-          enServicio = true;
-          if (ultimaMar.objetivo) objetivoActual = ultimaMar.objetivo;
-        }
-      }
+  }
 
-      if (!enServicio) {
-        alert("❌ No se puede enviar la alerta de pánico: Se encuentra fuera de servicio (requiere tener una Entrada activa).");
-        return;
-      }
 
-      if (!navigator.geolocation) {
-        alert("Tu dispositivo no soporta geolocalización.");
-        return;
-      }
+  if (!enServicio) {
 
-      navigator.geolocation.getCurrentPosition(
-        function(position) {
-          const lat = position.coords.latitude;
-          const lon = position.coords.longitude;
-          const fechaActual = new Date().toISOString();
+    alert(
+      "❌ No se puede enviar el informe: Actualmente se encuentra fuera de servicio (debe tener una Entrada activa / En Turno)."
+    );
 
-          // Payload estandarizado incluyendo 'fechaHora' para que el panel lo lea correctamente
-          const payloadPanico = {
-            tipo: "PANICO",
-            legajo: String(legajo),
-            nombre: nombreVigilador,
-            objetivo: objetivoActual,
-            latitud: lat,
-            longitud: lon,
-            mapa: `https://www.google.com/maps?q=${lat},${lon}`,
-            fechaHora: fechaActual,
-            fechaHoraDispositivo: fechaActual,
-            estado: "PENDIENTE",
-            atendido: false
+    return;
+
+  }
+
+
+  if (!descripcion) {
+
+    alert(
+      "Por favor, escriba la descripción de la novedad o incidencia."
+    );
+
+    return;
+
+  }
+
+
+  if (!navigator.geolocation) {
+
+    alert(
+      "Tu dispositivo no soporta geolocalización."
+    );
+
+    return;
+
+  }
+
+
+  navigator.geolocation.getCurrentPosition(
+
+    function(position) {
+
+      const lat =
+        position.coords.latitude;
+
+
+      const lon =
+        position.coords.longitude;
+
+
+      if (
+        inputArchivo.files &&
+        inputArchivo.files[0]
+      ) {
+
+        const lector =
+          new FileReader();
+
+
+        lector.onload =
+          function(e) {
+
+            enviarDatosFirebase(
+              legajo,
+              nombreVigilador,
+              objetivoActual,
+              tipoIncidencia,
+              descripcion,
+              lat,
+              lon,
+              e.target.result
+            );
+
           };
 
-          fetch(`${URL_FIREBASE}/panicos.json`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payloadPanico)
-          })
-          .then(res => res.json())
-          .then(() => {
-            alert("🚨 ¡ALERTA DE PÁNICO ENVIADA A LA CENTRAL. EL PERSONAL OPERATIVO HA SIDO NOTIFICADO!");
-          })
-          .catch(error => {
-            alert("Error al enviar alerta de pánico: " + error.toString());
-          });
-        },
-        function(error) {
-          alert("Error: Es obligatorio permitir el acceso al GPS para activar la alerta de pánico.");
-        },
-        { enableHighAccuracy: true }
+
+        lector.readAsDataURL(
+          inputArchivo.files[0]
+        );
+
+      } else {
+
+        enviarDatosFirebase(
+          legajo,
+          nombreVigilador,
+          objetivoActual,
+          tipoIncidencia,
+          descripcion,
+          lat,
+          lon,
+          ""
+        );
+
+      }
+
+    },
+
+    function(error) {
+
+      alert(
+        "Error: Es necesario activar el GPS para enviar novedades."
       );
+
+    },
+
+    {
+      enableHighAccuracy: true
     }
 
-    // 📝 ENVÍO DE NOVEDAD A FIREBASE
-    function enviarNovedadPortal() {
-      const legajo = sessionStorage.getItem('vigilador_legajo');
-      const nombreVigilador = sessionStorage.getItem('vigilador_nombre') || `Legajo ${legajo}`;
-      const tipoIncidencia = document.getElementById('tipoIncidencia').value;
-      const descripcion = document.getElementById('descNovedad').value.trim();
-      const inputArchivo = document.getElementById('fotoNovedadInput');
+  );
 
-      if (!legajo) {
-        alert("Debe iniciar sesión para enviar una novedad.");
-        return;
-      }
+}
 
-      let enServicio = false;
-      let objetivoActual = "Objetivo Asignado";
 
-      if (datosVigiladorGlobal.length > 0) {
-        let ordenadas = [...datosVigiladorGlobal].sort((a, b) => parseFechaSegura(a.fecha) - parseFechaSegura(b.fecha));
-        let ultimaMar = ordenadas[ordenadas.length - 1];
-        
-        if (ultimaMar && ultimaMar.tipo === 'ENTRADA') {
-          enServicio = true;
-          if (ultimaMar.objetivo) objetivoActual = ultimaMar.objetivo;
-        }
-      }
+/* ============================================================
+   FIREBASE NOVEDADES
+============================================================ */
 
-      if (!enServicio) {
-        alert("❌ No se puede enviar el informe: Actualmente se encuentra fuera de servicio (debe tener una Entrada activa / En Turno).");
-        return;
-      }
+function enviarDatosFirebase(
+  legajo,
+  nombre,
+  objetivo,
+  tipoIncidencia,
+  descripcion,
+  lat,
+  lon,
+  fotoBase64
+) {
 
-      if (!descripcion) {
-        alert("Por favor, escriba la descripción de la novedad o incidencia.");
-        return;
-      }
+  const payload = {
 
-      if (!navigator.geolocation) {
-        alert("Tu dispositivo no soporta geolocalización.");
-        return;
-      }
+    fechaHora:
+      new Date().toISOString(),
 
-      navigator.geolocation.getCurrentPosition(
-        function(position) {
-          const lat = position.coords.latitude;
-          const lon = position.coords.longitude;
+    legajo:
+      legajo,
 
-          if (inputArchivo.files && inputArchivo.files[0]) {
-            const lector = new FileReader();
-            lector.onload = function(e) {
-              enviarDatosFirebase(legajo, nombreVigilador, objetivoActual, tipoIncidencia, descripcion, lat, lon, e.target.result);
-            };
-            lector.readAsDataURL(inputArchivo.files[0]);
-          } else {
-            enviarDatosFirebase(legajo, nombreVigilador, objetivoActual, tipoIncidencia, descripcion, lat, lon, "");
-          }
-        },
-        function(error) {
-          alert("Error: Es necesario activar el GPS para enviar novedades.");
-        },
-        { enableHighAccuracy: true }
+    nombre:
+      nombre,
+
+    objetivo:
+      objetivo,
+
+    tipoIncidencia:
+      tipoIncidencia,
+
+    descripcion:
+      descripcion,
+
+    latitud:
+      lat,
+
+    longitud:
+      lon,
+
+    foto:
+      fotoBase64
+
+  };
+
+
+  fetch(
+    `${URL_FIREBASE}/novedades.json`,
+    {
+
+      method: "POST",
+
+      body:
+        JSON.stringify(
+          payload
+        )
+
+    }
+  )
+
+  .then(
+    res =>
+      res.json()
+  )
+
+  .then(
+    () => {
+
+      alert(
+        "✅ Novedad enviada correctamente a la central."
       );
-    }
 
-    function enviarDatosFirebase(legajo, nombre, objetivo, tipoIncidencia, descripcion, lat, lon, fotoBase64) {
-      const payload = {
-        fechaHora: new Date().toISOString(),
-        legajo: legajo,
-        nombre: nombre,
-        objetivo: objetivo,
-        tipoIncidencia: tipoIncidencia,
-        descripcion: descripcion,
-        latitud: lat,
-        longitud: lon,
-        foto: fotoBase64
-      };
 
-      fetch(`${URL_FIREBASE}/novedades.json`, {
-        method: "POST",
-        body: JSON.stringify(payload)
-      })
-      .then(res => res.json())
-      .then(() => {
-        alert("✅ Novedad enviada correctamente a la central.");
-        document.getElementById('descNovedad').value = "";
-        document.getElementById('fotoNovedadInput').value = "";
-      })
-      .catch(error => {
-        alert("Error de conexión al enviar novedad: " + error.toString());
-      });
-    }
+      document.getElementById(
+        'descNovedad'
+      ).value =
+        "";
 
-    function cerrarSesionVigilador() {
-      clearTimeout(temporizadorInactividad);
-      sessionStorage.removeItem('vigilador_legajo');
-      sessionStorage.removeItem('vigilador_nombre');
-      datosVigiladorGlobal = [];
-      
-      document.getElementById('formLoginVigilador').classList.remove('hidden');
-      document.getElementById('infoSesionActiva').classList.add('hidden');
-      document.getElementById('btnCerrarSesion').classList.add('hidden');
-      document.getElementById('seccionPanico').classList.add('hidden');
-      document.getElementById('seccionFiltros').classList.add('hidden');
-      document.getElementById('resumenHoras').classList.add('hidden');
-      document.getElementById('seccionNovedades').classList.add('hidden'); 
-      document.getElementById('contenedorTabla').classList.add('hidden');
-      
-      document.getElementById('legajoInput').value = '';
-      document.getElementById('pinInput').value = '';
-      document.getElementById('filtroMes').innerHTML = `<option value="todos">Todos los meses</option>`;
-      document.getElementById('filtroDia').value = '';
+
+      document.getElementById(
+        'fotoNovedadInput'
+      ).value =
+        "";
+
     }
-  </script>
+  )
+
+  .catch(
+    error => {
+
+      alert(
+        "Error de conexión al enviar novedad: " +
+        error.toString()
+      );
+
+    }
+  );
+
+}
+
+
+/* ============================================================
+   CERRAR SESIÓN
+============================================================ */
+
+function cerrarSesionVigilador() {
+
+  clearTimeout(
+    temporizadorInactividad
+  );
+
+
+  sessionStorage.removeItem(
+    'vigilador_legajo'
+  );
+
+
+  sessionStorage.removeItem(
+    'vigilador_nombre'
+  );
+
+
+  datosVigiladorGlobal =
+    [];
+
+
+  document
+    .getElementById(
+      'formLoginVigilador'
+    )
+    .classList.remove(
+      'hidden'
+    );
+
+
+  document
+    .getElementById(
+      'infoSesionActiva'
+    )
+    .classList.add(
+      'hidden'
+    );
+
+
+  document
+    .getElementById(
+      'btnCerrarSesion'
+    )
+    .classList.add(
+      'hidden'
+    );
+
+
+  document
+    .getElementById(
+      'seccionPanico'
+    )
+    .classList.add(
+      'hidden'
+    );
+
+
+  document
+    .getElementById(
+      'seccionFiltros'
+    )
+    .classList.add(
+      'hidden'
+    );
+
+
+  document
+    .getElementById(
+      'resumenHoras'
+    )
+    .classList.add(
+      'hidden'
+    );
+
+
+  document
+    .getElementById(
+      'seccionNovedades'
+    )
+    .classList.add(
+      'hidden'
+    );
+
+
+  document
+    .getElementById(
+      'contenedorTabla'
+    )
+    .classList.add(
+      'hidden'
+    );
+
+
+  document.getElementById(
+    'legajoInput'
+  ).value =
+    '';
+
+
+  document.getElementById(
+    'pinInput'
+  ).value =
+    '';
+
+
+  document.getElementById(
+    'filtroMes'
+  ).innerHTML =
+    `<option value="todos">Todos los meses</option>`;
+
+
+  document.getElementById(
+    'filtroDia'
+  ).value =
+    '';
+
+
+  actualizarEstadoConexionPanico();
+
+}
+
+</script>
+
 </body>
 </html>
+```
