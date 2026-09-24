@@ -117,7 +117,17 @@
 
   <script>
     const URL_FIREBASE = "https://fir-asistencia-fad12-default-rtdb.firebaseio.com";
-    
+
+    // ==========================================
+    // CONFIGURACIÓN DE ASISTENCIA DESDE FIREBASE
+    // ==========================================
+    const URL_CONFIGURACION_ASISTENCIA = `${URL_FIREBASE}/configuracionAsistencia.json`;
+    const CONFIGURACION_ASISTENCIA_DEFAULT = {
+      toleranciaEntradaMinutos: 15,
+      toleranciaSalidaMinutos: 30
+    };
+    let configuracionAsistenciaGlobal = { ...CONFIGURACION_ASISTENCIA_DEFAULT };
+
     let fotoBase64Global = "";
     let estaSincronizando = false;
     let ultimoTipoFichadaGlobal = "";
@@ -131,7 +141,80 @@
     let turnoProgramadoGlobal = null;
     let objetivoAutorizadoIdsGlobal = [];
 
+    function normalizarConfiguracionAsistencia(data) {
+      const entrada = Number(data?.toleranciaEntradaMinutos);
+      const salida = Number(data?.toleranciaSalidaMinutos);
+
+      return {
+        toleranciaEntradaMinutos:
+          Number.isFinite(entrada) && entrada >= 0
+            ? Math.round(entrada)
+            : CONFIGURACION_ASISTENCIA_DEFAULT.toleranciaEntradaMinutos,
+        toleranciaSalidaMinutos:
+          Number.isFinite(salida) && salida >= 0
+            ? Math.round(salida)
+            : CONFIGURACION_ASISTENCIA_DEFAULT.toleranciaSalidaMinutos
+      };
+    }
+
+    function obtenerToleranciaEntrada() {
+      const valor = Number(configuracionAsistenciaGlobal?.toleranciaEntradaMinutos);
+      return Number.isFinite(valor) && valor >= 0
+        ? valor
+        : CONFIGURACION_ASISTENCIA_DEFAULT.toleranciaEntradaMinutos;
+    }
+
+    function obtenerToleranciaSalida() {
+      const valor = Number(configuracionAsistenciaGlobal?.toleranciaSalidaMinutos);
+      return Number.isFinite(valor) && valor >= 0
+        ? valor
+        : CONFIGURACION_ASISTENCIA_DEFAULT.toleranciaSalidaMinutos;
+    }
+
+    async function cargarConfiguracionAsistencia() {
+      // Primero usa lo último conocido para que el sistema no quede sin
+      // configuración si temporalmente no hay conexión.
+      try {
+        const cache = JSON.parse(
+          localStorage.getItem('demo_configuracion_asistencia') || 'null'
+        );
+
+        if (cache && typeof cache === 'object') {
+          configuracionAsistenciaGlobal = normalizarConfiguracionAsistencia(cache);
+        }
+      } catch (e) {}
+
+      if (!navigator.onLine) return configuracionAsistenciaGlobal;
+
+      try {
+        const res = await fetch(
+          `${URL_CONFIGURACION_ASISTENCIA}?ts=${Date.now()}`,
+          { cache: 'no-store' }
+        );
+
+        const data = res.ok ? await res.json() : null;
+
+        if (data && typeof data === 'object') {
+          configuracionAsistenciaGlobal = normalizarConfiguracionAsistencia(data);
+          localStorage.setItem(
+            'demo_configuracion_asistencia',
+            JSON.stringify(configuracionAsistenciaGlobal)
+          );
+        }
+      } catch (e) {
+        console.warn(
+          'No se pudo cargar la configuración de asistencia. Se usan los valores disponibles en caché/predeterminados.',
+          e
+        );
+      }
+
+      return configuracionAsistenciaGlobal;
+    }
+
     window.onload = async function() {
+      // La configuración de asistencia se carga antes de permitir fichadas.
+      await cargarConfiguracionAsistencia();
+
       iniciarCamaraSegura();
       cargarObjetivos();
       actualizarEstadoRed();
@@ -197,8 +280,9 @@
       }
     }
 
-    window.addEventListener('online', () => {
+    window.addEventListener('online', async () => {
       actualizarEstadoRed();
+      await cargarConfiguracionAsistencia();
       sincronizarFichadasPendientes();
       sincronizarAlertasFichadasPendientes();
     });
@@ -1658,9 +1742,6 @@
     // CONTROL DE HORARIO
     // ==========================================
 
-    const TOLERANCIA_ENTRADA_MINUTOS = 15;
-    const TOLERANCIA_SALIDA_MINUTOS = 30;
-
     function construirFechaHoraTurno(
       baseDate,
       horaTexto,
@@ -1909,7 +1990,7 @@
 
         if (
           diferenciaMin <=
-          TOLERANCIA_ENTRADA_MINUTOS
+          obtenerToleranciaEntrada()
         ) {
           return {
             estado:
@@ -1968,7 +2049,7 @@
 
       if (
         diferenciaFin <=
-        TOLERANCIA_SALIDA_MINUTOS
+        obtenerToleranciaSalida()
       ) {
         return {
           estado:
@@ -2027,10 +2108,10 @@
           datos.minutosTardanza || 0,
 
         toleranciaMinutos:
-          TOLERANCIA_ENTRADA_MINUTOS,
+          obtenerToleranciaEntrada(),
 
         mensaje:
-          `Entrada fuera de tolerancia: ${datos.minutosTardanza || 0} minutos después del inicio del turno.`
+          `Entrada fuera de tolerancia: ${datos.minutosTardanza || 0} minutos después del inicio del turno. Tolerancia configurada: ${obtenerToleranciaEntrada()} min.`
       };
 
       if (!navigator.onLine) {
@@ -2098,7 +2179,11 @@
     // PROCESAR FICHADA
     // ==========================================
 
-    function procesarEnvio(tipoRecibido) {
+    async function procesarEnvio(tipoRecibido) {
+      // Refresca la configuración inmediatamente antes de fichar para que,
+      // si el administrador cambió las tolerancias, la nueva regla se aplique.
+      await cargarConfiguracionAsistencia();
+
       const tipo =
         String(tipoRecibido)
           .trim()
@@ -2552,11 +2637,12 @@
       datos.minutosExtra =
         evaluacionHorario.minutosExtra;
 
+      // Guardamos también los valores realmente aplicados a esta fichada.
       datos.toleranciaEntradaMinutos =
-        TOLERANCIA_ENTRADA_MINUTOS;
+        obtenerToleranciaEntrada();
 
       datos.toleranciaSalidaMinutos =
-        TOLERANCIA_SALIDA_MINUTOS;
+        obtenerToleranciaSalida();
 
       // ==========================================
       // ALERTA DE ENTRADA TARDÍA
@@ -2654,7 +2740,7 @@
               "p-3 rounded-xl text-xs text-center bg-amber-950 text-amber-200 border border-amber-500";
 
             divResultado.innerText =
-              `⚠️ Fichada registrada dentro de la tolerancia: ${datos.minutosTardanza} min de demora.`;
+              `⚠️ Fichada registrada dentro de la tolerancia configurada de ${datos.toleranciaEntradaMinutos} minutos: ${datos.minutosTardanza} min de demora.`;
 
           } else if (
             datos.estadoHorario ===
@@ -2674,7 +2760,7 @@
               "p-3 rounded-xl text-xs text-center bg-amber-950 text-amber-200 border border-amber-500";
 
             divResultado.innerText =
-              `✓ Salida registrada. Dentro de los ${TOLERANCIA_SALIDA_MINUTOS} minutos de tolerancia.`;
+              `✓ Salida registrada. Dentro de los ${datos.toleranciaSalidaMinutos} minutos de tolerancia configurada.`;
 
           } else if (
             datos.estadoHorario ===
