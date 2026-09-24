@@ -436,6 +436,13 @@
     const URL_TURNOS = `${URL_BASE_FIREBASE}/asignacionesTurnos.json`;
     const URL_ALERTAS_TARDANZA = `${URL_BASE_FIREBASE}/alertasLlegadasTarde.json`;
     const URL_ALERTAS_SALIDA_ANTICIPADA = `${URL_BASE_FIREBASE}/alertasSalidasAnticipadas.json`;
+    const URL_CONFIGURACION_ASISTENCIA = `${URL_BASE_FIREBASE}/configuracionAsistencia.json`;
+
+    const CONFIGURACION_ASISTENCIA_DEFAULT = {
+      toleranciaEntradaMinutos: 15,
+      toleranciaSalidaMinutos: 30
+    };
+    let configuracionAsistenciaPanel = { ...CONFIGURACION_ASISTENCIA_DEFAULT };
     
     let datosLocales = [];
     let datosFiltradosActuales = [];
@@ -886,11 +893,42 @@
     let instChartBarras = null;
     let actualizacionPanelEnCurso = false;
 
+    async function cargarConfiguracionAsistenciaPanel() {
+      try {
+        const res = await fetch(`${URL_CONFIGURACION_ASISTENCIA}?ts=${Date.now()}`, { cache: 'no-store' });
+        const data = res.ok ? await res.json() : null;
+        const entrada = Number(data?.toleranciaEntradaMinutos);
+        const salida = Number(data?.toleranciaSalidaMinutos);
+        configuracionAsistenciaPanel = {
+          toleranciaEntradaMinutos: Number.isFinite(entrada) && entrada >= 0 ? Math.round(entrada) : CONFIGURACION_ASISTENCIA_DEFAULT.toleranciaEntradaMinutos,
+          toleranciaSalidaMinutos: Number.isFinite(salida) && salida >= 0 ? Math.round(salida) : CONFIGURACION_ASISTENCIA_DEFAULT.toleranciaSalidaMinutos
+        };
+      } catch (e) {
+        configuracionAsistenciaPanel = { ...CONFIGURACION_ASISTENCIA_DEFAULT };
+        console.warn('No se pudo cargar la configuración de asistencia; se usan valores predeterminados.', e);
+      }
+    }
+
+    function obtenerToleranciaEntradaPanel() {
+      return Number(configuracionAsistenciaPanel?.toleranciaEntradaMinutos) >= 0
+        ? Number(configuracionAsistenciaPanel.toleranciaEntradaMinutos)
+        : CONFIGURACION_ASISTENCIA_DEFAULT.toleranciaEntradaMinutos;
+    }
+
+    function obtenerToleranciaSalidaPanel() {
+      return Number(configuracionAsistenciaPanel?.toleranciaSalidaMinutos) >= 0
+        ? Number(configuracionAsistenciaPanel.toleranciaSalidaMinutos)
+        : CONFIGURACION_ASISTENCIA_DEFAULT.toleranciaSalidaMinutos;
+    }
+
     async function actualizarPanelAutomaticamente() {
       if (actualizacionPanelEnCurso) return;
       actualizacionPanelEnCurso = true;
 
       try {
+        // La configuración debe cargarse antes de evaluar tardanzas y horas extra.
+        await cargarConfiguracionAsistenciaPanel();
+
         // Primero actualizamos fichadas, personal y turnos.
         // Recién después cargamos las alertas para nunca evaluarlas contra datos viejos.
         await cargarDatos();
@@ -1414,7 +1452,7 @@
       if (diferenciaMin < 0) return { estado: 'NORMAL', minutosTarde: 0, horario };
 
       // Desde el comienzo hasta el minuto 15 inclusive: tolerancia naranja.
-      if (diferenciaMin <= 15) return { estado: 'TOLERANCIA', minutosTarde: diferenciaMin, horario };
+      if (diferenciaMin <= obtenerToleranciaEntradaPanel()) return { estado: 'TOLERANCIA', minutosTarde: diferenciaMin, horario };
 
       // Desde el minuto 16: llegada tardía roja.
       return { estado: 'TARDE', minutosTarde: diferenciaMin, horario };
@@ -1696,9 +1734,8 @@
         }
       }
 
-      // Tolerancia de salida: los primeros 30 minutos posteriores al fin del turno
-      // no se consideran extra. Si la salida supera el minuto 30, se habilita todo
-      // el tiempo transcurrido desde la finalización programada del turno.
+      // Tolerancia de salida: la ventana posterior al fin del turno se toma de la configuración de asistencia.
+      // Si la salida supera esa ventana, se habilita el tiempo transcurrido desde la finalización programada del turno.
       let finComputable = new Date(fin.getTime());
       let minutosExtra = 0;
       if (horarioProgramado?.fin) {
@@ -1716,12 +1753,12 @@
             }
           }
 
-          const limiteTolerancia = new Date(finTurno.getTime() + 30 * 60000);
+          const limiteTolerancia = new Date(finTurno.getTime() + obtenerToleranciaSalidaPanel() * 60000);
           if (fin > limiteTolerancia) {
             minutosExtra = Math.max(0, Math.round((fin - finTurno) / 60000));
             finComputable = fin;
           } else if (fin > finTurno) {
-            // Salida dentro de los 30 minutos de tolerancia: se computa hasta el fin del turno.
+            // Salida dentro de la tolerancia configurada: se computa hasta el fin del turno.
             finComputable = finTurno;
           }
         }
