@@ -494,25 +494,34 @@ async function buscarMisHoras(e) {
   }
 
   try {
-    const legajoBuscado = String(parseInt(legajoInput, 10));
+    // 1. Forzar inicialización de Firebase si no hay app activa
+    if (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length === 0) {
+      // Intenta usar la configuración definida en window.firebaseConfig o da-config.js
+      const config = window.firebaseConfig || (typeof DAConfig !== 'undefined' ? DAConfig.firebase : null);
+      if (config) {
+        firebase.initializeApp(config);
+      }
+    }
 
-    // 1. Obtener referencia a la base de datos de manera segura
+    // 2. Obtener la referencia a Realtime Database según el SDK/wrapper disponible
     let dbRef = null;
     if (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0) {
       dbRef = firebase.database().ref('personal');
     } else if (typeof DAFirebase !== 'undefined' && DAFirebase.database) {
       dbRef = DAFirebase.database().ref('personal');
-    } else if (typeof window.db !== 'undefined') {
-      dbRef = window.db.ref('personal');
+    } else if (typeof DAAuth !== 'undefined' && DAAuth.db) {
+      dbRef = DAAuth.db.ref('personal');
     } else {
-      throw new Error('La conexión a Firebase no está inicializada en esta página.');
+      throw new Error('No se encontró una configuración válida para inicializar Firebase.');
     }
 
-    // 2. Obtener la lista de personal
+    const legajoBuscado = String(parseInt(legajoInput, 10));
+
+    // 3. Obtener los datos de personal
     const snapshot = await dbRef.once('value');
     const personalData = snapshot.val() || {};
 
-    // 3. Buscar al vigilador por Legajo y PIN
+    // 4. Validar Legajo y PIN
     let vigiladorEncontrado = null;
 
     Object.values(personalData).forEach(p => {
@@ -529,7 +538,7 @@ async function buscarMisHoras(e) {
       return;
     }
 
-    // 4. Mostrar el panel del vigilador
+    // 5. Ocultar formulario de login y mostrar horas
     const loginCard = document.getElementById('pantallaLogin') || 
                       document.getElementById('seccionLogin') || 
                       elLegajo.closest('form') ||
