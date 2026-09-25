@@ -1,6 +1,6 @@
 'use strict';
 
-const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const { onValueCreated, onValueWritten } = require('firebase-functions/v2/database');
 const logger = require('firebase-functions/logger');
 const admin = require('firebase-admin');
@@ -113,7 +113,6 @@ function evaluarHorarioServidor(tipo, fechaEvento, horario, fechaBaseTurno, tole
   const localDate = fechaBaseTurno || partesFechaLocalArgentina(fechaEvento);
   if (!localDate) return { estado: 'SIN_HORARIO', minutosTardanza: 0, minutosAnticipacion: 0, minutosExtra: 0 };
 
-  // Construimos instantes con la zona de Argentina sin depender de la zona del runtime.
   const makeLocal = (date, mins) => {
     const sign = '-03:00';
     const hh = String(Math.floor(mins / 60)).padStart(2, '0');
@@ -133,7 +132,6 @@ function evaluarHorarioServidor(tipo, fechaEvento, horario, fechaBaseTurno, tole
   const finDate = finMin <= inicioMin ? new Date(inicio.getTime() + 24 * 60 * 60 * 1000) : makeLocal(localDate, finMin);
   const diffToFin = Math.round((dt - finDate) / 60000);
   const diffFromInicio = Math.round((dt - inicio) / 60000);
-  // Una salida anterior al inicio programado no se clasifica como anticipada.
   if (diffFromInicio < 0) return { estado: 'NORMAL', minutosTardanza: 0, minutosAnticipacion: 0, minutosExtra: 0 };
   if (diffToFin < 0) {
     const anticipacion = Math.abs(diffToFin);
@@ -178,7 +176,6 @@ async function obtenerHorarioServidor(personal, legajo, tipo, pending) {
           entradaActiva: ultimaEntrada
         };
       }
-      // Si existe una asignación para la fecha de la entrada, la usamos como fuente de verdad.
       const turnosSnap = await db.ref('asignacionesTurnos').orderByChild('legajo').equalTo(legajo).once('value');
       const data = turnosSnap.val() || {};
       const candidatos = Object.entries(data).filter(([, t]) => String(t?.fecha || '') === baseTurno);
@@ -270,8 +267,7 @@ async function validarServidorFichada(pending, pendingId) {
   const fechaDispositivoMs = Date.parse(String(pending?.fechaHoraDispositivo || ''));
   const ahoraServidor = Date.now();
   if (!Number.isFinite(fechaDispositivoMs)) return { ok: false, motivo: 'FECHA_DISPOSITIVO_INVALIDA' };
-  // Evita marcas con un reloj del dispositivo absurdamente desfasado. Offline conserva la hora del evento,
-  // mientras que timestampServidor representa el momento en que el backend la recibe/acepta.
+
   if (Math.abs(ahoraServidor - fechaDispositivoMs) > 48 * 60 * 60 * 1000) {
     return { ok: false, motivo: 'FECHA_DISPOSITIVO_FUERA_DE_RANGO' };
   }
@@ -327,7 +323,6 @@ async function validarServidorFichada(pending, pendingId) {
     };
   }
 
-  // Protección adicional contra duplicados inmediatos por combinación de usuario/tipo/objetivo.
   const recientes = ultimosRegistros;
   const ahora = Date.now();
   const duplicado = recientes.some(f =>
@@ -791,8 +786,6 @@ exports.verificarAssertionWebAuthn = onCall(async request => {
 
   const newCounter = Number(verification.authenticationInfo?.newCounter || 0);
   const oldCounter = Number(credential.counter || 0);
-  // Algunos autenticadores válidos reportan counter=0. En ese caso no se fuerza incremento,
-  // pero se conserva el valor para auditoría; cuando ambos son no-cero sí se exige monotonía.
   if (oldCounter > 0 && newCounter > 0 && newCounter <= oldCounter) {
     throw new HttpsError('permission-denied', 'Contador WebAuthn no válido.');
   }
@@ -801,20 +794,38 @@ exports.verificarAssertionWebAuthn = onCall(async request => {
   await challengeRef.update({ used: true, usedAt: Date.now() });
   return { ok: true, signCount: newCounter };
 });
-// Endpoint temporal para crear tu primer administrador desde el navegador
-exports.crearPrimerAdmin = functions.https.onRequest(async (req, res) => {
-  const email = "admin@demo.asistencia"; // El correo que quieras usar
-  const password = "AdminPassword123!";  // La contraseña que quieras usar
+
+exports.crearPrimerAdmin = onRequest(async (req, res) => {
+  const email = "admin@demo.asistencia";
+  const password = "AdminPassword123!";
 
   try {
     let user;
     try {
-      user = await admin.auth().getUserByEmail(email);
-      await admin.auth().updateUser(user.uid, { password: password });
+      user = await auth.getUserByEmail(email);
+      await auth.updateUser(user.uid, { password: password });
     } catch (e) {
-      user = await admin.auth().createUser({
-        email: email,
-        password: password,
-        displayName: "Super Admin"
-      });
+      if (e.code === 'auth/user-not-found') {
+        user = await auth.createUser({
+          email: email,
+          password: password,
+          displayName: "Super Admin"
+        });
+      } else {
+        throw e;
+      }
     }
+
+    await auth.setCustomUserClaims(user.uid, { role: 'admin' });
+
+    res.status(200).send({
+      ok: true,
+      mensaje: "Administrador inicial configurado correctamente.",
+      uid: user.uid,
+      email: email
+    });
+  } catch (err) {
+    logger.error("crearPrimerAdmin", err);
+    res.status(500).send({ ok: false, error: err.message });
+  }
+});
