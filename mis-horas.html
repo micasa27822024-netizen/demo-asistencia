@@ -476,13 +476,13 @@
 async function buscarMisHoras(e) {
   if (e) e.preventDefault();
 
-  const elLegajo = document.getElementById('inputLegajo') || 
-                   document.getElementById('legajoInput') || 
+  const elLegajo = document.getElementById('legajoInput') ||
+                   document.getElementById('inputLegajo') ||
                    document.querySelector('input[placeholder*="0286"]') ||
                    document.querySelector('input[type="text"]');
 
-  const elPin = document.getElementById('inputPin') || 
-                document.getElementById('pinInput') || 
+  const elPin = document.getElementById('pinInput') ||
+                document.getElementById('inputPin') ||
                 document.querySelector('input[type="password"]');
 
   const legajoInput = elLegajo ? elLegajo.value.trim() : '';
@@ -493,72 +493,32 @@ async function buscarMisHoras(e) {
     return;
   }
 
+  const btn = document.querySelector('#formLoginVigilador button[type="submit"]');
+  const textoBtnOriginal = btn ? btn.innerText : null;
+  if (btn) { btn.disabled = true; btn.innerText = 'Verificando...'; }
+
   try {
-    // 1. Inicialización de Firebase
-    if (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length === 0) {
-      const config = window.firebaseConfig || (typeof DAConfig !== 'undefined' ? DAConfig.firebase : null);
-      if (config) firebase.initializeApp(config);
+    // Autenticación real contra Firebase Auth (la sesión habilita las lecturas
+    // seguras). Ya no se comparan PIN en el cliente ni se lee todo /personal.
+    if (typeof DAAuth === 'undefined') {
+      throw new Error('El módulo de seguridad (da-security.js) no está cargado.');
     }
+    await DAAuth.init();
+    const { user } = await DAAuth.ensureVigilador(legajoInput, pinInput);
 
-    let dbRef = null;
-    if (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0) {
-      dbRef = firebase.database().ref('personal');
-    } else if (typeof DAFirebase !== 'undefined' && DAFirebase.database) {
-      dbRef = DAFirebase.database().ref('personal');
-    } else if (typeof DAAuth !== 'undefined' && DAAuth.db) {
-      dbRef = DAAuth.db.ref('personal');
-    }
-
-    const legajoBuscado = String(parseInt(legajoInput, 10));
-
-    // 2. Obtener datos del vigilador
-    const snapshot = await dbRef.once('value');
-    const personalData = snapshot.val() || {};
-
-    let vigiladorEncontrado = null;
-    Object.values(personalData).forEach(p => {
-      const legajoP = String(parseInt(p.legajo || p.legajoId || '0', 10));
-      const pinP = String(p.pin || p.clave || '').trim();
-
-      if (legajoP === legajoBuscado && pinP === pinInput) {
-        vigiladorEncontrado = p;
-      }
-    });
-
-    if (!vigiladorEncontrado) {
-      alert('Legajo o PIN incorrectos.');
-      return;
-    }
-
-    // 3. Ocultar solo el formulario de login (no el marco general)
-    const formulario = elLegajo.closest('form') || elLegajo.closest('div');
-    if (formulario) {
-      formulario.style.display = 'none';
-    }
-
-    // 4. Mostrar el contenedor de horas o invocar el render existente
-    const contenedorResultados = document.getElementById('contenidoMisHoras') || 
-                                 document.getElementById('seccionHoras') || 
-                                 document.getElementById('resultadoConsulta') ||
-                                 document.getElementById('panelVigilador');
-
-    if (contenedorResultados) {
-      contenedorResultados.classList.remove('hidden');
-      contenedorResultados.style.display = 'block';
-    }
-
-    // 5. Ejecutar la función propia de tu proyecto para dibujar los datos
-    if (typeof cargarHorasVigilador === 'function') {
-      cargarHorasVigilador(vigiladorEncontrado);
-    } else if (typeof renderizarHoras === 'function') {
-      renderizarHoras(vigiladorEncontrado);
-    } else if (typeof mostrarResumenHoras === 'function') {
-      mostrarResumenHoras(vigiladorEncontrado);
-    }
+    // Con la sesión abierta, se cargan las horas usando el flujo autenticado.
+    await cargarMisHorasAutenticado(user.uid);
 
   } catch (err) {
     console.error('Error al consultar horas:', err);
-    alert('Error al conectar con la base de datos: ' + (err.message || err));
+    const msg = String(err && err.message || err);
+    if (/wrong-password|invalid-credential|user-not-found|password/i.test(msg)) {
+      alert('Legajo o PIN incorrectos.');
+    } else {
+      alert(msg || 'No se pudo consultar tus horas. Verificá tu conexión e intentá de nuevo.');
+    }
+  } finally {
+    if (btn) { btn.disabled = false; if (textoBtnOriginal !== null) btn.innerText = textoBtnOriginal; }
   }
 }
 
