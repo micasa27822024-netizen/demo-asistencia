@@ -17,5 +17,24 @@
       "authRequired": true,
       "serverValidationRequired": true
     }
+  },
+  {
+    "id": "demo-local",
+    "nombre": "Demo Asistencia Local",
+    "dominio": "localhost",
+    "metodoIdentificacion": "FOTO",
+    "firebase": {
+      "apiKey": "AIzaSyBYsTCQWwnqEaBzsC5P-9cTM6uBKCnKAmo",
+      "authDomain": "fir-asistencia-fad12.firebaseapp.com",
+      "projectId": "fir-asistencia-fad12",
+      "databaseURL": "https://fir-asistencia-fad12-default-rtdb.firebaseio.com",
+      "storageBucket": "fir-asistencia-fad12.firebasestorage.app",
+      "messagingSenderId": "441100861030",
+      "appId": "1:441100861030:web:b4287e1c3a377cf892b7a7"
+    },
+    "seguridad": {
+      "authRequired": true,
+      "serverValidationRequired": true
+    }
   }
 ]
