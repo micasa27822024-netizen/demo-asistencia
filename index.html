@@ -1,24 +1,19 @@
 <!DOCTYPE html>
-
 <html lang="es">
 <head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Demo Asistencia — Terminal de Fichada</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet"/>
-<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-functions-compat.js"></script>
-<script src="./da-config.js"></script>
-<script src="./da-security.js"></script>
-<meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin"/>
-<meta http-equiv="Permissions-Policy" content="camera=(self), geolocation=(self), microphone=()"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Demo Asistencia - Control de Asistencia</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  
+  <!-- LIBRERÍA FACE-API.JS COMPLETA Y ESTABLE -->
+  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
-<!-- ENCABEZADO Y MENÚ CORPORATIVO -->
-<header class="bg-slate-900 border-b border-slate-800 shadow-md mb-4">
+
+  <!-- ENCABEZADO Y MENÚ CORPORATIVO -->
+  <header class="bg-slate-900 border-b border-slate-800 shadow-md mb-4">
     <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-4">
       
       <div class="flex items-center space-x-3">
@@ -52,85 +47,75 @@
 
     </div>
   </header>
-<!-- CONTENEDOR PRINCIPAL DE FICHAJE -->
-<main class="flex-grow flex items-center justify-center p-4">
-<div class="w-full max-w-md bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 p-6 space-y-4">
-<div class="flex justify-between items-center">
-<h2 class="text-xl font-bold text-white tracking-wide uppercase">Registro de Asistencia</h2>
-<span class="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-500/30" id="estadoRed">🟢 Online</span>
-</div>
-<!-- LEGAJO Y VALIDACIÓN -->
-<div>
-<label class="block text-xs uppercase text-slate-400 mb-1">N° Legajo</label>
-<div class="relative">
-<input class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500" id="legajo" onblur="validarLegajo()" placeholder="Ingrese su legajo (ej: 0286)" type="text"/>
-<button class="absolute right-2 top-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs px-2 py-1 rounded" onclick="validarLegajo()" type="button">
-<i class="fa-solid fa-magnifying-glass"></i>
-</button>
-</div>
-<p class="text-xs mt-1 hidden" id="legajo-status"></p>
-<p class="text-xs mt-1.5 font-semibold hidden" id="ultimo-estado-badge"></p>
-</div>
-<!-- NOMBRE -->
-<div>
-<label class="block text-xs uppercase text-slate-400 mb-1">Nombre Completo</label>
-<input class="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-slate-400 cursor-not-allowed" id="nombre" placeholder="Se autocompletará con su legajo" readonly="" type="text"/>
-</div>
-<!-- PIN DE SEGURIDAD -->
-<div>
-<label class="block text-xs uppercase text-slate-400 mb-1">PIN / Clave de Personal</label>
-<input class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500" id="pin" maxlength="6" onblur="precargarDatosVigilador()" placeholder="****" type="password"/>
-</div>
-<!-- OBJETIVO / PUESTO -->
-<div>
-<label class="block text-xs uppercase text-slate-400 mb-1">Objetivo / Puesto</label>
-<select class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500" id="objetivo">
-<option value="">Cargando objetivos...</option>
-</select>
-<p class="text-[11px] mt-1 text-slate-500" id="objetivo-status"></p>
-<p class="text-[11px] mt-1 hidden" id="turno-status"></p>
-</div>
-<!-- CÁMARA Y RECONOCIMIENTO FACIAL -->
-<div class="space-y-2">
-<label class="block text-xs uppercase text-slate-400">Validación Facial IA</label>
-<div class="relative w-full h-48 bg-slate-950 rounded-lg overflow-hidden border border-slate-700 flex items-center justify-center">
-<video autoplay="" class="w-full h-full object-cover -scale-x-100" id="webcam" playsinline=""></video>
-<canvas class="hidden" id="canvas"></canvas>
-<img class="w-full h-full object-cover -scale-x-100 hidden absolute inset-0 border-2 border-emerald-500" id="preview"/>
-</div>
-<button class="w-full bg-amber-600 hover:bg-amber-500 text-xs py-2 rounded-lg font-bold transition flex items-center justify-center gap-2" id="btnCapturar" onclick="capturarFoto()" type="button">
-<i class="fa-solid fa-camera"></i> CAPTURAR Y VALIDAR ROSTRO
+
+  <!-- CONTENEDOR PRINCIPAL DE FICHAJE -->
+  <main class="flex-grow flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 p-6 space-y-4">
+      <div class="flex justify-between items-center">
+        <h2 class="text-xl font-bold text-white tracking-wide uppercase">Registro de Asistencia</h2>
+        <span id="estadoRed" class="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-500/30">🟢 Online</span>
+      </div>
+
+      <!-- LEGAJO Y VALIDACIÓN -->
+      <div>
+        <label class="block text-xs uppercase text-slate-400 mb-1">N° Legajo</label>
+        <div class="relative">
+          <input type="text" id="legajo" onblur="validarLegajo()" placeholder="Ingrese su legajo (ej: 0286)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500">
+          <button type="button" onclick="validarLegajo()" class="absolute right-2 top-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs px-2 py-1 rounded">
+            <i class="fa-solid fa-magnifying-glass"></i>
+          </button>
+        </div>
+        <p id="legajo-status" class="text-xs mt-1 hidden"></p>
+        <p id="ultimo-estado-badge" class="text-xs mt-1.5 font-semibold hidden"></p>
+      </div>
+
+      <!-- NOMBRE -->
+      <div>
+        <label class="block text-xs uppercase text-slate-400 mb-1">Nombre Completo</label>
+        <input type="text" id="nombre" readonly placeholder="Se autocompletará con su legajo" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-slate-400 cursor-not-allowed">
+      </div>
+
+      <!-- PIN DE SEGURIDAD -->
+      <div>
+        <label class="block text-xs uppercase text-slate-400 mb-1">PIN / Clave de Personal</label>
+        <input type="password" id="pin" maxlength="6" placeholder="****" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500">
+      </div>
+
+      <!-- OBJETIVO / PUESTO -->
+      <div>
+        <label class="block text-xs uppercase text-slate-400 mb-1">Objetivo / Puesto</label>
+        <select id="objetivo" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500">
+          <option value="">Cargando objetivos...</option>
+        </select>
+        <p id="objetivo-status" class="text-[11px] mt-1 text-slate-500"></p>
+        <p id="turno-status" class="text-[11px] mt-1 hidden"></p>
+      </div>
+
+      <!-- CÁMARA Y RECONOCIMIENTO FACIAL -->
+      <div class="space-y-2">
+        <label class="block text-xs uppercase text-slate-400">Validación Facial IA</label>
+        <div class="relative w-full h-48 bg-slate-950 rounded-lg overflow-hidden border border-slate-700 flex items-center justify-center">
+          <video id="webcam" autoplay playsinline class="w-full h-full object-cover -scale-x-100"></video>
+          <canvas id="canvas" class="hidden"></canvas>
+          <img id="preview" class="w-full h-full object-cover -scale-x-100 hidden absolute inset-0 border-2 border-emerald-500">
+        </div>
+        <button type="button" id="btnCapturar" onclick="capturarFoto()" class="w-full bg-amber-600 hover:bg-amber-500 text-xs py-2 rounded-lg font-bold transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-camera"></i> CAPTURAR Y VALIDAR ROSTRO
         </button>
-<p class="text-xs text-rose-400 text-center font-semibold" id="foto-status">⚠️ Foto no capturada</p>
-</div>
-<!-- IDENTIFICACIÓN POR BIOMETRÍA DEL DISPOSITIVO -->
-<div class="hidden space-y-3 rounded-2xl border border-sky-500/20 bg-sky-500/5 p-4" id="panelBiometria">
-  <div class="flex items-center gap-3">
-    <div class="w-11 h-11 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-300 flex items-center justify-center">
-      <i class="fa-solid fa-fingerprint text-xl"></i>
+        <p id="foto-status" class="text-xs text-rose-400 text-center font-semibold">⚠️ Foto no capturada</p>
+      </div>
+
+      <!-- BOTONES DE ENVÍO -->
+      <div class="grid grid-cols-2 gap-4 pt-2">
+        <button onclick="procesarEnvio('ENTRADA')" class="bg-emerald-600 hover:bg-emerald-500 font-bold py-3 rounded-xl transition">ENTRADA</button>
+        <button onclick="procesarEnvio('SALIDA')" class="bg-rose-600 hover:bg-rose-500 font-bold py-3 rounded-xl transition">SALIDA</button>
+      </div>
+
+      <div id="resultado" class="hidden p-3 rounded-xl text-xs text-center"></div>
     </div>
-    <div>
-      <p class="text-xs uppercase tracking-wider text-sky-300 font-bold">Identificación del dispositivo</p>
-      <p class="text-[11px] text-slate-400">Usa la huella, Face ID o PIN seguro del dispositivo. La biometría no sale del dispositivo.</p>
-    </div>
-  </div>
-  <button class="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-3 rounded-xl transition flex items-center justify-center gap-2" id="btnBiometria" onclick="validarBiometriaDispositivo()" type="button">
-    <i class="fa-solid fa-fingerprint"></i> VALIDAR CON BIOMETRÍA
-  </button>
-  <button class="w-full bg-slate-700 hover:bg-slate-600 text-slate-100 font-semibold py-2.5 rounded-xl transition text-xs" id="btnRegistrarBiometria" onclick="registrarBiometriaDispositivo()" type="button">
-    <i class="fa-solid fa-mobile-screen-button"></i> Registrar este dispositivo
-  </button>
-  <p class="text-[11px] text-slate-500 text-center" id="biometria-status">Primero inicia sesión con tu legajo y clave.</p>
-</div>
-<!-- BOTONES DE ENVÍO -->
-<div class="grid grid-cols-2 gap-4 pt-2">
-<button class="bg-emerald-600 hover:bg-emerald-500 font-bold py-3 rounded-xl transition" onclick="procesarEnvio('ENTRADA')">ENTRADA</button>
-<button class="bg-rose-600 hover:bg-rose-500 font-bold py-3 rounded-xl transition" onclick="procesarEnvio('SALIDA')">SALIDA</button>
-</div>
-<div class="hidden p-3 rounded-xl text-xs text-center" id="resultado"></div>
-</div>
-</main>
-<script>
+  </main>
+
+  <script>
     const URL_FIREBASE = "https://fir-asistencia-fad12-default-rtdb.firebaseio.com";
 
     // ==========================================
@@ -226,85 +211,20 @@
       return configuracionAsistenciaGlobal;
     }
 
-    async function cargarConfiguracionEmpresaAutenticada() {
-      try {
-        const res = await fetch(`${URL_FIREBASE}/configuracionEmpresa.json?ts=${Date.now()}`, { cache: 'no-store' });
-        if (!res.ok) return window.DAConfig?.current || null;
-        const data = await res.json();
-        const metodo = String(data?.metodoIdentificacion || window.DAConfig?.current?.metodoIdentificacion || 'FOTO').toUpperCase();
-        if (window.DAConfig?.current) {
-          window.DAConfig.current.metodoIdentificacion = ['FOTO', 'WEBAUTHN'].includes(metodo) ? metodo : 'FOTO';
-          window.DAConfig.current.configuracionEmpresa = data || {};
-        }
-        try {
-          localStorage.setItem('demo_configuracion_empresa', JSON.stringify(data || {}));
-        } catch (e) {}
-        return window.DAConfig?.current || null;
-      } catch (e) {
-        console.warn('No se pudo cargar la configuración de empresa; se utiliza la configuración disponible.', e);
-        return window.DAConfig?.current || null;
-      }
-    }
-
     window.onload = async function() {
+      // La configuración de asistencia se carga antes de permitir fichadas.
       await cargarConfiguracionAsistencia();
-      try {
-        const cacheEmpresa = JSON.parse(localStorage.getItem('demo_configuracion_empresa') || 'null');
-        const metodoCache = String(cacheEmpresa?.metodoIdentificacion || '').toUpperCase();
-        if (window.DAConfig?.current && ['FOTO', 'WEBAUTHN'].includes(metodoCache)) {
-          window.DAConfig.current.metodoIdentificacion = metodoCache;
-        }
-      } catch (e) {}
-      await cargarConfiguracionEmpresaAutenticada();
-      await inicializarModoIdentificacion();
+
+      iniciarCamaraSegura();
       cargarObjetivos();
       actualizarEstadoRed();
+      cargarModelosIA();
 
       if (navigator.onLine) {
         sincronizarFichadasPendientes();
         sincronizarAlertasFichadasPendientes();
       }
     };
-
-    async function cargarFaceApiDinamicamente() {
-      if (window.faceapi) return true;
-      await new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js';
-        script.async = true;
-        script.onload = resolve;
-        script.onerror = () => reject(new Error('No se pudo cargar face-api.js.'));
-        document.head.appendChild(script);
-      });
-      return Boolean(window.faceapi);
-    }
-
-    async function inicializarModoIdentificacion() {
-      const metodo = String(window.DAConfig?.current?.metodoIdentificacion || 'FOTO').toUpperCase();
-      const panelCamara = document.getElementById('webcam')?.closest('.space-y-2');
-      const panelBio = document.getElementById('panelBiometria');
-      if (metodo === 'WEBAUTHN') {
-        if (panelCamara) panelCamara.classList.add('hidden');
-        if (panelBio) panelBio.classList.remove('hidden');
-        document.getElementById('foto-status')?.classList.add('hidden');
-        try {
-          const user = await DAAuth.currentUser().catch(() => null);
-          if (user && navigator.onLine) await DAAuth.prepareWebAuthnChallenges(8).catch(() => {});
-        } catch (e) {}
-        return;
-      }
-
-      if (panelBio) panelBio.classList.add('hidden');
-      if (panelCamara) panelCamara.classList.remove('hidden');
-      try {
-        await cargarFaceApiDinamicamente();
-        iniciarCamaraSegura();
-        cargarModelosIA();
-      } catch (e) {
-        const status = document.getElementById('foto-status');
-        if (status) status.innerText = '⚠️ No se pudo cargar la validación facial.';
-      }
-    }
 
     // ==========================================
     // UTILIDADES
@@ -363,8 +283,6 @@
     window.addEventListener('online', async () => {
       actualizarEstadoRed();
       await cargarConfiguracionAsistencia();
-      await cargarConfiguracionEmpresaAutenticada();
-      await inicializarModoIdentificacion();
       sincronizarFichadasPendientes();
       sincronizarAlertasFichadasPendientes();
     });
@@ -437,11 +355,10 @@
       }
 
       if (navigator.onLine) {
-        DAAuth.currentUser().then(user => {
-          if (!user) return null;
-          return fetch(`${URL_FIREBASE}/objetivos.json?ts=${Date.now()}`, { cache: 'no-store' });
+        fetch(`${URL_FIREBASE}/objetivos.json?ts=${Date.now()}`, {
+          cache: 'no-store'
         })
-          .then(res => res ? res.json() : null)
+          .then(res => res.json())
           .then(data => {
             if (!data) return;
 
@@ -520,7 +437,7 @@
 
       try {
         const res = await fetch(
-          `${URL_FIREBASE}/asignacionesTurnos.json?orderBy=%22legajo%22&equalTo=%22${encodeURIComponent(normalizarLegajo(legajo))}%22&ts=${Date.now()}`,
+          `${URL_FIREBASE}/asignacionesTurnos.json?ts=${Date.now()}`,
           { cache: 'no-store' }
         );
 
@@ -556,8 +473,10 @@
 
       if (!personal) return;
 
-      localStorage.setItem('personal_config_fichada', JSON.stringify(personal));
-      if (personal.legajo) localStorage.setItem(`demo_personal_${normalizarLegajo(personal.legajo)}`, JSON.stringify(personal));
+      localStorage.setItem(
+        'personal_config_fichada',
+        JSON.stringify(personal)
+      );
 
       const asignadosRaw = normalizarObjetivosAsignados(personal);
 
@@ -909,200 +828,350 @@
 
     async function registrarAlertaFichadaBloqueada(alerta) {
       if (!alerta) return;
-      const usuario = await DAAuth.currentUser().catch(() => null);
-      if (!usuario) {
-        console.warn('No se registra alerta de ubicación sin una sesión autenticada.');
-        return;
-      }
-
-      const segura = {
-        ...alerta,
-        authUid: usuario.uid,
-        legajo: normalizarLegajo(alerta.legajo || usuario.uid),
-        timestampServidor: { '.sv': 'timestamp' }
-      };
-
-      const guardarPendienteLocal = () => {
-        const pendientes = JSON.parse(localStorage.getItem('alertas_fichadas_pendientes') || '[]');
-        pendientes.push(segura);
-        localStorage.setItem('alertas_fichadas_pendientes', JSON.stringify(pendientes));
-      };
 
       if (!navigator.onLine) {
-        guardarPendienteLocal();
+        const pendientes = JSON.parse(
+          localStorage.getItem(
+            'alertas_fichadas_pendientes'
+          ) || '[]'
+        );
+
+        pendientes.push(alerta);
+
+        localStorage.setItem(
+          'alertas_fichadas_pendientes',
+          JSON.stringify(pendientes)
+        );
+
         return;
       }
 
       try {
-        const res = await fetch(`${URL_FIREBASE}/alertasFichadasPendientes.json`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(segura)
-        });
-        if (!res.ok) throw new Error('Firebase rechazó la alerta pendiente.');
+        const res = await fetch(
+          `${URL_FIREBASE}/alertasFichadas.json`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(alerta)
+          }
+        );
+
+        if (!res.ok) {
+          throw new Error(
+            "No se pudo registrar la alerta de fichada."
+          );
+        }
+
       } catch (err) {
-        console.warn('No se pudo enviar la alerta de ubicación; queda pendiente.', err);
-        guardarPendienteLocal();
+        console.warn(
+          "No se pudo enviar la alerta de fichada. Se guardará para sincronizar luego.",
+          err
+        );
+
+        const pendientes = JSON.parse(
+          localStorage.getItem(
+            'alertas_fichadas_pendientes'
+          ) || '[]'
+        );
+
+        pendientes.push(alerta);
+
+        localStorage.setItem(
+          'alertas_fichadas_pendientes',
+          JSON.stringify(pendientes)
+        );
       }
     }
 
     function sincronizarAlertasFichadasPendientes() {
       if (!navigator.onLine) return;
-      const pendientes = JSON.parse(localStorage.getItem('alertas_fichadas_pendientes') || '[]');
+
+      const pendientes = JSON.parse(
+        localStorage.getItem(
+          'alertas_fichadas_pendientes'
+        ) || '[]'
+      );
+
       if (!pendientes.length) return;
+
       const alerta = pendientes[0];
-      fetch(`${URL_FIREBASE}/alertasFichadasPendientes.json`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(alerta)
-      })
+
+      fetch(
+        `${URL_FIREBASE}/alertasFichadas.json`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(alerta)
+        }
+      )
       .then(res => {
-        if (!res.ok) throw new Error('Firebase rechazó la alerta pendiente.');
+        if (!res.ok) {
+          throw new Error(
+            "Firebase rechazó la alerta pendiente."
+          );
+        }
+
         return res.json();
       })
       .then(() => {
-        const restantes = JSON.parse(localStorage.getItem('alertas_fichadas_pendientes') || '[]');
+        const restantes = JSON.parse(
+          localStorage.getItem(
+            'alertas_fichadas_pendientes'
+          ) || '[]'
+        );
+
         restantes.shift();
-        localStorage.setItem('alertas_fichadas_pendientes', JSON.stringify(restantes));
-        if (restantes.length) sincronizarAlertasFichadasPendientes();
+
+        localStorage.setItem(
+          'alertas_fichadas_pendientes',
+          JSON.stringify(restantes)
+        );
+
+        if (restantes.length) {
+          sincronizarAlertasFichadasPendientes();
+        }
       })
-      .catch(err => console.warn('La alerta pendiente seguirá en cola:', err));
+      .catch(err =>
+        console.warn(
+          "La alerta pendiente seguirá en cola:",
+          err
+        )
+      );
     }
 
     // ==========================================
     // VALIDACIÓN DEL LEGAJO Y ÚLTIMA FICHADA
     // ==========================================
 
-    async function cargarDatosVigiladorAutenticado(legajoInput) {
-      const legajoNormalizado = normalizarLegajo(legajoInput);
-      if (!navigator.onLine) {
-        const cache = JSON.parse(localStorage.getItem(`demo_personal_${legajoNormalizado}`) || localStorage.getItem('personal_config_fichada') || 'null');
-        if (cache && normalizarLegajo(cache.legajo) === legajoNormalizado) {
-          document.getElementById('nombre').value = cache.nombre || '';
-          fotoMasterGuardada = cache.fotoMaster || null;
-          await aplicarConfiguracionVigilador(cache);
-          return cache;
-        }
-        throw new Error('No hay configuración del vigilador disponible sin conexión.');
-      }
+    function validarLegajo() {
+      const legajoInput =
+        document.getElementById('legajo').value.trim();
 
-      const q = encodeURIComponent(legajoNormalizado);
-      const [resPersonal, resFichadas] = await Promise.all([
-        fetch(`${URL_FIREBASE}/personal.json?orderBy=%22legajo%22&equalTo=%22${q}%22&ts=${Date.now()}`, { cache: 'no-store' }),
-        fetch(`${URL_FIREBASE}/fichadas.json?orderBy=%22legajo%22&equalTo=%22${q}%22&ts=${Date.now()}`, { cache: 'no-store' })
-      ]);
-      if (!resPersonal.ok || !resFichadas.ok) throw new Error('Firebase rechazó la consulta del vigilador.');
-      const [dataPersonal, dataFichadas] = await Promise.all([resPersonal.json(), resFichadas.json()]);
-      const encontradoEntry = Object.entries(dataPersonal || {})[0];
-      const encontrado = encontradoEntry ? { ...encontradoEntry[1], firebaseId: encontradoEntry[0] } : null;
+      const statusLbl =
+        document.getElementById('legajo-status');
 
-      if (!encontrado) throw new Error('Legajo no encontrado o no autorizado.');
-      if (String(encontrado.estado || 'ACTIVO').toUpperCase() !== 'ACTIVO') throw new Error('El vigilador se encuentra inactivo.');
-      if (normalizarLegajo(encontrado.authUid || encontrado.legajo) !== legajoNormalizado) throw new Error('La cuenta de autenticación no coincide con el legajo.');
+      const badgeEstado =
+        document.getElementById('ultimo-estado-badge');
 
-      document.getElementById('nombre').value = encontrado.nombre || '';
-      fotoMasterGuardada = encontrado.fotoMaster || null;
-      document.getElementById('legajo-status').className = "text-xs mt-1 text-emerald-400 block";
-      document.getElementById('legajo-status').innerText = `✓ ${encontrado.nombre || 'Legajo encontrado'}${fotoMasterGuardada ? ' (Foto Master OK)' : ' (Sin Foto Master)'}`;
-      await aplicarConfiguracionVigilador(encontrado);
-      localStorage.setItem(`demo_personal_${legajoNormalizado}`, JSON.stringify(encontrado));
-
-      let ultima = null, ultimoTs = 0;
-      Object.values(dataFichadas || {}).forEach(f => {
-        const t = obtenerTimestampFichada(f) || Number(f.timestampServidor || 0);
-        if (normalizarLegajo(f?.legajo) === legajoNormalizado && t >= ultimoTs) { ultimoTs = t; ultima = f; }
-      });
-      const pendientes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
-      pendientes.forEach(f => {
-        const t = obtenerTimestampFichada(f);
-        if (normalizarLegajo(f?.legajo) === legajoNormalizado && t >= ultimoTs) { ultimoTs = t; ultima = f; }
-      });
-      ultimaFichadaGlobal = ultima;
-      ultimoTipoFichadaGlobal = String(ultima?.tipo || '').toUpperCase();
-      const badgeEstado = document.getElementById('ultimo-estado-badge');
-      if (ultima) {
-        badgeEstado.classList.remove('hidden');
-        badgeEstado.className = "text-xs mt-1.5 font-semibold text-slate-400 block";
-        badgeEstado.innerText = ultimoTipoFichadaGlobal === 'ENTRADA'
-          ? 'ℹ️ Estado actual: Ya registraste una ENTRADA. Tu próxima acción debe ser SALIDA.'
-          : 'ℹ️ Estado actual: Última fichada fue SALIDA. Puedes marcar ENTRADA.';
-      } else badgeEstado.classList.add('hidden');
-      return encontrado;
-    }
-
-    // Precarga el nombre del vigilador en cuanto hay legajo + PIN completos.
-    // Autentica de forma silenciosa (Firebase Auth) para que las reglas de
-    // seguridad permitan leer los datos, y luego autocompleta nombre/estado.
-    let _precargaEnCurso = false;
-    async function precargarDatosVigilador() {
-      const legajoInput = document.getElementById('legajo').value.trim();
-      const pin = document.getElementById('pin').value.trim();
-      const statusLbl = document.getElementById('legajo-status');
-      if (!legajoInput || !pin) return;
-      if (typeof DAAuth === 'undefined') return;
-      if (!navigator.onLine) {
-        statusLbl.className = "text-xs mt-1 text-slate-400 block";
-        statusLbl.innerText = "Modo Offline: se requiere una sesi\u00f3n de vigilador previamente autenticada.";
-        verificarUltimoEstadoLocal(legajoInput);
-        return;
-      }
-      if (_precargaEnCurso) return;
-      _precargaEnCurso = true;
-      try {
-        statusLbl.className = "text-xs mt-1 text-slate-400 block";
-        statusLbl.innerText = "Verificando legajo...";
-        await DAAuth.init();
-        await DAAuth.ensureVigilador(legajoInput, pin);
-        await cargarDatosVigiladorAutenticado(legajoInput);
-      } catch (e) {
-        const msg = String(e && e.message || e);
-        if (/wrong-password|invalid-credential|user-not-found|password/i.test(msg)) {
-          statusLbl.className = "text-xs mt-1 text-rose-400 block";
-          statusLbl.innerText = "Legajo o PIN incorrectos.";
-        } else {
-          statusLbl.className = "text-xs mt-1 text-slate-400 block";
-          statusLbl.innerText = "Complete legajo y clave; se validar\u00e1 al fichar.";
-        }
-      } finally {
-        _precargaEnCurso = false;
-      }
-    }
-
-    async function validarLegajo() {
-      const legajoInput = document.getElementById('legajo').value.trim();
-      const statusLbl = document.getElementById('legajo-status');
-      const badgeEstado = document.getElementById('ultimo-estado-badge');
       fotoMasterGuardada = null;
+
       if (!legajoInput) {
         badgeEstado.classList.add('hidden');
-        ultimoTipoFichadaGlobal = '';
+
+        ultimoTipoFichadaGlobal = "";
         ultimaFichadaGlobal = null;
+
         personalActualGlobal = null;
         turnoProgramadoGlobal = null;
-        document.getElementById('nombre').value = '';
+
+        document.getElementById('nombre').value = "";
+
         return;
       }
 
-      const legajoNormalizado = normalizarLegajo(legajoInput);
+      const legajoNormalizado =
+        normalizarLegajo(legajoInput);
+
       if (!navigator.onLine) {
-        statusLbl.className = "text-xs mt-1 text-slate-400 block";
-        statusLbl.innerText = "Modo Offline: se requiere una sesión de vigilador previamente autenticada.";
+        statusLbl.className =
+          "text-xs mt-1 text-slate-400 block";
+
+        statusLbl.innerText =
+          "Modo Offline: Verificación en servidor omitida.";
+
         verificarUltimoEstadoLocal(legajoInput);
+
         return;
       }
 
-      try {
-        const user = await DAAuth.currentUser();
-        if (!user || normalizarLegajo(user.uid) !== legajoNormalizado) {
-          statusLbl.className = "text-xs mt-1 text-slate-400 block";
-          statusLbl.innerText = "Ingrese su clave y pulse ENTRADA/SALIDA para autenticar el legajo.";
-          return;
+      statusLbl.className =
+        "text-xs mt-1 text-amber-400 block";
+
+      statusLbl.innerText =
+        "Buscando legajo y foto oficial...";
+
+      Promise.all([
+        fetch(`${URL_FIREBASE}/personal.json`)
+          .then(res => res.json())
+          .catch(() => null),
+
+        fetch(`${URL_FIREBASE}/fichadas.json`)
+          .then(res => res.json())
+          .catch(() => null)
+      ])
+      .then(([dataPersonal, dataFichadas]) => {
+
+        let encontrado = null;
+
+        if (dataPersonal) {
+          if (dataPersonal[legajoInput]) {
+            encontrado = dataPersonal[legajoInput];
+          } else {
+            Object.values(dataPersonal).forEach(personal => {
+              if (
+                normalizarLegajo(personal?.legajo) ===
+                legajoNormalizado
+              ) {
+                encontrado = personal;
+              }
+            });
+          }
         }
-        await cargarDatosVigiladorAutenticado(legajoInput);
-      } catch (e) {
-        statusLbl.className = "text-xs mt-1 text-rose-400 block";
-        statusLbl.innerText = e?.message || 'No se pudo validar el legajo.';
-      }
+
+        if (encontrado) {
+          document.getElementById('nombre').value =
+            encontrado.nombre || "";
+
+          fotoMasterGuardada =
+            encontrado.fotoMaster || null;
+
+          statusLbl.className =
+            "text-xs mt-1 text-emerald-400 block";
+
+          statusLbl.innerText =
+            `✓ ${
+              encontrado.nombre || 'Legajo Encontrado'
+            } ${
+              fotoMasterGuardada
+                ? '📸 (Foto Master OK)'
+                : '⚠️ (Sin Foto Master)'
+            }`;
+
+        } else {
+          document.getElementById('nombre').value = "";
+
+          statusLbl.className =
+            "text-xs mt-1 text-rose-400 block";
+
+          statusLbl.innerText =
+            "❌ Legajo no encontrado en el sistema.";
+        }
+
+        if (encontrado) {
+          aplicarConfiguracionVigilador(encontrado);
+        } else {
+          personalActualGlobal = null;
+          turnoProgramadoGlobal = null;
+          objetivoAutorizadoIdsGlobal = [];
+          ultimaFichadaGlobal = null;
+          ultimoTipoFichadaGlobal = "";
+
+          document.getElementById('objetivo').innerHTML =
+            '<option value="">Legajo no autorizado</option>';
+
+          document.getElementById('objetivo-status').innerText =
+            '';
+
+          document.getElementById('turno-status')
+            .classList.add('hidden');
+        }
+
+        // ==========================================
+        // BUSCAR LA ÚLTIMA FICHADA COMPLETA
+        // Esto es importante para turnos nocturnos:
+        // necesitamos la ENTRADA completa y su fecha.
+        // ==========================================
+
+        let ultimaFichadaEncontrada = null;
+        let timestampUltimo = 0;
+
+        if (dataFichadas) {
+          Object.values(dataFichadas).forEach(f => {
+
+            if (
+              normalizarLegajo(f?.legajo) !==
+              legajoNormalizado
+            ) {
+              return;
+            }
+
+            const tiempoFichada =
+              obtenerTimestampFichada(f);
+
+            if (tiempoFichada >= timestampUltimo) {
+              timestampUltimo = tiempoFichada;
+              ultimaFichadaEncontrada = f;
+            }
+          });
+        }
+
+        // También contemplamos fichadas offline pendientes.
+        const pendientes = JSON.parse(
+          localStorage.getItem(
+            'fichadas_pendientes'
+          ) || '[]'
+        );
+
+        pendientes.forEach(p => {
+
+          if (
+            normalizarLegajo(p?.legajo) !==
+            legajoNormalizado
+          ) {
+            return;
+          }
+
+          const tiempoP =
+            obtenerTimestampFichada(p);
+
+          if (tiempoP >= timestampUltimo) {
+            timestampUltimo = tiempoP;
+            ultimaFichadaEncontrada = p;
+          }
+        });
+
+        ultimaFichadaGlobal =
+          ultimaFichadaEncontrada || null;
+
+        ultimoTipoFichadaGlobal =
+          String(
+            ultimaFichadaEncontrada?.tipo || ""
+          )
+            .trim()
+            .toUpperCase();
+
+        if (ultimaFichadaEncontrada) {
+          badgeEstado.classList.remove('hidden');
+
+          if (
+            ultimoTipoFichadaGlobal === 'ENTRADA'
+          ) {
+            badgeEstado.className =
+              "text-xs mt-1.5 font-semibold text-emerald-400 block";
+
+            badgeEstado.innerText =
+              "ℹ️ Estado actual: Ya registraste una ENTRADA. Tu próxima acción debe ser SALIDA.";
+
+          } else {
+            badgeEstado.className =
+              "text-xs mt-1.5 font-semibold text-slate-400 block";
+
+            badgeEstado.innerText =
+              "ℹ️ Estado actual: Última fichada fue SALIDA. Puedes marcar ENTRADA.";
+          }
+
+        } else {
+          badgeEstado.classList.add('hidden');
+        }
+
+        console.log(
+          "📌 Última fichada detectada:",
+          ultimaFichadaGlobal
+        );
+      })
+      .catch(() => {
+        statusLbl.className =
+          "text-xs mt-1 text-slate-400 block";
+
+        statusLbl.innerText =
+          "Error de conexión al validar legajo.";
+
+        ultimaFichadaGlobal = null;
+      });
     }
 
     function verificarUltimoEstadoLocal(legajoInput) {
@@ -2004,46 +2073,105 @@
       };
     }
 
-    async function registrarAlertaTardanzaEntrada(datos) {
-      // La alerta definitiva la genera el backend una vez validada la fichada.
-      // No se permite que el cliente escriba directamente /alertasFichadas.
-      return {
-        tipoAlerta: 'FICHADA_TARDIA_ENTRADA',
-        legajo: normalizarLegajo(datos?.legajo || ''),
-        nombre: datos?.nombre || '',
-        objetivo: datos?.objetivo || '',
-        fechaHora: datos?.fechaHoraDispositivo || new Date().toISOString()
+    async function registrarAlertaTardanzaEntrada(
+      datos
+    ) {
+      const alerta = {
+        tipoAlerta:
+          'FICHADA_TARDIA_ENTRADA',
+
+        estado:
+          'NUEVA',
+
+        legajo:
+          datos.legajo,
+
+        nombre:
+          datos.nombre ||
+          `Legajo ${datos.legajo}`,
+
+        objetivo:
+          datos.objetivo ||
+          'Sin objetivo',
+
+        tipoFichada:
+          'ENTRADA',
+
+        fechaHora:
+          datos.fechaHoraDispositivo,
+
+        horaInicioProgramada:
+          datos.horarioProgramadoInicio ||
+          null,
+
+        minutosTardanza:
+          datos.minutosTardanza || 0,
+
+        toleranciaMinutos:
+          obtenerToleranciaEntrada(),
+
+        mensaje:
+          `Entrada fuera de tolerancia: ${datos.minutosTardanza || 0} minutos después del inicio del turno. Tolerancia configurada: ${obtenerToleranciaEntrada()} min.`
       };
-    }
 
-    async function registrarBiometriaDispositivo() {
-      try {
-        const legajo = document.getElementById('legajo').value.trim();
-        const pin = document.getElementById('pin').value.trim();
-        if (!legajo || !pin) return alert('Ingrese legajo y clave antes de registrar la biometría.');
-        await DAAuth.ensureVigilador(legajo, pin);
-        const result = await DAAuth.registerWebAuthn();
-        const status = document.getElementById('biometria-status');
-        if (status) status.innerText = '✓ Dispositivo registrado correctamente. Ya puede validar futuras fichadas.';
-        alert('Biometría del dispositivo registrada correctamente.');
-      } catch (e) {
-        console.error(e);
-        alert(e?.message || 'No se pudo registrar la biometría.');
+      if (!navigator.onLine) {
+        const pendientes =
+          JSON.parse(
+            localStorage.getItem(
+              'alertas_fichadas_pendientes'
+            ) || '[]'
+          );
+
+        pendientes.push(alerta);
+
+        localStorage.setItem(
+          'alertas_fichadas_pendientes',
+          JSON.stringify(pendientes)
+        );
+
+        return;
       }
-    }
 
-    async function validarBiometriaDispositivo() {
       try {
-        const legajo = document.getElementById('legajo').value.trim();
-        const pin = document.getElementById('pin').value.trim();
-        if (!legajo || !pin) return alert('Ingrese legajo y clave antes de validar la biometría.');
-        await DAAuth.ensureVigilador(legajo, pin);
-        window.__daWebAuthnAssertionGlobal = await DAAuth.authenticateWebAuthn();
-        const status = document.getElementById('biometria-status');
-        if (status) status.innerText = '✓ Biometría validada. Ahora puede registrar ENTRADA o SALIDA.';
+        const res =
+          await fetch(
+            `${URL_FIREBASE}/alertasFichadas.json`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type':
+                  'application/json'
+              },
+              body:
+                JSON.stringify(alerta)
+            }
+          );
+
+        if (!res.ok) {
+          throw new Error(
+            'No se pudo registrar la alerta de tardanza.'
+          );
+        }
+
       } catch (e) {
-        console.error(e);
-        alert(e?.message || 'No se pudo validar la biometría.');
+        console.warn(
+          'No se pudo enviar la alerta de tardanza; queda pendiente.',
+          e
+        );
+
+        const pendientes =
+          JSON.parse(
+            localStorage.getItem(
+              'alertas_fichadas_pendientes'
+            ) || '[]'
+          );
+
+        pendientes.push(alerta);
+
+        localStorage.setItem(
+          'alertas_fichadas_pendientes',
+          JSON.stringify(pendientes)
+        );
       }
     }
 
@@ -2081,23 +2209,15 @@
           'objetivo'
         ).value;
 
-      if (!legajo || !pin || !objetivo) {
-        alert("Por favor complete su N° de Legajo, clave de acceso y seleccione un Objetivo.");
-        return;
-      }
+      if (
+        !legajo ||
+        !pin ||
+        !objetivo
+      ) {
+        alert(
+          "Por favor complete su N° de Legajo, PIN de Seguridad y seleccione un Objetivo."
+        );
 
-      try {
-        await DAAuth.ensureVigilador(legajo, pin);
-        await cargarConfiguracionEmpresaAutenticada();
-        await inicializarModoIdentificacion();
-        await cargarDatosVigiladorAutenticado(legajo);
-      } catch (e) {
-        const divAuth = document.getElementById('resultado');
-        if (divAuth) {
-          divAuth.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
-          divAuth.innerText = e?.message || 'No se pudo autenticar el vigilador.';
-          divAuth.classList.remove('hidden');
-        } else alert(e?.message || 'No se pudo autenticar el vigilador.');
         return;
       }
 
@@ -2196,23 +2316,13 @@
         objetivo
       );
 
-      const metodoIdentificacion = String(window.DAConfig?.current?.metodoIdentificacion || 'FOTO').toUpperCase();
-      if (metodoIdentificacion === 'FOTO' && !fotoBase64Global) {
-        alert("Primero capture una selfie válida haciendo clic en 'CAPTURAR Y VALIDAR ROSTRO'.");
+      if (!fotoBase64Global) {
+        alert(
+          "Primero capture una selfie válida haciendo clic en 'CAPTURAR Y VALIDAR ROSTRO'."
+        );
+
         return;
       }
-
-      if (metodoIdentificacion === 'WEBAUTHN' && !window.__daWebAuthnAssertionGlobal) {
-        try {
-          window.__daWebAuthnAssertionGlobal = await DAAuth.authenticateWebAuthn();
-          const bioStatus = document.getElementById('biometria-status');
-          if (bioStatus) bioStatus.innerText = '✓ Biometría validada en el dispositivo. Preparando fichada...';
-        } catch (e) {
-          alert(e?.message || 'No se pudo validar la biometría del dispositivo.');
-          return;
-        }
-      }
-
 
       const divResultado =
         document.getElementById(
@@ -2362,8 +2472,8 @@
 
       const datos = {
         legajo: legajo,
-        authUid: normalizarLegajo(legajo),
-        metodoIdentificacion: String(window.DAConfig?.current?.metodoIdentificacion || 'FOTO').toUpperCase(),
+
+        pin: pin,
 
         nombre:
           nombre ||
@@ -2394,9 +2504,6 @@
 
         fechaHoraDispositivo:
           new Date().toISOString(),
-
-        timestampServidor:
-          { ".sv": "timestamp" },
 
         // ==========================================
         // GEOLOCALIZACIÓN
@@ -2489,10 +2596,6 @@
           null
       };
 
-      if (window.__daWebAuthnAssertionGlobal) {
-        datos.webAuthn = window.__daWebAuthnAssertionGlobal;
-      }
-
       // ==========================================
       // EVALUACIÓN DE HORARIO
       //
@@ -2565,8 +2668,12 @@
       // ==========================================
 
       if (!navigator.onLine) {
-        guardarFichadaOffline(datos, tipo, legajo);
-        window.__daWebAuthnAssertionGlobal = null;
+        guardarFichadaOffline(
+          datos,
+          tipo,
+          legajo
+        );
+
         return;
       }
 
@@ -2581,7 +2688,7 @@
       );
 
       fetch(
-        `${URL_FIREBASE}/fichadasPendientes.json`,
+        `${URL_FIREBASE}/fichadas.json`,
         {
           method: "POST",
 
@@ -2615,10 +2722,6 @@
           // MENSAJES
           // ==========================================
 
-          divResultado.className = "p-3 rounded-xl text-xs text-center bg-sky-950 text-sky-200 border border-sky-500";
-          divResultado.innerText = "✓ Solicitud de fichada enviada. El servidor la está validando.";
-
-          /*
           if (
             datos.estadoHorario ===
             'TARDANZA_ALERTA'
@@ -2676,10 +2779,6 @@
             divResultado.innerText =
               `✓ ¡Fichada de ${tipo} registrada con éxito!`;
           }
-
-          */
-
-          window.__daWebAuthnAssertionGlobal = null;
 
           // Actualizamos el estado local.
           ultimoTipoFichadaGlobal =
@@ -2904,7 +3003,7 @@
       );
 
       fetch(
-        `${URL_FIREBASE}/fichadasPendientes.json`,
+        `${URL_FIREBASE}/fichadas.json`,
         {
           method: "POST",
           headers: {
