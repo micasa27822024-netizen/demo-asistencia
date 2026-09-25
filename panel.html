@@ -382,44 +382,63 @@
       }
     });
 
-    async function validarPassword(e) {
-      e.preventDefault();
-      const email = document.getElementById('inputEmailSupervisor').value.trim();
-      const password = document.getElementById('inputPass').value;
-      const errorMsg = document.getElementById('msgErrorPass');
-      errorMsg.classList.add('hidden');
+   async function validarPassword(e) {
+  e.preventDefault();
+  const email = document.getElementById('inputEmailSupervisor').value.trim();
+  const password = document.getElementById('inputPass').value;
+  const errorMsg = document.getElementById('msgErrorPass');
+  errorMsg.classList.add('hidden');
+
+  try {
+    // 1. Autenticar con correo y contraseña
+    await DAAuth.signInWithEmail(email, password);
+
+    // 2. Verificar rol (Permitir 'supervisor' o 'admin')
+    try {
+      await DAAuth.requireRole('supervisor');
+    } catch (roleErr) {
+      // Si falla 'supervisor', probamos si la cuenta tiene rol 'admin'
       try {
-        await DAAuth.signInWithEmail(email, password);
-        await DAAuth.requireRole('supervisor');
-        mostrarPanel();
-      } catch (err) {
-        console.error('Error autenticando supervisor:', err);
-        errorMsg.classList.remove('hidden');
-        const icon = '<i class="fa-solid fa-circle-exclamation"></i>';
-        const code = String(err?.code || '');
-        let detalle = 'No se pudo autenticar la cuenta de supervisor.';
-        if (code === 'auth/user-not-found' || code === 'auth/invalid-credential') {
-          detalle = 'La cuenta no existe en Firebase Authentication o el correo/contraseña no son correctos.';
-        } else if (code === 'auth/wrong-password') {
-          detalle = 'La contraseña de Firebase Authentication es incorrecta.';
-        } else if (code === 'auth/invalid-email') {
-          detalle = 'El correo ingresado no tiene un formato válido.';
-        } else if (code === 'auth/operation-not-allowed') {
-          detalle = 'El proveedor Correo/Contraseña no está habilitado en Firebase Authentication.';
-        } else if (code === 'auth/network-request-failed') {
-          detalle = 'No se pudo conectar con Firebase Authentication. Revisá Internet y el dominio autorizado.';
-        } else if (code === 'auth/too-many-requests') {
-          detalle = 'Firebase bloqueó temporalmente nuevos intentos por demasiados accesos fallidos.';
-        } else if (String(err?.message || '').includes('rol requerido')) {
-          detalle = 'La cuenta está autenticada, pero no tiene asignado el rol supervisor.';
-        } else if (err?.message) {
-          detalle = String(err.message);
-        }
-        errorMsg.innerHTML = icon + ' ' + detalle;
-        document.getElementById('inputPass').value = '';
-        document.getElementById('inputPass').focus();
+        await DAAuth.requireRole('admin');
+      } catch (adminErr) {
+        // Si no tiene ninguno de los dos roles, lanzamos el error de rol
+        throw new Error('rol requerido');
       }
     }
+
+    // 3. Si pasó la validación, mostrar el panel
+    mostrarPanel();
+
+  } catch (err) {
+    console.error('Error autenticando supervisor:', err);
+    errorMsg.classList.remove('hidden');
+    const icon = '<i class="fa-solid fa-circle-exclamation"></i>';
+    const code = String(err?.code || '');
+    let detalle = 'No se pudo autenticar la cuenta de supervisor.';
+
+    if (code === 'auth/user-not-found' || code === 'auth/invalid-credential') {
+      detalle = 'La cuenta no existe en Firebase Authentication o el correo/contraseña no son correctos.';
+    } else if (code === 'auth/wrong-password') {
+      detalle = 'La contraseña de Firebase Authentication es incorrecta.';
+    } else if (code === 'auth/invalid-email') {
+      detalle = 'El correo ingresado no tiene un formato válido.';
+    } else if (code === 'auth/operation-not-allowed') {
+      detalle = 'El proveedor Correo/Contraseña no está habilitado en Firebase Authentication.';
+    } else if (code === 'auth/network-request-failed') {
+      detalle = 'No se pudo conectar con Firebase Authentication. Revisá Internet y el dominio autorizado.';
+    } else if (code === 'auth/too-many-requests') {
+      detalle = 'Firebase bloqueó temporalmente nuevos intentos por demasiados accesos fallidos.';
+    } else if (String(err?.message || '').includes('rol requerido')) {
+      detalle = 'La cuenta está autenticada, pero no tiene asignado el rol de supervisor o administrador.';
+    } else if (err?.message) {
+      detalle = String(err.message);
+    }
+
+    errorMsg.innerHTML = icon + ' ' + detalle;
+    document.getElementById('inputPass').value = '';
+    document.getElementById('inputPass').focus();
+  }
+}
 
     async function mostrarPanel() {
       cargarArchivadasDesdeStorage();
