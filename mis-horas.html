@@ -473,11 +473,21 @@
       reiniciarTemporizador();
     }
 
-   async function buscarMisHoras(e) {
+ async function buscarMisHoras(e) {
   if (e) e.preventDefault();
 
-  const legajoInput = document.getElementById('inputLegajo')?.value.trim();
-  const pinInput = document.getElementById('inputPin')?.value.trim();
+  // Buscar los campos de Legajo y PIN por cualquier ID posible
+  const elLegajo = document.getElementById('inputLegajo') || 
+                   document.getElementById('legajoInput') || 
+                   document.querySelector('input[placeholder*="0286"]') ||
+                   document.querySelector('input[type="text"]');
+
+  const elPin = document.getElementById('inputPin') || 
+                document.getElementById('pinInput') || 
+                document.querySelector('input[type="password"]');
+
+  const legajoInput = elLegajo ? elLegajo.value.trim() : '';
+  const pinInput = elPin ? elPin.value.trim() : '';
 
   if (!legajoInput || !pinInput) {
     alert('Por favor ingrese legajo y PIN.');
@@ -485,10 +495,9 @@
   }
 
   try {
-    // Normalizamos el legajo para buscar (ej: '0286' o '286')
     const legajoBuscado = String(parseInt(legajoInput, 10));
 
-    // 1. Obtener la lista de personal de Realtime Database
+    // 1. Obtener la lista de personal desde Firebase Realtime Database
     const snapshot = await firebase.database().ref('personal').once('value');
     const personalData = snapshot.val() || {};
 
@@ -509,16 +518,25 @@
       return;
     }
 
-    // 3. Ocultar pantalla de consulta y cargar datos en la vista del vigilador
-    const pantallaLogin = document.getElementById('pantallaLogin') || document.getElementById('seccionLogin');
-    const contenidoMisHoras = document.getElementById('contenidoMisHoras') || document.getElementById('seccionHoras');
+    // 3. Ocultar el formulario de consulta y mostrar el panel de horas
+    const loginCard = document.getElementById('pantallaLogin') || 
+                      document.getElementById('seccionLogin') || 
+                      document.querySelector('.max-w-md') ||
+                      elLegajo.closest('form') ||
+                      elLegajo.closest('.bg-slate-800');
 
-    if (pantallaLogin) pantallaLogin.classList.add('hidden');
-    if (contenidoMisHoras) contenidoMisHoras.classList.remove('hidden');
+    const contenidoHoras = document.getElementById('contenidoMisHoras') || 
+                           document.getElementById('seccionHoras') || 
+                           document.getElementById('contenidoPrincipal');
 
-    // 4. Invocar la carga de marcaciones del vigilador
+    if (loginCard) loginCard.classList.add('hidden');
+    if (contenidoHoras) contenidoHoras.classList.remove('hidden');
+
+    // 4. Ejecutar la función de renderizado de horas si existe
     if (typeof cargarHorasVigilador === 'function') {
       cargarHorasVigilador(vigiladorEncontrado);
+    } else if (typeof renderizarHoras === 'function') {
+      renderizarHoras(vigiladorEncontrado);
     }
 
   } catch (err) {
