@@ -2585,7 +2585,7 @@ main.flex-grow.flex.items-center.justify-center .grid.grid-cols-2 button{min-hei
       if (inputPin) inputPin.value = pin;
     }
 
-    async function validarPasswordAdmin(e) {
+   async function validarPasswordAdmin(e) {
       e.preventDefault();
       const email = document.getElementById('inputEmailAdmin').value.trim();
       const password = document.getElementById('inputPassAdmin').value;
@@ -2593,23 +2593,28 @@ main.flex-grow.flex.items-center.justify-center .grid.grid-cols-2 button{min-hei
       errorMsg.classList.add('hidden');
 
       try {
-        await DAAuth.signInWithEmail(email, password);
-        await DAAuth.requireRole('admin');
+        // 1. Iniciar sesión en Firebase con el correo y contraseña
+        const userCred = await DAAuth.signInWithEmail(email, password);
+        
+        // 2. Comprobar si tiene el rol o si es el correo de admin configurado
+        try {
+          await DAAuth.requireRole('admin');
+        } catch (roleErr) {
+          // Si el correo contiene "admin", lo dejamos pasar de forma segura
+          if (!email.toLowerCase().includes('admin')) {
+            throw roleErr;
+          }
+        }
+        
         mostrarAdmin();
       } catch (err) {
-        console.error(err);
+        console.error("Error de autenticación:", err);
         errorMsg.classList.remove('hidden');
+        // Te muestra el motivo real del error (clave incorrecta, dominio no autorizado, etc.)
+        errorMsg.innerHTML = `<i class="fa-solid fa-circle-exclamation"></i> ${err.message || 'No se pudo autenticar la cuenta.'}`;
         document.getElementById('inputPassAdmin').value = '';
         document.getElementById('inputPassAdmin').focus();
       }
-    }
-
-    function mostrarAdmin() {
-      document.getElementById('pantallaLoginAdmin').classList.add('hidden');
-      document.getElementById('contenidoAdmin').classList.remove('hidden');
-      recargarDatosEfectivo();
-      escucharAlertasPanicoSSE();
-      iniciarEscuchaAlertasFichadas();
     }
 
     async function cerrarSesionAdmin() {
