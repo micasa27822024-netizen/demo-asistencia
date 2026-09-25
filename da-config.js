@@ -119,11 +119,21 @@
     return auth.signOut();
   }
 
-  async function roleOf(user) {
-    if (!user) return null;
-    const token = await user.getIdTokenResult(true);
-    return token.claims?.role || token.claims?.rol || null;
+ async function roleOf(user) {
+  if (!user) return null;
+
+  // 1. Verificar si el correo coincide directamente con el admin
+  const email = String(user.email || '').toLowerCase();
+  const allowedAdmins = (company?.admins || []).map(a => String(a).toLowerCase());
+  
+  if (email === 'micasa27822024@gmail.com' || allowedAdmins.includes(email)) {
+    return 'admin';
   }
+
+  // 2. Si no es tu correo, busca el Custom Claim nativo de Firebase
+  const token = await user.getIdTokenResult(true);
+  return token.claims?.role || token.claims?.rol || null;
+}
 
   async function requireRole(role) {
     const user = await currentUser();
