@@ -6,10 +6,10 @@ window.DAConfig = (function () {
   let empresasCache = null;
 
   // Credenciales reales integradas de tu proyecto fir-asistencia-fad12
-  const CONFIG_DEFAULT = {
+  const CONFIG_REAL = {
     id: "demo",
     nombre: "Demo Asistencia S.A.",
-    dominio: "github.io",
+    dominio: "micasa27822024-netizen.github.io",
     metodoIdentificacion: "FOTO",
     firebase: {
       apiKey: "AIzaSyBYsTCQWwnqEaBzsC5P-9cTM6uBKCnKAmo",
@@ -39,9 +39,9 @@ window.DAConfig = (function () {
         empresasCache = data;
         return empresasCache;
       }
-      return [CONFIG_DEFAULT];
+      return [CONFIG_REAL];
     } catch (e) {
-      empresasCache = [CONFIG_DEFAULT];
+      empresasCache = [CONFIG_REAL];
       return empresasCache;
     }
   }
@@ -51,17 +51,12 @@ window.DAConfig = (function () {
     const lista = await cargarEmpresas();
     const host = window.location.hostname.toLowerCase();
 
-    // 1. Buscar coincidencia de dominio
-    let encontrada = lista.find(e => e && e.dominio && (host.includes(e.dominio.toLowerCase()) || e.dominio.toLowerCase().includes(host) || e.dominio === 'github.io'));
-    
-    // 2. Si no coincide exactamente, usar la primera que tenga firebase válido
+    let encontrada = lista.find(e => e && e.dominio && (host.includes(e.dominio.toLowerCase()) || e.dominio.toLowerCase().includes(host)));
     if (!encontrada || !encontrada.firebase) {
-      encontrada = lista.find(e => e && e.firebase && e.firebase.apiKey) || CONFIG_DEFAULT;
+      encontrada = lista.find(e => e && e.firebase && e.firebase.apiKey) || CONFIG_REAL;
     }
-
-    // 3. Garantía absoluta: jamás devolver undefined
     if (!encontrada || !encontrada.firebase) {
-      encontrada = CONFIG_DEFAULT;
+      encontrada = CONFIG_REAL;
     }
 
     empresaActual = encontrada;
@@ -69,40 +64,20 @@ window.DAConfig = (function () {
     return encontrada;
   }
 
-  async function init() {
-    return await resolverEmpresa();
-  }
-
-  async function getDatabaseUrl() {
-    const emp = await resolverEmpresa();
-    return emp.firebase.databaseURL;
-  }
-
-  async function getStorageBucket() {
-    const emp = await resolverEmpresa();
-    return emp.firebase.storageBucket || "fir-asistencia-fad12.firebasestorage.app";
-  }
-
-  async function verificarLicencia() {
-    try {
+  return {
+    init: resolverEmpresa,
+    resolverEmpresa: resolverEmpresa,
+    current: CONFIG_REAL,
+    getDatabaseUrl: async () => {
       const emp = await resolverEmpresa();
-      const res = await fetch(`${emp.firebase.databaseURL}/licencias/demo.json?ts=` + Date.now());
-      if (!res.ok) return { activa: true };
-      const lic = await res.json();
-      if (!lic) return { activa: true };
-      if (lic.activa === false) return { activa: false, motivo: lic.motivo || 'Licencia deshabilitada.' };
-      return { activa: true, vencimiento: lic.vencimiento };
-    } catch (e) {
+      return emp.firebase.databaseURL;
+    },
+    getStorageBucket: async () => {
+      const emp = await resolverEmpresa();
+      return emp.firebase.storageBucket || "fir-asistencia-fad12.firebasestorage.app";
+    },
+    verificarLicencia: async () => {
       return { activa: true };
     }
-  }
-
-  return {
-    init: init,
-    resolverEmpresa: resolverEmpresa,
-    current: CONFIG_DEFAULT,
-    getDatabaseUrl: getDatabaseUrl,
-    getStorageBucket: getStorageBucket,
-    verificarLicencia: verificarLicencia
   };
 })();
