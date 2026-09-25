@@ -473,29 +473,59 @@
       reiniciarTemporizador();
     }
 
-    async function buscarMisHoras() {
-      const legajoIngresado = document.getElementById('legajoInput').value.trim();
-      const pinIngresado = document.getElementById('pinInput').value.trim();
-      if (!legajoIngresado || !pinIngresado) return alert('Por favor ingresa tu número de legajo y tu clave de acceso.');
+   async function buscarMisHoras(e) {
+  if (e) e.preventDefault();
 
-      try {
-        const { user } = await DAAuth.ensureVigilador(legajoIngresado, pinIngresado);
-        await cargarMisHorasAutenticado(user.uid);
-      } catch (err) {
-        console.error(err);
-        alert(err?.message || 'No se pudo autenticar el vigilador.');
+  const legajoInput = document.getElementById('inputLegajo')?.value.trim();
+  const pinInput = document.getElementById('inputPin')?.value.trim();
+
+  if (!legajoInput || !pinInput) {
+    alert('Por favor ingrese legajo y PIN.');
+    return;
+  }
+
+  try {
+    // Normalizamos el legajo para buscar (ej: '0286' o '286')
+    const legajoBuscado = String(parseInt(legajoInput, 10));
+
+    // 1. Obtener la lista de personal de Realtime Database
+    const snapshot = await firebase.database().ref('personal').once('value');
+    const personalData = snapshot.val() || {};
+
+    // 2. Buscar al vigilador que coincida en Legajo y PIN
+    let vigiladorEncontrado = null;
+
+    Object.values(personalData).forEach(p => {
+      const legajoP = String(parseInt(p.legajo || p.legajoId || '0', 10));
+      const pinP = String(p.pin || p.clave || '').trim();
+
+      if (legajoP === legajoBuscado && pinP === pinInput) {
+        vigiladorEncontrado = p;
       }
+    });
+
+    if (!vigiladorEncontrado) {
+      alert('Legajo o PIN incorrectos.');
+      return;
     }
 
-    async function ejecutarConsulta(legajo) {
-      try {
-        const user = await DAAuth.currentUser();
-        if (!user || DAAuth.normalizarLegajo(user.uid) !== DAAuth.normalizarLegajo(legajo)) throw new Error('Sesión no autorizada.');
-        await cargarMisHorasAutenticado(user.uid);
-      } catch (e) {
-        console.error(e);
-      }
+    // 3. Ocultar pantalla de consulta y cargar datos en la vista del vigilador
+    const pantallaLogin = document.getElementById('pantallaLogin') || document.getElementById('seccionLogin');
+    const contenidoMisHoras = document.getElementById('contenidoMisHoras') || document.getElementById('seccionHoras');
+
+    if (pantallaLogin) pantallaLogin.classList.add('hidden');
+    if (contenidoMisHoras) contenidoMisHoras.classList.remove('hidden');
+
+    // 4. Invocar la carga de marcaciones del vigilador
+    if (typeof cargarHorasVigilador === 'function') {
+      cargarHorasVigilador(vigiladorEncontrado);
     }
+
+  } catch (err) {
+    console.error('Error al consultar horas:', err);
+    alert('Error al conectar con la base de datos: ' + (err.message || err));
+  }
+}
 
     function poblarSelectMeses(datos) {
       const selectMes = document.getElementById('filtroMes');
