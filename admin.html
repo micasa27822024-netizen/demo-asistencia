@@ -15,50 +15,19 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 </link>
+
+<!-- SDKs de Firebase (compat) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<!-- AGREGAR ESTA LÍNEA QUE FALTABA: -->
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-functions-compat.js"></script>
+
 <script src="./da-config.js"></script>
 <script src="./da-security.js"></script>
 <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin"/>
 <meta http-equiv="Permissions-Policy" content="camera=(self), geolocation=(self), microphone=()"/>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
-<!-- ENCABEZADO Y MENÚ CORPORATIVO -->
-<header class="bg-slate-900 border-b border-slate-800 shadow-md">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-4">
-      
-     <div class="flex items-center space-x-3">
-       <div class="w-10 h-10 bg-slate-800 border border-emerald-500/30 rounded-xl flex items-center justify-center overflow-hidden shadow-inner p-1">
-         <img src="https://i.ibb.co/qYcVxcTH/Chat-GPT-Image-3-sept-2026-13-19-18.png" alt="Logo Demo Asistencia" class="w-full h-full object-contain">
-       </div>
-       <div>
-         <span class="text-[10px] font-extrabold tracking-widest text-emerald-400 uppercase block">Demo Asistencia S.A.</span>
-         <h1 class="text-lg font-bold text-white tracking-wide">Portal de Operaciones</h1>
-       </div>
-     </div>
-
-      <nav class="flex flex-wrap justify-center items-center gap-1 bg-slate-800/80 p-1.5 rounded-xl border border-slate-700/60">
-        <a href="index.html" class="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition flex items-center space-x-1.5">
-          <i class="fa-solid fa-camera-retro text-emerald-400"></i>
-          <span>Fichadas</span>
-        </a>
-        <a href="admin.html" class="px-3 py-1.5 text-xs font-medium text-white bg-slate-700 rounded-lg transition flex items-center space-x-1.5 shadow-sm">
-          <i class="fa-solid fa-building-shield text-emerald-400"></i>
-          <span>Centro de Operaciones</span>
-        </a>
-        <a href="panel.html" class="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition flex items-center space-x-1.5">
-          <i class="fa-solid fa-chart-line text-emerald-400"></i>
-          <span>Control en Tiempo Real</span>
-        </a>
-        <a href="mis-horas.html" class="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition flex items-center space-x-1.5">
-          <i class="fa-solid fa-clock text-emerald-400"></i>
-          <span>Control de Mis Horas</span>
-        </a>
-      </nav>
-
-    </div>
-  </header>
 <!-- MODAL DE ACCESO ADMIN -->
 <div class="fixed inset-0 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4 z-50" id="pantallaLoginAdmin">
 <div class="bg-slate-800 border border-slate-700 p-6 md:p-8 rounded-2xl max-w-md w-full shadow-2xl text-center space-y-6">
