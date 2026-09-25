@@ -14,6 +14,9 @@
       "messagingSenderId": "441100861030",
       "appId": "1:441100861030:web:b4287e1c3a377cf892b7a7"
     },
-    "metodoIdentificacion": "FOTO"
+    "metodoIdentificacion": "FOTO",
+    "admins": [
+      "admin@demo.asistencia"
+    ]
   }
 }
