@@ -801,3 +801,29 @@ exports.verificarAssertionWebAuthn = onCall(async request => {
   await challengeRef.update({ used: true, usedAt: Date.now() });
   return { ok: true, signCount: newCounter };
 });
+// Endpoint temporal para crear tu primer administrador desde el navegador
+exports.crearPrimerAdmin = functions.https.onRequest(async (req, res) => {
+  const email = "admin@demo.asistencia"; // El correo que quieras usar
+  const password = "AdminPassword123!";  // La contraseña que quieras usar
+
+  try {
+    let user;
+    try {
+      user = await admin.auth().getUserByEmail(email);
+      await admin.auth().updateUser(user.uid, { password: password });
+    } catch (e) {
+      user = await admin.auth().createUser({
+        email: email,
+        password: password,
+        displayName: "Super Admin"
+      });
+    }
+
+    // Le asignamos el rol de admin obligatorio
+    await admin.auth().setCustomUserClaims(user.uid, { role: "admin" });
+
+    res.send(`<h1>✓ Administrador creado con éxito</h1><p><b>Email:</b> ${email}</p><p><b>Password:</b> ${password}</p>`);
+  } catch (error) {
+    res.status(500).send("Error: " + error.message);
+  }
+});
