@@ -1,24 +1,305 @@
 <!DOCTYPE html>
+
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Demo Asistencia - Panel de Control</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-  <!-- MAPA GRATUITO: Leaflet + OpenStreetMap -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  
-  <!-- LIBRERÍAS DE EXPORTACIÓN -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Demo Asistencia — Centro de Operaciones</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet"/>
+<!-- MAPA GRATUITO: Leaflet + OpenStreetMap -->
+<link crossorigin="" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet">
+<script crossorigin="" src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- LIBRERÍAS DE EXPORTACIÓN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+<!-- VISUAL REFRESH: Demo Asistencia -->
+<style id="demo-asistencia-visual-refresh">
+:root{
+  --da-bg:#070b12;
+  --da-surface:#0f1724;
+  --da-surface-2:#111c2c;
+  --da-border:rgba(148,163,184,.14);
+  --da-border-strong:rgba(52,211,153,.26);
+  --da-text:#f8fafc;
+  --da-muted:#94a3b8;
+  --da-accent:#34d399;
+  --da-accent-2:#22d3ee;
+  --da-danger:#fb7185;
+  --da-warning:#fbbf24;
+  --da-radius:18px;
+}
+
+html{background:var(--da-bg);scroll-behavior:smooth}
+body.bg-slate-900{
+  background:
+    radial-gradient(circle at 12% 0%, rgba(16,185,129,.08), transparent 30%),
+    radial-gradient(circle at 92% 8%, rgba(34,211,238,.065), transparent 26%),
+    linear-gradient(180deg,#08101a 0%,#070b12 48%,#06090f 100%);
+  color:var(--da-text);
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  letter-spacing:.005em;
+}
+
+body.bg-slate-900::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  background-image:linear-gradient(rgba(255,255,255,.02) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.02) 1px,transparent 1px);
+  background-size:32px 32px;
+  mask-image:linear-gradient(to bottom,rgba(0,0,0,.5),transparent 68%);
+  z-index:-1;
+}
+
+header.bg-slate-900{
+  position:sticky;
+  top:0;
+  z-index:40;
+  background:rgba(7,11,18,.82)!important;
+  border-bottom:1px solid rgba(148,163,184,.12)!important;
+  box-shadow:0 12px 36px rgba(0,0,0,.24)!important;
+  backdrop-filter:blur(18px) saturate(140%);
+}
+
+header.bg-slate-900::after{
+  content:"";
+  display:block;
+  height:1px;
+  background:linear-gradient(90deg,transparent,rgba(52,211,153,.25),rgba(34,211,238,.22),transparent);
+  opacity:.9;
+}
+
+header.bg-slate-900 > div{
+  max-width:1480px!important;
+  min-height:76px;
+  padding-top:14px!important;
+  padding-bottom:14px!important;
+}
+
+header .w-10.h-10{
+  width:46px!important;
+  height:46px!important;
+  border-radius:14px!important;
+  background:linear-gradient(145deg,#111c2c,#0a111d)!important;
+  border-color:rgba(52,211,153,.28)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 24px rgba(0,0,0,.24)!important;
+}
+
+header nav{
+  max-width:100%;
+  overflow-x:auto;
+  scrollbar-width:none;
+  background:rgba(15,23,36,.72)!important;
+  border:1px solid rgba(148,163,184,.12)!important;
+  border-radius:16px!important;
+  padding:6px!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.025),0 8px 24px rgba(0,0,0,.18);
+}
+header nav::-webkit-scrollbar{display:none}
+header nav a{
+  white-space:nowrap;
+  border-radius:11px!important;
+  min-height:38px;
+  padding:9px 13px!important;
+  transition:all .18s ease!important;
+}
+header nav a:hover{transform:translateY(-1px);background:rgba(51,65,85,.5)!important}
+header nav a.bg-slate-700{
+  background:linear-gradient(135deg,rgba(52,211,153,.15),rgba(34,211,238,.08))!important;
+  color:#fff!important;
+  box-shadow:inset 0 0 0 1px rgba(52,211,153,.13),0 4px 12px rgba(0,0,0,.18);
+}
+header nav a i{filter:drop-shadow(0 0 7px rgba(52,211,153,.16))}
+
+main{position:relative}
+main.flex-grow.flex.items-center.justify-center{padding:32px 18px 52px!important}
+main.max-w-4xl{max-width:1180px!important;padding:32px 18px 52px!important}
+
+body.bg-slate-900 > main > div,
+body.bg-slate-900 #contenidoAdmin .bg-slate-800,
+body.bg-slate-900 #contenidoPanel .bg-slate-800,
+body.bg-slate-900 main .bg-slate-800{
+  background:linear-gradient(180deg,rgba(17,28,44,.94),rgba(12,20,32,.96))!important;
+  border-color:var(--da-border)!important;
+  border-radius:var(--da-radius)!important;
+  box-shadow:0 22px 60px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.025)!important;
+}
+
+body.bg-slate-900 > main > div{
+  position:relative;
+  overflow:hidden;
+}
+body.bg-slate-900 > main > div::before{
+  content:"";
+  position:absolute;
+  left:-30px;
+  top:-30px;
+  width:170px;
+  height:170px;
+  border-radius:999px;
+  background:rgba(52,211,153,.08);
+  filter:blur(32px);
+  pointer-events:none;
+}
+
+label,
+.text-xs.uppercase,
+label.text-xs{letter-spacing:.08em}
+
+input,select,textarea{
+  border-color:rgba(148,163,184,.15)!important;
+  background:rgba(6,11,19,.78)!important;
+  border-radius:12px!important;
+  transition:border-color .18s ease,box-shadow .18s ease,background .18s ease,transform .18s ease;
+}
+input:focus,select:focus,textarea:focus{
+  border-color:rgba(52,211,153,.58)!important;
+  box-shadow:0 0 0 3px rgba(52,211,153,.08)!important;
+  background:rgba(8,15,25,.96)!important;
+}
+input[readonly]{background:rgba(4,8,14,.62)!important;color:#94a3b8!important}
+
+button{
+  border-radius:12px!important;
+  transition:transform .18s ease,box-shadow .18s ease,filter .18s ease!important;
+}
+button:hover{transform:translateY(-1px)}
+button:active{transform:translateY(0) scale(.985)}
+
+.bg-emerald-600{background:linear-gradient(135deg,#059669,#10b981)!important;box-shadow:0 10px 24px rgba(16,185,129,.12)!important}
+.bg-emerald-700{background:linear-gradient(135deg,#047857,#059669)!important}
+.bg-rose-600{background:linear-gradient(135deg,#e11d48,#f43f5e)!important;box-shadow:0 10px 24px rgba(244,63,94,.10)!important}
+.bg-rose-700{background:linear-gradient(135deg,#be123c,#e11d48)!important}
+.bg-amber-600{background:linear-gradient(135deg,#d97706,#f59e0b)!important;box-shadow:0 10px 24px rgba(245,158,11,.10)!important}
+.bg-amber-700{background:linear-gradient(135deg,#b45309,#d97706)!important}
+
+/* Fichadas */
+main.flex-grow.flex.items-center.justify-center > div{max-width:560px!important;padding:28px!important}
+main.flex-grow.flex.items-center.justify-center h2{font-size:1.1rem!important;letter-spacing:.06em}
+#estadoRed{padding:6px 10px!important;border-radius:999px!important;background:rgba(16,185,129,.09)!important;border-color:rgba(52,211,153,.18)!important}
+#webcam{
+  border-radius:16px;
+  filter:saturate(.98) contrast(1.02);
+}
+#webcam, #preview{box-shadow:inset 0 0 0 1px rgba(255,255,255,.035)}
+#btnCapturar{min-height:46px;font-size:.78rem!important;letter-spacing:.06em}
+#foto-status{padding:5px 0}
+main.flex-grow.flex.items-center.justify-center .grid.grid-cols-2 button{min-height:52px;font-size:.86rem}
+#resultado{border:1px solid rgba(148,163,184,.12);box-shadow:0 10px 24px rgba(0,0,0,.15)}
+
+/* Administración y supervisor */
+#contenidoAdmin,#contenidoPanel{max-width:1480px!important;margin:0 auto;padding:24px 18px 54px}
+#contenidoAdmin > *,#contenidoPanel > *{margin-top:18px}
+#contenidoAdmin > :first-child,#contenidoPanel > :first-child{margin-top:0}
+
+#contenidoAdmin .bg-slate-800,
+#contenidoPanel .bg-slate-800{
+  position:relative;
+  overflow:hidden;
+}
+#contenidoAdmin .bg-slate-800::after,
+#contenidoPanel .bg-slate-800::after{
+  content:"";
+  position:absolute;
+  left:0;right:0;top:0;height:1px;
+  background:linear-gradient(90deg,rgba(52,211,153,.20),transparent 55%);
+  pointer-events:none;
+}
+
+#contenidoAdmin .p-5,#contenidoAdmin .p-6,#contenidoAdmin .p-8,
+#contenidoPanel .p-5,#contenidoPanel .p-6,#contenidoPanel .p-8{position:relative}
+
+#contenidoAdmin table,#contenidoPanel table,main.max-w-4xl table{border-collapse:separate;border-spacing:0}
+#contenidoAdmin thead,#contenidoPanel thead,main.max-w-4xl thead{background:rgba(4,8,14,.68)!important}
+#contenidoAdmin th,#contenidoPanel th,main.max-w-4xl th{font-weight:700;letter-spacing:.07em;color:#94a3b8!important}
+#contenidoAdmin tbody tr,#contenidoPanel tbody tr,main.max-w-4xl tbody tr{transition:background .16s ease}
+#contenidoAdmin tbody tr:hover,#contenidoPanel tbody tr:hover,main.max-w-4xl tbody tr:hover{background:rgba(52,211,153,.035)!important}
+
+/* Barras / tabs del admin */
+#contenidoAdmin [id^="tabBtn"],#contenidoAdmin .tab-button{
+  min-height:42px;
+  border-radius:12px!important;
+}
+#contenidoAdmin [id^="tabBtn"] i{margin-right:6px}
+
+/* KPIs del supervisor */
+#contenidoPanel [id^="kpi"]{
+  text-shadow:0 0 18px rgba(52,211,153,.08)
+}
+#chartDonaHoy,#chartBarrasSemana{filter:drop-shadow(0 10px 24px rgba(0,0,0,.16))}
+
+/* Mis horas */
+#infoSesionActiva{
+  background:linear-gradient(135deg,rgba(16,185,129,.07),rgba(8,16,28,.72))!important;
+  box-shadow:inset 0 0 0 1px rgba(52,211,153,.05)!important;
+}
+#seccionPanico{
+  background:linear-gradient(135deg,rgba(127,29,29,.35),rgba(45,14,25,.46))!important;
+  border-color:rgba(244,63,94,.28)!important;
+}
+#btnPanico{min-height:60px;letter-spacing:.05em}
+#seccionFiltros{padding:18px!important}
+#resumenHoras > div{min-height:106px;display:flex;flex-direction:column;justify-content:center}
+#contenedorTabla{overflow:hidden!important}
+#seccionNovedades{border-color:rgba(251,191,36,.14)!important}
+
+/* Modales */
+#pantallaLoginAdmin,#pantallaLogin,
+#modalPanicoAdmin,#modalFoto,#modalAccionFraude,#modalAuditoriaIA,
+#modalEditarPersonal,#modalTurnosPersonal,#modalEditarObjetivo,#modalAlertasFichadas,
+#modalAlertasTardanzaArchivadas{
+  backdrop-filter:blur(14px)!important;
+  background:rgba(2,6,12,.76)!important;
+}
+#pantallaLoginAdmin > div,#pantallaLogin > div,
+#modalPanicoAdmin > div,#modalFoto > div,#modalAccionFraude > div,#modalAuditoriaIA > div,
+#modalEditarPersonal > div,#modalTurnosPersonal > div,#modalEditarObjetivo > div,
+#modalAlertasFichadas > div,#modalAlertasTardanzaArchivadas > div{
+  background:linear-gradient(180deg,#111c2c,#0c1420)!important;
+  border-color:rgba(148,163,184,.14)!important;
+  border-radius:20px!important;
+  box-shadow:0 30px 90px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.03)!important;
+}
+
+/* Scrollbars */
+*{scrollbar-color:#263446 transparent;scrollbar-width:thin}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#263446;border-radius:999px;border:3px solid transparent;background-clip:padding-box}
+
+@media (max-width:900px){
+  header.bg-slate-900 > div{align-items:stretch!important}
+  header nav{width:100%}
+  #contenidoAdmin,#contenidoPanel{padding-left:12px;padding-right:12px}
+}
+
+@media (max-width:640px){
+  header.bg-slate-900 > div{min-height:auto}
+  header .w-10.h-10{width:42px!important;height:42px!important}
+  header .text-lg{font-size:1rem!important}
+  header nav a{padding:8px 11px!important;font-size:.69rem!important}
+  main.flex-grow.flex.items-center.justify-center{padding:18px 10px 34px!important}
+  main.flex-grow.flex.items-center.justify-center > div{padding:20px!important;border-radius:16px!important}
+  main.max-w-4xl{padding:18px 10px 34px!important}
+  #contenidoAdmin,#contenidoPanel{padding:14px 8px 36px}
+  #btnPanico{min-height:56px;font-size:.84rem!important}
+}
+
+  </style>
+</link>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-functions-compat.js"></script>
+<script src="./da-config.js"></script>
+<script src="./da-security.js"></script>
+<meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin"/>
+<meta http-equiv="Permissions-Policy" content="camera=(self), geolocation=(self), microphone=()"/>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
-
-  <!-- ENCABEZADO Y MENÚ CORPORATIVO -->
-  <header class="bg-slate-900 border-b border-slate-800 shadow-md">
+<!-- ENCABEZADO Y MENÚ CORPORATIVO -->
+<header class="bg-slate-900 border-b border-slate-800 shadow-md">
     <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-4">
       
      <div class="flex items-center space-x-3">
@@ -52,780 +333,739 @@
 
     </div>
   </header>
-
-  <!-- MODAL DE ACCESO ADMIN -->
-  <div id="pantallaLoginAdmin" class="fixed inset-0 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4 z-50">
-    <div class="bg-slate-800 border border-slate-700 p-6 md:p-8 rounded-2xl max-w-md w-full shadow-2xl text-center space-y-6">
-      <div class="w-16 h-16 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-2xl flex items-center justify-center mx-auto text-2xl">
-        <i class="fa-solid fa-user-gear"></i>
-      </div>
-      <div>
-        <h2 class="text-xl font-bold text-white">Acceso Administrador</h2>
-        <p class="text-xs text-slate-400 mt-1">Ingresa la contraseña para acceder al panel admin</p>
-      </div>
-      <form onsubmit="validarPasswordAdmin(event)" class="space-y-4">
-        <div class="relative">
-          <i class="fa-solid fa-lock absolute left-3 top-3.5 text-slate-400 text-sm"></i>
-          <input type="password" id="inputPassAdmin" placeholder="Contraseña de acceso" required class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500 text-center tracking-widest text-lg">
-        </div>
-        <p id="msgErrorPassAdmin" class="text-xs text-rose-400 hidden flex items-center justify-center gap-1">
-          <i class="fa-solid fa-circle-exclamation"></i> Contraseña incorrecta. Intenta nuevamente.
+<!-- MODAL DE ACCESO ADMIN -->
+<div class="fixed inset-0 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4 z-50" id="pantallaLoginAdmin">
+<div class="bg-slate-800 border border-slate-700 p-6 md:p-8 rounded-2xl max-w-md w-full shadow-2xl text-center space-y-6">
+<div class="w-16 h-16 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-2xl flex items-center justify-center mx-auto text-2xl">
+<i class="fa-solid fa-user-gear"></i>
+</div>
+<div>
+<h2 class="text-xl font-bold text-white">Acceso Administrador</h2>
+<p class="text-xs text-slate-400 mt-1">Ingresa la contraseña para acceder al panel admin</p>
+</div>
+<form class="space-y-4" onsubmit="validarPasswordAdmin(event)">
+<div class="relative">
+<i class="fa-solid fa-envelope absolute left-3 top-3.5 text-slate-400 text-sm"></i>
+<input autocomplete="username" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500" id="inputEmailAdmin" placeholder="Correo del administrador" required="" type="email"/>
+</div>
+<div class="relative">
+<i class="fa-solid fa-lock absolute left-3 top-3.5 text-slate-400 text-sm"></i>
+<input autocomplete="current-password" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500" id="inputPassAdmin" placeholder="Contraseña" required="" type="password"/>
+</div>
+<p class="text-xs text-rose-400 hidden flex items-center justify-center gap-1" id="msgErrorPassAdmin">
+<i class="fa-solid fa-circle-exclamation"></i> No se pudo autenticar la cuenta administrativa.
         </p>
-        <button type="submit" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-2.5 rounded-xl text-sm transition shadow-lg flex items-center justify-center gap-2">
-          <i class="fa-solid fa-key"></i> Ingresar como Admin
+<button class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-2.5 rounded-xl text-sm transition shadow-lg flex items-center justify-center gap-2" type="submit">
+<i class="fa-solid fa-shield-keyhole"></i> Autenticar como Admin
         </button>
-      </form>
-    </div>
-  </div>
-
-  <!-- CONTENIDO PRINCIPAL -->
-  <div id="contenidoAdmin" class="max-w-7xl mx-auto space-y-6 p-4 md:p-8 flex-grow hidden w-full">
-    
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
-      <div>
-        <h2 class="text-2xl font-bold text-white flex items-center gap-2">
-          <i class="fa-solid fa-shield-halved text-emerald-500"></i> Panel de Control Operativo
+</form>
+</div>
+</div>
+<!-- CONTENIDO PRINCIPAL -->
+<div class="max-w-7xl mx-auto space-y-6 p-4 md:p-8 flex-grow hidden w-full" id="contenidoAdmin">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
+<div>
+<h2 class="text-2xl font-bold text-white flex items-center gap-2">
+<i class="fa-solid fa-shield-halved text-emerald-500"></i> Panel de Control Operativo
         </h2>
-        <p class="text-xs text-slate-400 mt-1">Gestión de asistencia, auditoría de IA en segundo plano y puestos</p>
-      </div>
-      <div class="flex items-center gap-3">
-        <button onclick="recargarDatosEfectivo()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
-          <i class="fa-solid fa-rotate-right" id="icono-reload"></i> Actualizar Datos
+<p class="text-xs text-slate-400 mt-1">Gestión de asistencia, auditoría de IA en segundo plano y puestos</p>
+</div>
+<div class="flex items-center gap-3">
+<button class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg" onclick="recargarDatosEfectivo()">
+<i class="fa-solid fa-rotate-right" id="icono-reload"></i> Actualizar Datos
         </button>
-        <button onclick="abrirModalAlertasFichadas()" id="btnAlertasFichadas" class="relative bg-rose-600/15 hover:bg-rose-600/30 text-rose-300 font-bold px-3 py-2 rounded-xl text-sm transition border border-rose-500/30" title="Alertas de fichadas: ubicación y llegadas tarde">
-          <i class="fa-solid fa-bell"></i>
-          <span id="badgeAlertasFichadas" class="hidden absolute -top-2 -right-2 min-w-[20px] h-5 px-1.5 rounded-full bg-rose-600 text-white text-[10px] font-black items-center justify-center border-2 border-slate-900">0</span>
-        </button>
-        <button onclick="cerrarSesionAdmin()" class="bg-slate-700 hover:bg-rose-600 text-slate-300 hover:text-white font-semibold px-3 py-2 rounded-xl text-sm transition border border-slate-600" title="Cerrar Sesión">
-          <i class="fa-solid fa-right-from-bracket"></i>
-        </button>
-      </div>
-    </div>
-
-    <!-- PESTAÑAS -->
-    <div class="flex flex-wrap border-b border-slate-700 gap-2">
-      <button id="tabBtnMarcaciones" onclick="cambiarTab('marcaciones')" class="px-5 py-3 font-semibold text-sm border-b-2 border-emerald-500 text-emerald-400 flex items-center gap-2 transition">
-        <i class="fa-solid fa-clipboard-user"></i> Marcaciones
+<button class="relative bg-rose-600/15 hover:bg-rose-600/30 text-rose-300 font-bold px-3 py-2 rounded-xl text-sm transition border border-rose-500/30" id="btnAlertasFichadas" onclick="abrirModalAlertasFichadas()" title="Alertas de fichadas: ubicación y llegadas tarde">
+<i class="fa-solid fa-bell"></i>
+<span class="hidden absolute -top-2 -right-2 min-w-[20px] h-5 px-1.5 rounded-full bg-rose-600 text-white text-[10px] font-black items-center justify-center border-2 border-slate-900" id="badgeAlertasFichadas">0</span>
+</button>
+<button class="bg-slate-700 hover:bg-rose-600 text-slate-300 hover:text-white font-semibold px-3 py-2 rounded-xl text-sm transition border border-slate-600" onclick="cerrarSesionAdmin()" title="Cerrar Sesión">
+<i class="fa-solid fa-right-from-bracket"></i>
+</button>
+</div>
+</div>
+<!-- PESTAÑAS -->
+<div class="flex flex-wrap border-b border-slate-700 gap-2">
+<button class="px-5 py-3 font-semibold text-sm border-b-2 border-emerald-500 text-emerald-400 flex items-center gap-2 transition" id="tabBtnMarcaciones" onclick="cambiarTab('marcaciones')">
+<i class="fa-solid fa-clipboard-user"></i> Marcaciones
       </button>
-      <button id="tabBtnAlertasUbicacion" onclick="cambiarTab('alertasUbicacion')" class="relative px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
-        <i class="fa-solid fa-bell text-rose-400"></i> Alertas de Ubicacion y llegada tarde
-        <span id="badgeAlertasTab" class="hidden min-w-[18px] h-5 px-1.5 rounded-full bg-rose-600 text-white text-[10px] font-black items-center justify-center">0</span>
+<button class="relative px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition" id="tabBtnAlertasUbicacion" onclick="cambiarTab('alertasUbicacion')">
+<i class="fa-solid fa-bell text-rose-400"></i> Alertas de Ubicacion y llegada tarde
+        <span class="hidden min-w-[18px] h-5 px-1.5 rounded-full bg-rose-600 text-white text-[10px] font-black items-center justify-center" id="badgeAlertasTab">0</span>
+</button>
+<button class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition" id="tabBtnNovedades" onclick="cambiarTab('novedades')">
+<i class="fa-solid fa-triangle-exclamation"></i> Novedades / Incidencias
       </button>
-      <button id="tabBtnNovedades" onclick="cambiarTab('novedades')" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
-        <i class="fa-solid fa-triangle-exclamation"></i> Novedades / Incidencias
+<button class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition" id="tabBtnPanicos" onclick="cambiarTab('panicos')">
+<i class="fa-solid fa-bell text-rose-400"></i> Pánicos
       </button>
-      <button id="tabBtnPanicos" onclick="cambiarTab('panicos')" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
-        <i class="fa-solid fa-bell text-rose-400"></i> Pánicos
+<button class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition" id="tabBtnPersonal" onclick="cambiarTab('personal')">
+<i class="fa-solid fa-id-card"></i> Personal / PINs
       </button>
-      <button id="tabBtnPersonal" onclick="cambiarTab('personal')" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
-        <i class="fa-solid fa-id-card"></i> Personal / PINs
+<button class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition" id="tabBtnObjetivos" onclick="cambiarTab('objetivos')">
+<i class="fa-solid fa-building"></i> Objetivos / Puestos
       </button>
-      <button id="tabBtnObjetivos" onclick="cambiarTab('objetivos')" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
-        <i class="fa-solid fa-building"></i> Objetivos / Puestos
+<button class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition" id="tabBtnConfiguracion" onclick="cambiarTab('configuracion')">
+<i class="fa-solid fa-gear"></i> Configuración
       </button>
-      <button id="tabBtnConfiguracion" onclick="cambiarTab('configuracion')" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
-        <i class="fa-solid fa-gear"></i> Configuración
-      </button>
-    </div>
-
-    <!-- TAB 1: MARCACIONES -->
-    <div id="tabMarcaciones" class="space-y-4">
-      <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 flex flex-col md:flex-row gap-4 justify-between items-center">
-        <div class="flex-1 relative w-full">
-          <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
-          <input type="text" id="inputBusqueda" onkeyup="filtrarTablaMarcaciones()" placeholder="Buscar por Nombre, Legajo u Objetivo..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
-        </div>
-        
-        <div class="flex flex-wrap md:flex-nowrap items-center gap-3 w-full md:w-auto">
-          <!-- Filtro de Alertas IA -->
-          <select id="filtroAuditoria" onchange="filtrarTablaMarcaciones()" class="w-full md:w-auto bg-slate-900 border border-slate-700 text-amber-400 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-500">
-            <option value="TODOS">Todas las auditorías</option>
-            <option value="FRAUDE">🚨 Solo Fraude / Sospechosos</option>
-            <option value="OK">✅ Solo Verificados</option>
-          </select>
-
-          <select id="filtroTipo" onchange="filtrarTablaMarcaciones()" class="w-full md:w-auto bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
-            <option value="TODOS">Todos los tipos</option>
-            <option value="ENTRADA">Solo Entradas</option>
-            <option value="SALIDA">Solo Salidas</option>
-          </select>
-
-          <button onclick="exportarExcel()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md w-full md:w-auto">
-            <i class="fa-solid fa-file-excel"></i> Excel
+</div>
+<!-- TAB 1: MARCACIONES -->
+<div class="space-y-4" id="tabMarcaciones">
+<div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 flex flex-col md:flex-row gap-4 justify-between items-center">
+<div class="flex-1 relative w-full">
+<i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
+<input class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500" id="inputBusqueda" onkeyup="filtrarTablaMarcaciones()" placeholder="Buscar por Nombre, Legajo u Objetivo..." type="text"/>
+</div>
+<div class="flex flex-wrap md:flex-nowrap items-center gap-3 w-full md:w-auto">
+<!-- Filtro de Alertas IA -->
+<select class="w-full md:w-auto bg-slate-900 border border-slate-700 text-amber-400 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-500" id="filtroAuditoria" onchange="filtrarTablaMarcaciones()">
+<option value="TODOS">Todas las auditorías</option>
+<option value="FRAUDE">🚨 Solo Fraude / Sospechosos</option>
+<option value="OK">✅ Solo Verificados</option>
+</select>
+<select class="w-full md:w-auto bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500" id="filtroTipo" onchange="filtrarTablaMarcaciones()">
+<option value="TODOS">Todos los tipos</option>
+<option value="ENTRADA">Solo Entradas</option>
+<option value="SALIDA">Solo Salidas</option>
+</select>
+<button class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md w-full md:w-auto" onclick="exportarExcel()">
+<i class="fa-solid fa-file-excel"></i> Excel
           </button>
-          <button onclick="exportarPDF()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md w-full md:w-auto">
-            <i class="fa-solid fa-file-pdf"></i> PDF
+<button class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md w-full md:w-auto" onclick="exportarPDF()">
+<i class="fa-solid fa-file-pdf"></i> PDF
           </button>
-        </div>
-      </div>
-
-      <div class="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-sm text-slate-300">
-            <thead class="bg-slate-950 text-slate-400 uppercase text-xs border-b border-slate-700">
-              <tr>
-                <th class="p-4">Fecha y Hora</th>
-                <th class="p-4">Legajo</th>
-                <th class="p-4">Nombre</th>
-                <th class="p-4">Objetivo</th>
-                <th class="p-4 text-center">Tipo</th>
-                <th class="p-4 text-center">Auditoría IA (2do Plano)</th>
-                <th class="p-4 text-center">Ubicación</th>
-                <th class="p-4 text-center">Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="cuerpoTablaMarcaciones" class="divide-y divide-slate-700/50">
-              <tr>
-                <td colspan="8" class="p-8 text-center text-slate-400">
-                  <i class="fa-solid fa-spinner fa-spin text-2xl text-emerald-500 mb-2"></i>
-                  <p>Cargando información...</p>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- TAB 2: NOVEDADES -->
-    <div id="tabNovedades" class="hidden space-y-4">
-      <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 flex flex-col md:flex-row gap-4 justify-between items-center">
-        <div class="flex-1 relative w-full">
-          <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
-          <input type="text" id="inputBusquedaNovedades" onkeyup="filtrarTablaNovedades()" placeholder="Buscar por Novedad, Objetivo o Personal..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
-        </div>
-        <div class="flex flex-wrap md:flex-nowrap items-center gap-3 w-full md:w-auto">
-          <button onclick="exportarExcelNovedades()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md w-full md:w-auto">
-            <i class="fa-solid fa-file-excel"></i> Excel
+</div>
+</div>
+<div class="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
+<div class="overflow-x-auto">
+<table class="w-full text-left text-sm text-slate-300">
+<thead class="bg-slate-950 text-slate-400 uppercase text-xs border-b border-slate-700">
+<tr>
+<th class="p-4">Fecha y Hora</th>
+<th class="p-4">Legajo</th>
+<th class="p-4">Nombre</th>
+<th class="p-4">Objetivo</th>
+<th class="p-4 text-center">Tipo</th>
+<th class="p-4 text-center">Auditoría IA (2do Plano)</th>
+<th class="p-4 text-center">Ubicación</th>
+<th class="p-4 text-center">Acciones</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-700/50" id="cuerpoTablaMarcaciones">
+<tr>
+<td class="p-8 text-center text-slate-400" colspan="8">
+<i class="fa-solid fa-spinner fa-spin text-2xl text-emerald-500 mb-2"></i>
+<p>Cargando información...</p>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<!-- TAB 2: NOVEDADES -->
+<div class="hidden space-y-4" id="tabNovedades">
+<div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 flex flex-col md:flex-row gap-4 justify-between items-center">
+<div class="flex-1 relative w-full">
+<i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
+<input class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-amber-500" id="inputBusquedaNovedades" onkeyup="filtrarTablaNovedades()" placeholder="Buscar por Novedad, Objetivo o Personal..." type="text"/>
+</div>
+<div class="flex flex-wrap md:flex-nowrap items-center gap-3 w-full md:w-auto">
+<button class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md w-full md:w-auto" onclick="exportarExcelNovedades()">
+<i class="fa-solid fa-file-excel"></i> Excel
           </button>
-          <button onclick="exportarPDFNovedades()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md w-full md:w-auto">
-            <i class="fa-solid fa-file-pdf"></i> PDF
+<button class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md w-full md:w-auto" onclick="exportarPDFNovedades()">
+<i class="fa-solid fa-file-pdf"></i> PDF
           </button>
-        </div>
-      </div>
-
-      <div class="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-sm text-slate-300">
-            <thead class="bg-slate-950 text-slate-400 uppercase text-xs border-b border-slate-700">
-              <tr>
-                <th class="p-4">Fecha y Hora</th>
-                <th class="p-4">Legajo / Nombre</th>
-                <th class="p-4">Objetivo</th>
-                <th class="p-4">Tipo Incidencia</th>
-                <th class="p-4">Descripción</th>
-                <th class="p-4 text-center">Ubicación</th>
-                <th class="p-4 text-center">Foto</th>
-              </tr>
-            </thead>
-            <tbody id="cuerpoTablaNovedades" class="divide-y divide-slate-700/50">
-              <tr><td colspan="7" class="p-8 text-center text-slate-400">Cargando novedades...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- TAB NUEVA: PÁNICOS -->
-    <div id="tabPanicos" class="hidden space-y-4">
-      <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 flex justify-between items-center">
-        <div>
-          <h3 class="text-lg font-bold text-white flex items-center gap-2">
-            <i class="fa-solid fa-triangle-exclamation text-rose-500"></i> Historial de Alertas de Pánico
+</div>
+</div>
+<div class="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
+<div class="overflow-x-auto">
+<table class="w-full text-left text-sm text-slate-300">
+<thead class="bg-slate-950 text-slate-400 uppercase text-xs border-b border-slate-700">
+<tr>
+<th class="p-4">Fecha y Hora</th>
+<th class="p-4">Legajo / Nombre</th>
+<th class="p-4">Objetivo</th>
+<th class="p-4">Tipo Incidencia</th>
+<th class="p-4">Descripción</th>
+<th class="p-4 text-center">Ubicación</th>
+<th class="p-4 text-center">Foto</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-700/50" id="cuerpoTablaNovedades">
+<tr><td class="p-8 text-center text-slate-400" colspan="7">Cargando novedades...</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<!-- TAB NUEVA: PÁNICOS -->
+<div class="hidden space-y-4" id="tabPanicos">
+<div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 flex justify-between items-center">
+<div>
+<h3 class="text-lg font-bold text-white flex items-center gap-2">
+<i class="fa-solid fa-triangle-exclamation text-rose-500"></i> Historial de Alertas de Pánico
           </h3>
-          <p class="text-xs text-slate-400 mt-1">Registro de todas las alertas emitidas por el personal operativo</p>
-        </div>
-      </div>
-
-      <div class="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-sm text-slate-300">
-            <thead class="bg-slate-950 text-slate-400 uppercase text-xs border-b border-slate-700">
-              <tr>
-                <th class="p-4">Fecha y Hora</th>
-                <th class="p-4">Legajo</th>
-                <th class="p-4">Nombre</th>
-                <th class="p-4">Objetivo</th>
-                <th class="p-4 text-center">Estado</th>
-                <th class="p-4 text-center">Ubicación GPS</th>
-                <th class="p-4 text-center">Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="cuerpoTablaPanicos" class="divide-y divide-slate-700/50">
-              <tr><td colspan="7" class="p-8 text-center text-slate-400">Cargando registros de pánico...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- TAB: HISTORIAL DE ALERTAS DE UBICACIÓN -->
-    <div id="tabAlertasUbicacion" class="hidden space-y-4">
-      <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-xl">
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div>
-            <h3 class="text-lg font-bold text-white flex items-center gap-2">
-              <i class="fa-solid fa-location-crosshairs text-rose-400"></i> Historial de fichadas bloqueadas
+<p class="text-xs text-slate-400 mt-1">Registro de todas las alertas emitidas por el personal operativo</p>
+</div>
+</div>
+<div class="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
+<div class="overflow-x-auto">
+<table class="w-full text-left text-sm text-slate-300">
+<thead class="bg-slate-950 text-slate-400 uppercase text-xs border-b border-slate-700">
+<tr>
+<th class="p-4">Fecha y Hora</th>
+<th class="p-4">Legajo</th>
+<th class="p-4">Nombre</th>
+<th class="p-4">Objetivo</th>
+<th class="p-4 text-center">Estado</th>
+<th class="p-4 text-center">Ubicación GPS</th>
+<th class="p-4 text-center">Acciones</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-700/50" id="cuerpoTablaPanicos">
+<tr><td class="p-8 text-center text-slate-400" colspan="7">Cargando registros de pánico...</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<!-- TAB: HISTORIAL DE ALERTAS DE UBICACIÓN -->
+<div class="hidden space-y-4" id="tabAlertasUbicacion">
+<div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-xl">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+<div>
+<h3 class="text-lg font-bold text-white flex items-center gap-2">
+<i class="fa-solid fa-location-crosshairs text-rose-400"></i> Historial de fichadas bloqueadas
             </h3>
-            <p class="text-xs text-slate-400 mt-1">Acá quedan guardados los intentos realizados fuera del radio permitido, incluso después de cerrar la notificación.</p>
-          </div>
-          <div class="flex gap-2">
-            <button onclick="cargarAlertasFichadas(false)" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-lg text-xs font-semibold transition">
-              <i class="fa-solid fa-rotate"></i> Actualizar
+<p class="text-xs text-slate-400 mt-1">Acá quedan guardados los intentos realizados fuera del radio permitido, incluso después de cerrar la notificación.</p>
+</div>
+<div class="flex gap-2">
+<button class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-lg text-xs font-semibold transition" onclick="cargarAlertasFichadas(false)">
+<i class="fa-solid fa-rotate"></i> Actualizar
             </button>
-            <button onclick="marcarTodasAlertasFichadasVistas()" class="bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 px-3 py-2 rounded-lg text-xs font-semibold transition">
-              <i class="fa-solid fa-check-double"></i> Marcar vistas
+<button class="bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 px-3 py-2 rounded-lg text-xs font-semibold transition" onclick="marcarTodasAlertasFichadasVistas()">
+<i class="fa-solid fa-check-double"></i> Marcar vistas
             </button>
-          </div>
-        </div>
-      </div>
-      <div class="bg-slate-800 rounded-2xl border border-slate-700 shadow-xl p-4">
-        <div id="listaAlertasFichadasHistorial" class="space-y-2"></div>
-      </div>
-    </div>
-
-    <!-- TAB 3: PERSONAL -->
-    <div id="tabPersonal" class="hidden space-y-6">
-      <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
-        <h3 class="text-lg font-bold text-white flex items-center gap-2">
-          <i class="fa-solid fa-user-plus text-amber-500"></i> Registrar Nuevo Personal
+</div>
+</div>
+</div>
+<div class="bg-slate-800 rounded-2xl border border-slate-700 shadow-xl p-4">
+<div class="space-y-2" id="listaAlertasFichadasHistorial"></div>
+</div>
+</div>
+<!-- TAB 3: PERSONAL -->
+<div class="hidden space-y-6" id="tabPersonal">
+<div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
+<h3 class="text-lg font-bold text-white flex items-center gap-2">
+<i class="fa-solid fa-user-plus text-amber-500"></i> Registrar Nuevo Personal
         </h3>
-        <p class="text-xs text-slate-400">El horario habitual y los objetivos autorizados se administran desde <strong class="text-slate-200">Configurar</strong>. Los cambios de un día puntual se gestionan desde <strong class="text-slate-200">Turnos</strong>.</p>
-        <form onsubmit="guardarVigilador(event)" class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-          <div>
-            <label class="block text-xs uppercase text-slate-400 mb-1">N° Legajo</label>
-            <input type="text" id="newLegajo" required placeholder="Ej: 0286" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
-          </div>
-          <div>
-            <label class="block text-xs uppercase text-slate-400 mb-1">Nombre Completo</label>
-            <input type="text" id="newNombre" required placeholder="Ej: Juan Pérez" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
-          </div>
-          <div>
-            <label class="block text-xs uppercase text-slate-400 mb-1">PIN Generado</label>
-            <div class="flex gap-2">
-              <input type="text" id="newPin" readonly required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm text-amber-400 font-mono font-bold tracking-widest text-center cursor-not-allowed">
-              <button type="button" onclick="generarPinAleatorio()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 p-2 rounded-xl text-sm transition">
-                <i class="fa-solid fa-arrows-rotate"></i>
-              </button>
-            </div>
-          </div>
-          <div>
-            <label class="block text-xs uppercase text-slate-400 mb-1">Foto Máster (IA)</label>
-            <input type="file" id="newFotoMaster" accept="image/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-700 file:text-amber-400 hover:file:bg-slate-600 cursor-pointer">
-          </div>
-          <button type="submit" id="btnGuardarGuardia" class="bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2">
-            <i class="fa-solid fa-floppy-disk"></i> Guardar Personal
+<p class="text-xs text-slate-400">El horario habitual y los objetivos autorizados se administran desde <strong class="text-slate-200">Configurar</strong>. Los cambios de un día puntual se gestionan desde <strong class="text-slate-200">Turnos</strong>.</p>
+<form class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end" onsubmit="guardarVigilador(event)">
+<div>
+<label class="block text-xs uppercase text-slate-400 mb-1">N° Legajo</label>
+<input class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-amber-500" id="newLegajo" placeholder="Ej: 0286" required="" type="text"/>
+</div>
+<div>
+<label class="block text-xs uppercase text-slate-400 mb-1">Nombre Completo</label>
+<input class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-amber-500" id="newNombre" placeholder="Ej: Juan Pérez" required="" type="text"/>
+</div>
+<div>
+<label class="block text-xs uppercase text-slate-400 mb-1">Clave temporal</label>
+<div class="flex gap-2">
+<input class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm text-amber-400 font-mono font-bold tracking-widest text-center cursor-not-allowed" id="newPin" readonly="" required="" type="text"/>
+<button class="bg-slate-700 hover:bg-slate-600 text-slate-200 p-2 rounded-xl text-sm transition" onclick="generarPinAleatorio()" type="button">
+<i class="fa-solid fa-arrows-rotate"></i>
+</button>
+</div>
+</div>
+<div>
+<label class="block text-xs uppercase text-slate-400 mb-1">Foto Máster (IA)</label>
+<input accept="image/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-700 file:text-amber-400 hover:file:bg-slate-600 cursor-pointer" id="newFotoMaster" type="file"/>
+</div>
+<button class="bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2" id="btnGuardarGuardia" type="submit">
+<i class="fa-solid fa-floppy-disk"></i> Guardar Personal
           </button>
-        </form>
-      </div>
-
-      <div class="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-sm text-slate-300">
-            <thead class="bg-slate-950 text-slate-400 uppercase text-xs border-b border-slate-700">
-              <tr>
-                <th class="p-4">Legajo</th>
-                <th class="p-4">Nombre Oficial</th>
-                <th class="p-4 text-center">PIN</th>
-                <th class="p-4 text-center">Foto Máster</th>
-                <th class="p-4 text-center">Estado</th>
-                <th class="p-4 text-center">Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="cuerpoTablaPersonal" class="divide-y divide-slate-700/50">
-              <tr><td colspan="6" class="p-8 text-center text-slate-400">Cargando personal...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- TAB 4: CONFIGURACIÓN DE ASISTENCIA -->
-    <div id="tabConfiguracion" class="hidden space-y-6">
-      <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-5">
-        <div>
-          <h3 class="text-lg font-bold text-white flex items-center gap-2">
-            <i class="fa-solid fa-sliders text-emerald-400"></i> Configuración de asistencia
+</form>
+</div>
+<div class="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
+<div class="overflow-x-auto">
+<table class="w-full text-left text-sm text-slate-300">
+<thead class="bg-slate-950 text-slate-400 uppercase text-xs border-b border-slate-700">
+<tr>
+<th class="p-4">Legajo</th>
+<th class="p-4">Nombre Oficial</th>
+<th class="p-4 text-center">Acceso</th>
+<th class="p-4 text-center">Foto Máster</th>
+<th class="p-4 text-center">Estado</th>
+<th class="p-4 text-center">Acciones</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-700/50" id="cuerpoTablaPersonal">
+<tr><td class="p-8 text-center text-slate-400" colspan="6">Cargando personal...</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<!-- TAB 4: CONFIGURACIÓN DE ASISTENCIA -->
+<div class="hidden space-y-6" id="tabConfiguracion">
+<div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-5">
+<div>
+<h3 class="text-lg font-bold text-white flex items-center gap-2">
+<i class="fa-solid fa-sliders text-emerald-400"></i> Configuración de asistencia
           </h3>
-          <p class="text-xs text-slate-400 mt-1">Estos valores se aplican como configuración general de la empresa. El radio de ubicación se define individualmente en cada objetivo.</p>
-        </div>
-
-        <form onsubmit="guardarConfiguracionAsistenciaAdmin(event)" class="space-y-5">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="bg-slate-900/70 border border-slate-700 rounded-2xl p-4">
-              <label for="configToleranciaEntrada" class="block text-sm font-bold text-white mb-1">Tolerancia de entrada</label>
-              <p class="text-[11px] text-slate-400 mb-3">Tiempo posterior al horario programado durante el cual la llegada se considera dentro de tolerancia.</p>
-              <div class="flex items-center gap-2">
-                <input type="number" min="0" step="1" id="configToleranciaEntrada" class="w-32 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-emerald-300 font-mono focus:outline-none focus:border-emerald-500" value="15">
-                <span class="text-sm text-slate-300">minutos</span>
-              </div>
-            </div>
-
-            <div class="bg-slate-900/70 border border-slate-700 rounded-2xl p-4">
-              <label for="configToleranciaSalida" class="block text-sm font-bold text-white mb-1">Tolerancia de salida</label>
-              <p class="text-[11px] text-slate-400 mb-3">Tiempo posterior al horario programado durante el cual la salida no genera horas extra.</p>
-              <div class="flex items-center gap-2">
-                <input type="number" min="0" step="1" id="configToleranciaSalida" class="w-32 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-emerald-300 font-mono focus:outline-none focus:border-emerald-500" value="30">
-                <span class="text-sm text-slate-300">minutos</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4">
-            <div class="flex items-start gap-3">
-              <i class="fa-solid fa-circle-info text-emerald-400 mt-0.5"></i>
-              <div class="text-xs text-slate-300">
-                <p class="font-bold text-white mb-1">¿Cómo funciona?</p>
-                <p>La llegada anticipada al turno no suma horas antes del horario programado. Una llegada posterior a la tolerancia genera tardanza. La salida posterior al fin del turno permanece dentro de la tolerancia configurada y, superada esa ventana, comienza a computarse como tiempo extra.</p>
-              </div>
-            </div>
-          </div>
-
-          <div class="bg-slate-950/60 border border-slate-700 rounded-2xl p-4">
-            <div class="flex items-center justify-between gap-3 flex-wrap">
-              <div>
-                <p class="text-[11px] uppercase tracking-wider text-slate-500 font-bold">Configuración actual</p>
-                <p id="resumenConfiguracionAsistencia" class="text-sm text-slate-200 mt-1">Entrada: 15 min · Salida: 30 min</p>
-              </div>
-              <span id="estadoGuardadoConfiguracion" class="text-xs text-slate-500">Sin cambios pendientes</span>
-            </div>
-          </div>
-
-          <button type="submit" id="btnGuardarConfiguracionAsistencia" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
-            <i class="fa-solid fa-floppy-disk"></i> Guardar configuración
+<p class="text-xs text-slate-400 mt-1">Estos valores se aplican como configuración general de la empresa. El radio de ubicación se define individualmente en cada objetivo.</p>
+</div>
+<form class="space-y-5" onsubmit="guardarConfiguracionAsistenciaAdmin(event)">
+<div class="bg-slate-900/70 border border-slate-700 rounded-2xl p-4 md:col-span-2">
+<label class="block text-sm font-bold text-white mb-1" for="configMetodoIdentificacion">Método de identificación de la empresa</label>
+<p class="text-[11px] text-slate-400 mb-3">Define cómo se valida la identidad en la terminal de fichada. FOTO usa reconocimiento facial local; WEBAUTHN usa la biometría/credencial del dispositivo.</p>
+<div class="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+<select class="w-full sm:w-80 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white" id="configMetodoIdentificacion">
+<option value="FOTO">FOTO + reconocimiento facial</option>
+<option value="WEBAUTHN">Biometría del dispositivo (WebAuthn)</option>
+</select>
+<span class="text-[11px] text-slate-500">El cambio se aplica a la terminal en la próxima carga.</span>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="bg-slate-900/70 border border-slate-700 rounded-2xl p-4">
+<label class="block text-sm font-bold text-white mb-1" for="configToleranciaEntrada">Tolerancia de entrada</label>
+<p class="text-[11px] text-slate-400 mb-3">Tiempo posterior al horario programado durante el cual la llegada se considera dentro de tolerancia.</p>
+<div class="flex items-center gap-2">
+<input class="w-32 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-emerald-300 font-mono focus:outline-none focus:border-emerald-500" id="configToleranciaEntrada" min="0" step="1" type="number" value="15"/>
+<span class="text-sm text-slate-300">minutos</span>
+</div>
+</div>
+<div class="bg-slate-900/70 border border-slate-700 rounded-2xl p-4">
+<label class="block text-sm font-bold text-white mb-1" for="configToleranciaSalida">Tolerancia de salida</label>
+<p class="text-[11px] text-slate-400 mb-3">Tiempo posterior al horario programado durante el cual la salida no genera horas extra.</p>
+<div class="flex items-center gap-2">
+<input class="w-32 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-emerald-300 font-mono focus:outline-none focus:border-emerald-500" id="configToleranciaSalida" min="0" step="1" type="number" value="30"/>
+<span class="text-sm text-slate-300">minutos</span>
+</div>
+</div>
+</div>
+<div class="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4">
+<div class="flex items-start gap-3">
+<i class="fa-solid fa-circle-info text-emerald-400 mt-0.5"></i>
+<div class="text-xs text-slate-300">
+<p class="font-bold text-white mb-1">¿Cómo funciona?</p>
+<p>La llegada anticipada al turno no suma horas antes del horario programado. Una llegada posterior a la tolerancia genera tardanza. La salida posterior al fin del turno permanece dentro de la tolerancia configurada y, superada esa ventana, comienza a computarse como tiempo extra.</p>
+</div>
+</div>
+</div>
+<div class="bg-slate-950/60 border border-slate-700 rounded-2xl p-4">
+<div class="flex items-center justify-between gap-3 flex-wrap">
+<div>
+<p class="text-[11px] uppercase tracking-wider text-slate-500 font-bold">Configuración actual</p>
+<p class="text-sm text-slate-200 mt-1" id="resumenConfiguracionAsistencia">Entrada: 15 min · Salida: 30 min</p>
+</div>
+<span class="text-xs text-slate-500" id="estadoGuardadoConfiguracion">Sin cambios pendientes</span>
+</div>
+</div>
+<button class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg" id="btnGuardarConfiguracionAsistencia" type="submit">
+<i class="fa-solid fa-floppy-disk"></i> Guardar configuración
           </button>
-        </form>
-      </div>
-
-      <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
-        <div class="flex items-center gap-2 mb-3">
-          <i class="fa-solid fa-location-dot text-sky-400"></i>
-          <h3 class="font-bold text-white">Perímetro permitido por objetivo</h3>
-        </div>
-        <p class="text-xs text-slate-400">El radio no se configura aquí porque puede variar según el puesto. Cada objetivo puede tener su propio perímetro: 25 m, 50 m, 75 m, 100 m, 150 m, 200 m o un valor personalizado.</p>
-      </div>
-    </div>
-
-    <!-- TAB 5: OBJETIVOS -->
-    <div id="tabObjetivos" class="hidden space-y-6">
-      <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
-        <div>
-          <h3 class="text-lg font-bold text-white flex items-center gap-2">
-            <i class="fa-solid fa-building-circle-check text-sky-500"></i> Registrar Nuevo Objetivo / Puesto
+</form>
+</div>
+<div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
+<div class="flex items-center gap-2 mb-3">
+<i class="fa-solid fa-location-dot text-sky-400"></i>
+<h3 class="font-bold text-white">Perímetro permitido por objetivo</h3>
+</div>
+<p class="text-xs text-slate-400">El radio no se configura aquí porque puede variar según el puesto. Cada objetivo puede tener su propio perímetro: 25 m, 50 m, 75 m, 100 m, 150 m, 200 m o un valor personalizado.</p>
+</div>
+</div>
+<!-- TAB 5: OBJETIVOS -->
+<div class="hidden space-y-6" id="tabObjetivos">
+<div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
+<div>
+<h3 class="text-lg font-bold text-white flex items-center gap-2">
+<i class="fa-solid fa-building-circle-check text-sky-500"></i> Registrar Nuevo Objetivo / Puesto
           </h3>
-          <p class="text-xs text-slate-400 mt-1">Escribí la dirección exacta. Podés buscarla en OpenStreetMap o abrirla directamente en Google Maps. Si Google Maps encuentra el domicilio, copiá sus coordenadas y pegálas abajo; también podés mover el marcador del mapa o cargar las coordenadas manualmente.</p>
-        </div>
-
-        <form onsubmit="guardarObjetivo(event)" class="space-y-4">
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-            <div>
-              <label class="block text-xs uppercase text-slate-400 mb-1">Nombre del Objetivo</label>
-              <input type="text" id="newObjetivo" required placeholder="Ej: Edificio Central" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500">
-            </div>
-            <div class="md:col-span-2">
-              <label class="block text-xs uppercase text-slate-400 mb-1">Dirección exacta</label>
-              <div class="flex flex-col sm:flex-row gap-2">
-                <input type="text" id="newDireccionObjetivo" required placeholder="Ej: Americo Vespucio 651, Bella Vista, San Miguel, Buenos Aires" class="flex-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500">
-                <button type="button" onclick="buscarDireccionObjetivo('nuevo')" id="btnBuscarDireccionNuevo" class="bg-sky-600 hover:bg-sky-500 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 whitespace-nowrap">
-                  <i class="fa-solid fa-magnifying-glass"></i> Buscar dirección
+<p class="text-xs text-slate-400 mt-1">Escribí la dirección exacta. Podés buscarla en OpenStreetMap o abrirla directamente en Google Maps. Si Google Maps encuentra el domicilio, copiá sus coordenadas y pegálas abajo; también podés mover el marcador del mapa o cargar las coordenadas manualmente.</p>
+</div>
+<form class="space-y-4" onsubmit="guardarObjetivo(event)">
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+<div>
+<label class="block text-xs uppercase text-slate-400 mb-1">Nombre del Objetivo</label>
+<input class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500" id="newObjetivo" placeholder="Ej: Edificio Central" required="" type="text"/>
+</div>
+<div class="md:col-span-2">
+<label class="block text-xs uppercase text-slate-400 mb-1">Dirección exacta</label>
+<div class="flex flex-col sm:flex-row gap-2">
+<input class="flex-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500" id="newDireccionObjetivo" placeholder="Ej: Americo Vespucio 651, Bella Vista, San Miguel, Buenos Aires" required="" type="text"/>
+<button class="bg-sky-600 hover:bg-sky-500 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 whitespace-nowrap" id="btnBuscarDireccionNuevo" onclick="buscarDireccionObjetivo('nuevo')" type="button">
+<i class="fa-solid fa-magnifying-glass"></i> Buscar dirección
                 </button>
-                <button type="button" onclick="buscarDireccionGoogleObjetivo('nuevo')" class="bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 whitespace-nowrap">
-                  <i class="fa-brands fa-google"></i> Google Maps
+<button class="bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 whitespace-nowrap" onclick="buscarDireccionGoogleObjetivo('nuevo')" type="button">
+<i class="fa-brands fa-google"></i> Google Maps
                 </button>
-              </div>
-            </div>
-          </div>
-
-          <div id="resultadoDireccionNuevo" class="hidden"></div>
-          <div id="mapaObjetivoNuevo" class="hidden rounded-2xl overflow-hidden border border-slate-700 shadow-inner h-72"></div>
-
-          <div class="text-xs text-slate-400 bg-slate-950/50 border border-slate-700 rounded-xl p-3">
-            <i class="fa-brands fa-google text-red-400 mr-1"></i>
-            <strong class="text-slate-200">Si necesitás precisión de domicilio:</strong>
+</div>
+</div>
+</div>
+<div class="hidden" id="resultadoDireccionNuevo"></div>
+<div class="hidden rounded-2xl overflow-hidden border border-slate-700 shadow-inner h-72" id="mapaObjetivoNuevo"></div>
+<div class="text-xs text-slate-400 bg-slate-950/50 border border-slate-700 rounded-xl p-3">
+<i class="fa-brands fa-google text-red-400 mr-1"></i>
+<strong class="text-slate-200">Si necesitás precisión de domicilio:</strong>
             abrí Google Maps, ubicá el punto exacto, copiá las coordenadas y pegálas en los campos de abajo.
           </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-            <div>
-              <label class="block text-xs uppercase text-slate-400 mb-1">Latitud</label>
-              <input type="text" id="newLatitudObjetivo" inputmode="decimal" placeholder="Ej: -34.545123" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-emerald-300 font-mono focus:outline-none">
-            </div>
-            <div>
-              <label class="block text-xs uppercase text-slate-400 mb-1">Longitud</label>
-              <input type="text" id="newLongitudObjetivo" inputmode="decimal" placeholder="Ej: -58.712345" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-emerald-300 font-mono focus:outline-none">
-            </div>
-            <div class="flex flex-col gap-2">
-              <button type="button" onclick="aplicarCoordenadasManualesObjetivo('nuevo')" class="bg-sky-700 hover:bg-sky-600 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2">
-                <i class="fa-solid fa-map-pin"></i> Aplicar coordenadas manuales
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+<div>
+<label class="block text-xs uppercase text-slate-400 mb-1">Latitud</label>
+<input class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-emerald-300 font-mono focus:outline-none" id="newLatitudObjetivo" inputmode="decimal" placeholder="Ej: -34.545123" type="text"/>
+</div>
+<div>
+<label class="block text-xs uppercase text-slate-400 mb-1">Longitud</label>
+<input class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-emerald-300 font-mono focus:outline-none" id="newLongitudObjetivo" inputmode="decimal" placeholder="Ej: -58.712345" type="text"/>
+</div>
+<div class="flex flex-col gap-2">
+<button class="bg-sky-700 hover:bg-sky-600 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2" onclick="aplicarCoordenadasManualesObjetivo('nuevo')" type="button">
+<i class="fa-solid fa-map-pin"></i> Aplicar coordenadas manuales
               </button>
-              <button type="button" onclick="usarGPSObjetivo('nuevo')" id="btnGPSNuevo" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2">
-                <i class="fa-solid fa-location-crosshairs"></i> Usar GPS actual
+<button class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2" id="btnGPSNuevo" onclick="usarGPSObjetivo('nuevo')" type="button">
+<i class="fa-solid fa-location-crosshairs"></i> Usar GPS actual
               </button>
-            </div>
-          </div>
-
-          <div id="infoUbicacionNuevo" class="hidden bg-sky-500/10 border border-sky-500/20 rounded-xl p-3 text-xs text-sky-200"></div>
-
-          <div class="bg-slate-950/50 border border-slate-700 rounded-2xl p-4 space-y-3">
-            <div>
-              <label for="newRadioPermitido" class="block text-xs uppercase text-slate-400 mb-1">Radio permitido para fichar</label>
-              <p class="text-[11px] text-slate-500 mb-3">Distancia máxima respecto de las coordenadas del objetivo. Valor predeterminado: 100 metros.</p>
-              <div class="flex flex-wrap gap-2 mb-3">
-                <button type="button" onclick="setRadioObjetivoNuevo(25)" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 text-slate-300 hover:border-sky-500 hover:text-white">25 m</button>
-                <button type="button" onclick="setRadioObjetivoNuevo(50)" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 text-slate-300 hover:border-sky-500 hover:text-white">50 m</button>
-                <button type="button" onclick="setRadioObjetivoNuevo(75)" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 text-slate-300 hover:border-sky-500 hover:text-white">75 m</button>
-                <button type="button" onclick="setRadioObjetivoNuevo(100)" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-600/20 border border-sky-500/30 text-sky-300 hover:bg-sky-600/30">100 m</button>
-                <button type="button" onclick="setRadioObjetivoNuevo(150)" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 text-slate-300 hover:border-sky-500 hover:text-white">150 m</button>
-                <button type="button" onclick="setRadioObjetivoNuevo(200)" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 text-slate-300 hover:border-sky-500 hover:text-white">200 m</button>
-              </div>
-              <div class="flex items-center gap-2">
-                <input type="number" min="1" step="1" id="newRadioPermitido" value="100" class="w-40 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-sky-300 font-mono focus:outline-none focus:border-sky-500">
-                <span class="text-sm text-slate-300">metros</span>
-              </div>
-              <div class="mt-3 text-[11px] text-slate-300 bg-sky-500/5 border border-sky-500/10 rounded-lg px-3 py-2"><i class="fa-solid fa-circle-info text-sky-400 mr-1"></i><span id="previewRadioObjetivoNuevo">Radio actual: 100 metros</span></div>
-              <div class="mt-2 text-[11px] text-slate-500"><i class="fa-solid fa-shield-location-dot text-sky-400 mr-1"></i>Las fichadas realizadas fuera de este perímetro serán rechazadas y generarán una alerta al supervisor.</div>
-            </div>
-          </div>
-
-          <button type="submit" id="btnGuardarObj" class="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2">
-            <i class="fa-solid fa-plus"></i> Añadir Objetivo
+</div>
+</div>
+<div class="hidden bg-sky-500/10 border border-sky-500/20 rounded-xl p-3 text-xs text-sky-200" id="infoUbicacionNuevo"></div>
+<div class="bg-slate-950/50 border border-slate-700 rounded-2xl p-4 space-y-3">
+<div>
+<label class="block text-xs uppercase text-slate-400 mb-1" for="newRadioPermitido">Radio permitido para fichar</label>
+<p class="text-[11px] text-slate-500 mb-3">Distancia máxima respecto de las coordenadas del objetivo. Valor predeterminado: 100 metros.</p>
+<div class="flex flex-wrap gap-2 mb-3">
+<button class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 text-slate-300 hover:border-sky-500 hover:text-white" onclick="setRadioObjetivoNuevo(25)" type="button">25 m</button>
+<button class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 text-slate-300 hover:border-sky-500 hover:text-white" onclick="setRadioObjetivoNuevo(50)" type="button">50 m</button>
+<button class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 text-slate-300 hover:border-sky-500 hover:text-white" onclick="setRadioObjetivoNuevo(75)" type="button">75 m</button>
+<button class="px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-600/20 border border-sky-500/30 text-sky-300 hover:bg-sky-600/30" onclick="setRadioObjetivoNuevo(100)" type="button">100 m</button>
+<button class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 text-slate-300 hover:border-sky-500 hover:text-white" onclick="setRadioObjetivoNuevo(150)" type="button">150 m</button>
+<button class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 text-slate-300 hover:border-sky-500 hover:text-white" onclick="setRadioObjetivoNuevo(200)" type="button">200 m</button>
+</div>
+<div class="flex items-center gap-2">
+<input class="w-40 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-sky-300 font-mono focus:outline-none focus:border-sky-500" id="newRadioPermitido" min="1" step="1" type="number" value="100"/>
+<span class="text-sm text-slate-300">metros</span>
+</div>
+<div class="mt-3 text-[11px] text-slate-300 bg-sky-500/5 border border-sky-500/10 rounded-lg px-3 py-2"><i class="fa-solid fa-circle-info text-sky-400 mr-1"></i><span id="previewRadioObjetivoNuevo">Radio actual: 100 metros</span></div>
+<div class="mt-2 text-[11px] text-slate-500"><i class="fa-solid fa-shield-location-dot text-sky-400 mr-1"></i>Las fichadas realizadas fuera de este perímetro serán rechazadas y generarán una alerta al supervisor.</div>
+</div>
+</div>
+<button class="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2" id="btnGuardarObj" type="submit">
+<i class="fa-solid fa-plus"></i> Añadir Objetivo
           </button>
-        </form>
-      </div>
-
-      <div class="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-sm text-slate-300">
-            <thead class="bg-slate-950 text-slate-400 uppercase text-xs border-b border-slate-700">
-              <tr>
-                <th class="p-4">ID</th>
-                <th class="p-4">Nombre del Objetivo</th>
-                <th class="p-4">Dirección</th>
-                <th class="p-4">Coordenadas</th>
-                <th class="p-4 text-center">Radio permitido</th>
-                <th class="p-4 text-center">Estado</th>
-                <th class="p-4 text-center">Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="cuerpoTablaObjetivos" class="divide-y divide-slate-700/50">
-              <tr><td colspan="7" class="p-8 text-center text-slate-400">Cargando objetivos...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-  </div>
-
-  <!-- MODAL DE ALERTA DE PÁNICO DE EMERGENCIA CRÍTICA (ESTÁTICO PARA FACILITAR LECTURA Y CLICS) -->
-  <div id="modalPanicoAdmin" class="fixed inset-0 bg-rose-950/90 backdrop-blur-md hidden flex items-center justify-center p-4 z-50">
-    <div class="bg-slate-900 border-2 border-rose-500 rounded-2xl p-6 max-w-md w-full text-center space-y-5 shadow-2xl">
-      <div class="w-20 h-20 bg-rose-600 text-white rounded-full flex items-center justify-center mx-auto text-3xl animate-pulse shadow-lg shadow-rose-600/50">
-        <i class="fa-solid fa-triangle-exclamation"></i>
-      </div>
-      <div>
-        <span class="bg-rose-500/20 text-rose-400 border border-rose-500/30 font-black px-3 py-1 rounded-full text-xs uppercase tracking-widest inline-block mb-2">¡ALERTA DE PÁNICO ACTIVADA!</span>
-        <h2 id="panicoNombre" class="text-2xl font-black text-white">Vigilador En Riesgo</h2>
-        <p id="panicoDetalle" class="text-sm text-slate-300 mt-1"></p>
-        <p id="panicoHora" class="text-xs font-mono text-rose-400 mt-2 font-bold"></p>
-      </div>
-      
-      <div id="panicoUbicacionBox" class="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs">
-        <a id="panicoMapaUrl" href="#" target="_blank" class="text-sky-400 hover:underline font-bold flex items-center justify-center gap-1.5">
-          <i class="fa-solid fa-map-location-dot"></i> Ver Ubicación GPS en Google Maps
+</form>
+</div>
+<div class="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
+<div class="overflow-x-auto">
+<table class="w-full text-left text-sm text-slate-300">
+<thead class="bg-slate-950 text-slate-400 uppercase text-xs border-b border-slate-700">
+<tr>
+<th class="p-4">ID</th>
+<th class="p-4">Nombre del Objetivo</th>
+<th class="p-4">Dirección</th>
+<th class="p-4">Coordenadas</th>
+<th class="p-4 text-center">Radio permitido</th>
+<th class="p-4 text-center">Estado</th>
+<th class="p-4 text-center">Acciones</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-700/50" id="cuerpoTablaObjetivos">
+<tr><td class="p-8 text-center text-slate-400" colspan="7">Cargando objetivos...</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+<!-- MODAL DE ALERTA DE PÁNICO DE EMERGENCIA CRÍTICA (ESTÁTICO PARA FACILITAR LECTURA Y CLICS) -->
+<div class="fixed inset-0 bg-rose-950/90 backdrop-blur-md hidden flex items-center justify-center p-4 z-50" id="modalPanicoAdmin">
+<div class="bg-slate-900 border-2 border-rose-500 rounded-2xl p-6 max-w-md w-full text-center space-y-5 shadow-2xl">
+<div class="w-20 h-20 bg-rose-600 text-white rounded-full flex items-center justify-center mx-auto text-3xl animate-pulse shadow-lg shadow-rose-600/50">
+<i class="fa-solid fa-triangle-exclamation"></i>
+</div>
+<div>
+<span class="bg-rose-500/20 text-rose-400 border border-rose-500/30 font-black px-3 py-1 rounded-full text-xs uppercase tracking-widest inline-block mb-2">¡ALERTA DE PÁNICO ACTIVADA!</span>
+<h2 class="text-2xl font-black text-white" id="panicoNombre">Vigilador En Riesgo</h2>
+<p class="text-sm text-slate-300 mt-1" id="panicoDetalle"></p>
+<p class="text-xs font-mono text-rose-400 mt-2 font-bold" id="panicoHora"></p>
+</div>
+<div class="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs" id="panicoUbicacionBox">
+<a class="text-sky-400 hover:underline font-bold flex items-center justify-center gap-1.5" href="#" id="panicoMapaUrl" target="_blank">
+<i class="fa-solid fa-map-location-dot"></i> Ver Ubicación GPS en Google Maps
         </a>
-      </div>
-
-      <button onclick="apagarAlertaPanico()" class="w-full bg-rose-600 hover:bg-rose-500 text-white font-black py-3.5 rounded-xl text-base transition shadow-xl flex items-center justify-center gap-2 cursor-pointer">
-        <i class="fa-solid fa-volume-xmark text-xl"></i> APAGAR ALARMA / ATENDER
+</div>
+<button class="w-full bg-rose-600 hover:bg-rose-500 text-white font-black py-3.5 rounded-xl text-base transition shadow-xl flex items-center justify-center gap-2 cursor-pointer" onclick="apagarAlertaPanico()">
+<i class="fa-solid fa-volume-xmark text-xl"></i> APAGAR ALARMA / ATENDER
       </button>
-    </div>
-  </div>
-
-  <!-- MODAL VER FOTO SIMPLE -->
-  <div id="modalFoto" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
-    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4 max-w-lg w-full relative space-y-4">
-      <button onclick="cerrarModal()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-      <h3 class="font-bold text-white text-base">Archivo Adjunto / Foto</h3>
-      <div class="w-full h-80 bg-slate-950 rounded-xl overflow-hidden flex items-center justify-center relative">
-        <img id="imgModal" src="" alt="Foto Adjunta" class="w-full h-full object-contain">
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL ACCION DE GESTION DE FRAUDE -->
-  <div id="modalAccionFraude" class="fixed inset-0 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-50">
-    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full relative space-y-5">
-      <button onclick="cerrarModalAccionFraude()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-
-      <div class="flex items-center gap-3 border-b border-slate-700 pb-3">
-        <div class="w-10 h-10 bg-rose-500/20 border border-rose-500/40 rounded-xl flex items-center justify-center text-rose-400 text-lg">
-          <i class="fa-solid fa-shield-cat"></i>
-        </div>
-        <div>
-          <h3 class="font-bold text-white text-base">Gestión de Fraude</h3>
-          <p class="text-xs text-slate-400">Toma una acción sobre esta alerta</p>
-        </div>
-      </div>
-
-      <input type="hidden" id="fraudeFirebaseId">
-      <div id="fraudeDetalleFichada" class="p-3 bg-slate-900 border border-slate-700 rounded-xl text-xs space-y-1 text-slate-300"></div>
-
-      <div class="space-y-2">
-        <button onclick="aprobarFraudeManual()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-md">
-          <i class="fa-solid fa-circle-check"></i> Aprobar / Descartar Sospecha (Validar Marcación)
+</div>
+</div>
+<!-- MODAL VER FOTO SIMPLE -->
+<div class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50" id="modalFoto">
+<div class="bg-slate-800 border border-slate-700 rounded-2xl p-4 max-w-lg w-full relative space-y-4">
+<button class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl" onclick="cerrarModal()">
+<i class="fa-solid fa-xmark"></i>
+</button>
+<h3 class="font-bold text-white text-base">Archivo Adjunto / Foto</h3>
+<div class="w-full h-80 bg-slate-950 rounded-xl overflow-hidden flex items-center justify-center relative">
+<img alt="Foto Adjunta" class="w-full h-full object-contain" id="imgModal" src=""/>
+</div>
+</div>
+</div>
+<!-- MODAL ACCION DE GESTION DE FRAUDE -->
+<div class="fixed inset-0 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-50" id="modalAccionFraude">
+<div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full relative space-y-5">
+<button class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl" onclick="cerrarModalAccionFraude()">
+<i class="fa-solid fa-xmark"></i>
+</button>
+<div class="flex items-center gap-3 border-b border-slate-700 pb-3">
+<div class="w-10 h-10 bg-rose-500/20 border border-rose-500/40 rounded-xl flex items-center justify-center text-rose-400 text-lg">
+<i class="fa-solid fa-shield-cat"></i>
+</div>
+<div>
+<h3 class="font-bold text-white text-base">Gestión de Fraude</h3>
+<p class="text-xs text-slate-400">Toma una acción sobre esta alerta</p>
+</div>
+</div>
+<input id="fraudeFirebaseId" type="hidden"/>
+<div class="p-3 bg-slate-900 border border-slate-700 rounded-xl text-xs space-y-1 text-slate-300" id="fraudeDetalleFichada"></div>
+<div class="space-y-2">
+<button class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-md" onclick="aprobarFraudeManual()">
+<i class="fa-solid fa-circle-check"></i> Aprobar / Descartar Sospecha (Validar Marcación)
         </button>
-        <button onclick="eliminarFraudeMarca()" class="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-md">
-          <i class="fa-solid fa-ban"></i> Rechazar y Eliminar Fichada por Suplantación
+<button class="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-md" onclick="eliminarFraudeMarca()">
+<i class="fa-solid fa-ban"></i> Rechazar y Eliminar Fichada por Suplantación
         </button>
-        <button onclick="verAuditoriaDesdeAccion()" class="w-full bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold py-2 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2">
-          <i class="fa-solid fa-brain text-amber-400"></i> Ver Evidencia Comparativa
+<button class="w-full bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold py-2 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2" onclick="verAuditoriaDesdeAccion()">
+<i class="fa-solid fa-brain text-amber-400"></i> Ver Evidencia Comparativa
         </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL AUDITORÍA IA COMPARATIVO DE FOTOS -->
-  <div id="modalAuditoriaIA" class="fixed inset-0 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-50">
-    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-2xl w-full relative space-y-5">
-      <button onclick="cerrarModalAuditoria()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-
-      <div class="flex items-center gap-2 border-b border-slate-700 pb-3">
-        <i class="fa-solid fa-brain text-amber-400 text-xl"></i>
-        <h3 class="font-bold text-white text-lg">Informe de Auditoría Facial / IA</h3>
-      </div>
-
-      <!-- Resumen del Alerta -->
-      <div id="boxAlertaAuditoria" class="p-4 rounded-xl border flex flex-col gap-2">
-        <div class="flex justify-between items-center">
-          <span id="lblTipoAlerta" class="font-extrabold text-sm uppercase"></span>
-          <span id="lblDistanciaEuclidiana" class="text-xs font-mono bg-slate-900/80 px-2.5 py-1 rounded-md text-amber-300"></span>
-        </div>
-        <p id="lblMotivoFraude" class="text-xs text-slate-300 mt-1"></p>
-      </div>
-
-      <!-- Comparador de Fotos -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="bg-slate-900 border border-slate-700 p-3 rounded-xl text-center space-y-2">
-          <span class="text-xs font-semibold text-slate-400 block uppercase">Foto de Fichada</span>
-          <div class="w-full h-48 bg-slate-950 rounded-lg overflow-hidden flex items-center justify-center">
-            <img id="imgAuditoriaFichada" src="" class="w-full h-full object-contain">
-          </div>
-        </div>
-        
-        <div class="bg-slate-900 border border-slate-700 p-3 rounded-xl text-center space-y-2">
-          <span class="text-xs font-semibold text-slate-400 block uppercase">Foto Máster (Referencia)</span>
-          <div class="w-full h-48 bg-slate-950 rounded-lg overflow-hidden flex items-center justify-center">
-            <img id="imgAuditoriaMaster" src="" class="w-full h-full object-contain">
-          </div>
-        </div>
-      </div>
-
-      <div class="flex justify-end pt-2">
-        <button onclick="cerrarModalAuditoria()" class="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-4 py-2 rounded-xl text-sm transition">
+</div>
+</div>
+</div>
+<!-- MODAL AUDITORÍA IA COMPARATIVO DE FOTOS -->
+<div class="fixed inset-0 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-50" id="modalAuditoriaIA">
+<div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-2xl w-full relative space-y-5">
+<button class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl" onclick="cerrarModalAuditoria()">
+<i class="fa-solid fa-xmark"></i>
+</button>
+<div class="flex items-center gap-2 border-b border-slate-700 pb-3">
+<i class="fa-solid fa-brain text-amber-400 text-xl"></i>
+<h3 class="font-bold text-white text-lg">Informe de Auditoría Facial / IA</h3>
+</div>
+<!-- Resumen del Alerta -->
+<div class="p-4 rounded-xl border flex flex-col gap-2" id="boxAlertaAuditoria">
+<div class="flex justify-between items-center">
+<span class="font-extrabold text-sm uppercase" id="lblTipoAlerta"></span>
+<span class="text-xs font-mono bg-slate-900/80 px-2.5 py-1 rounded-md text-amber-300" id="lblDistanciaEuclidiana"></span>
+</div>
+<p class="text-xs text-slate-300 mt-1" id="lblMotivoFraude"></p>
+</div>
+<!-- Comparador de Fotos -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="bg-slate-900 border border-slate-700 p-3 rounded-xl text-center space-y-2">
+<span class="text-xs font-semibold text-slate-400 block uppercase">Foto de Fichada</span>
+<div class="w-full h-48 bg-slate-950 rounded-lg overflow-hidden flex items-center justify-center">
+<img class="w-full h-full object-contain" id="imgAuditoriaFichada" src=""/>
+</div>
+</div>
+<div class="bg-slate-900 border border-slate-700 p-3 rounded-xl text-center space-y-2">
+<span class="text-xs font-semibold text-slate-400 block uppercase">Foto Máster (Referencia)</span>
+<div class="w-full h-48 bg-slate-950 rounded-lg overflow-hidden flex items-center justify-center">
+<img class="w-full h-full object-contain" id="imgAuditoriaMaster" src=""/>
+</div>
+</div>
+</div>
+<div class="flex justify-end pt-2">
+<button class="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-4 py-2 rounded-xl text-sm transition" onclick="cerrarModalAuditoria()">
           Cerrar Detalle
         </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL EDITAR PERSONAL -->
-  <div id="modalEditarPersonal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
-    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full relative space-y-4">
-      <button onclick="cerrarModalEditar()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-      <h3 class="font-bold text-white text-lg flex items-center gap-2">
-        <i class="fa-solid fa-user-pen text-amber-500"></i> Editar Personal
+</div>
+</div>
+</div>
+<!-- MODAL EDITAR PERSONAL -->
+<div class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50" id="modalEditarPersonal">
+<div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full relative space-y-4">
+<button class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl" onclick="cerrarModalEditar()">
+<i class="fa-solid fa-xmark"></i>
+</button>
+<h3 class="font-bold text-white text-lg flex items-center gap-2">
+<i class="fa-solid fa-user-pen text-amber-500"></i> Editar Personal
       </h3>
-      <input type="hidden" id="editFirebaseId">
-      
-      <div class="space-y-3">
-        <div>
-          <label class="block text-xs uppercase text-slate-400 mb-1">N° Legajo</label>
-          <input type="text" id="editLegajo" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
-        </div>
-        <div>
-          <label class="block text-xs uppercase text-slate-400 mb-1">Nombre Completo</label>
-          <input type="text" id="editNombre" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
-        </div>
-        <div>
-          <label class="block text-xs uppercase text-slate-400 mb-1">PIN</label>
-          <input type="text" id="editPin" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-amber-400 font-mono font-bold tracking-widest text-center focus:outline-none focus:border-amber-500">
-        </div>
-        <div>
-          <label class="block text-xs uppercase text-slate-400 mb-1">Actualizar Foto Máster</label>
-          <input type="file" id="editFotoMaster" accept="image/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-700 file:text-amber-400 hover:file:bg-slate-600 cursor-pointer">
-          <div id="previewFotoActual" class="mt-2 text-xs font-semibold"></div>
-        </div>
-        <div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-700">
-          <div>
-            <label class="block text-xs uppercase text-slate-400 mb-1">Horario habitual - Inicio</label>
-            <input type="time" id="editHorarioInicio" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
-          </div>
-          <div>
-            <label class="block text-xs uppercase text-slate-400 mb-1">Horario habitual - Fin</label>
-            <input type="time" id="editHorarioFin" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
-          </div>
-        </div>
-        <div>
-          <label class="block text-xs uppercase text-slate-400 mb-2">Objetivos autorizados para este vigilador</label>
-          <div id="editObjetivosAsignados" class="max-h-40 overflow-y-auto bg-slate-950 border border-slate-700 rounded-xl p-3 space-y-2 text-xs">
-            <span class="text-slate-500">Cargando objetivos...</span>
-          </div>
-          <p class="text-[11px] text-slate-500 mt-1">Solo los objetivos marcados podrán aparecer en la pantalla de fichada de este vigilador.</p>
-        </div>
-      </div>
-
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" onclick="cerrarModalEditar()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2 rounded-xl text-sm font-semibold transition">Cancelar</button>
-        <button type="button" onclick="guardarEdicionPersonal()" id="btnGuardarEdicion" class="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-xl text-sm font-bold transition">Guardar Cambios</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL GESTIONAR TURNOS POR FECHA -->
-  <div id="modalTurnosPersonal" class="fixed inset-0 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-[70] overflow-y-auto">
-    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-4xl w-full relative space-y-5 my-6 shadow-2xl">
-      <button type="button" onclick="cerrarModalTurnosPersonal()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
-      <div class="pr-8">
-        <h3 class="font-bold text-white text-lg flex items-center gap-2"><i class="fa-solid fa-calendar-days text-sky-400"></i> Turnos y cambios por fecha</h3>
-        <p id="turnosPersonalSubtitulo" class="text-xs text-slate-400 mt-1"></p>
-      </div>
-      <form onsubmit="guardarAsignacionTurno(event)" class="grid grid-cols-1 md:grid-cols-5 gap-3 items-end bg-slate-900/60 border border-slate-700 rounded-xl p-4">
-        <input type="hidden" id="turnoFirebaseId">
-        <div><label class="block text-xs uppercase text-slate-400 mb-1">Fecha</label><input type="date" id="turnoFecha" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"></div>
-        <div><label class="block text-xs uppercase text-slate-400 mb-1">Objetivo</label><select id="turnoObjetivo" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"><option value="">Cargando...</option></select></div>
-        <div><label class="block text-xs uppercase text-slate-400 mb-1">Inicio</label><input type="time" id="turnoHoraInicio" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"></div>
-        <div><label class="block text-xs uppercase text-slate-400 mb-1">Fin</label><input type="time" id="turnoHoraFin" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"></div>
-        <button type="submit" id="btnGuardarTurno" class="bg-sky-600 hover:bg-sky-500 text-white font-bold py-2 rounded-xl text-sm"><i class="fa-solid fa-save"></i> Guardar</button>
-        <div class="md:col-span-5"><label class="block text-xs uppercase text-slate-400 mb-1">Observación (opcional)</label><input type="text" id="turnoObservacion" placeholder="Ej: Cobertura de franco / cambio de objetivo" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"></div>
-      </form>
-      <div class="bg-slate-900 border border-slate-700 rounded-xl overflow-hidden">
-        <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="bg-slate-950 text-slate-400 uppercase text-xs"><tr><th class="p-3">Fecha</th><th class="p-3">Objetivo</th><th class="p-3">Horario</th><th class="p-3">Observación</th><th class="p-3 text-center">Acciones</th></tr></thead><tbody id="cuerpoTurnosPersonal"><tr><td colspan="5" class="p-6 text-center text-slate-500">Cargando turnos...</td></tr></tbody></table></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL EDITAR OBJETIVO -->
-  <div id="modalEditarObjetivo" class="fixed inset-0 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-[60] overflow-y-auto">
-    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-3xl w-full relative space-y-5 my-6 shadow-2xl">
-      <button type="button" onclick="cerrarModalEditarObjetivo()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-      <div class="flex items-center gap-3 border-b border-slate-700 pb-3 pr-8">
-        <div class="w-10 h-10 bg-sky-500/20 border border-sky-500/40 rounded-xl flex items-center justify-center text-sky-400 text-lg">
-          <i class="fa-solid fa-location-dot"></i>
-        </div>
-        <div>
-          <h3 class="font-bold text-white text-base">Editar objetivo / puesto</h3>
-          <p class="text-xs text-slate-400">Corregí la dirección o seleccioná nuevamente la ubicación.</p>
-        </div>
-      </div>
-      <input type="hidden" id="editObjetivoId">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-xs uppercase text-slate-400 mb-1">Nombre del Objetivo</label>
-          <input type="text" id="editNombreObjetivo" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500">
-        </div>
-        <div>
-          <label class="block text-xs uppercase text-slate-400 mb-1">Dirección exacta</label>
-          <div class="flex gap-2">
-            <input type="text" id="editDireccionObjetivo" class="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500">
-            <button type="button" onclick="buscarDireccionObjetivo('editar')" id="btnBuscarDireccionEditar" class="bg-sky-600 hover:bg-sky-500 text-white font-bold px-4 rounded-xl text-sm transition" title="Buscar dirección">
-              <i class="fa-solid fa-magnifying-glass"></i>
-            </button>
-          </div>
-        </div>
-      </div>
-      <div id="resultadoDireccionEditar" class="hidden"></div>
-      <div id="mapaObjetivoEditar" class="rounded-2xl overflow-hidden border border-slate-700 h-72"></div>
-
-      <div class="bg-slate-950/50 border border-slate-700 rounded-2xl p-4 space-y-3">
-        <div>
-          <label for="editRadioPermitido" class="block text-xs uppercase text-slate-400 mb-1">Radio permitido para fichar</label>
-          <p class="text-[11px] text-slate-500 mb-3">La distancia máxima respecto del objetivo para aceptar una fichada.</p>
-          <div class="flex flex-wrap gap-2 mb-3">
-            <button type="button" onclick="setRadioObjetivoEditar(25)" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 text-slate-300 hover:border-sky-500 hover:text-white">25 m</button>
-            <button type="button" onclick="setRadioObjetivoEditar(50)" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 text-slate-300 hover:border-sky-500 hover:text-white">50 m</button>
-            <button type="button" onclick="setRadioObjetivoEditar(75)" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 text-slate-300 hover:border-sky-500 hover:text-white">75 m</button>
-            <button type="button" onclick="setRadioObjetivoEditar(100)" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-600/20 border border-sky-500/30 text-sky-300">100 m</button>
-            <button type="button" onclick="setRadioObjetivoEditar(150)" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 text-slate-300 hover:border-sky-500 hover:text-white">150 m</button>
-            <button type="button" onclick="setRadioObjetivoEditar(200)" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 text-slate-300 hover:border-sky-500 hover:text-white">200 m</button>
-          </div>
-          <div class="flex items-center gap-2">
-            <input type="number" min="1" step="1" id="editRadioPermitido" value="100" class="w-40 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-sky-300 font-mono focus:outline-none focus:border-sky-500">
-            <span class="text-sm text-slate-300">metros</span>
-          </div>
-        </div>
-          <div class="mt-3 text-[11px] text-slate-300 bg-sky-500/5 border border-sky-500/10 rounded-lg px-3 py-2"><i class="fa-solid fa-circle-info text-sky-400 mr-1"></i><span id="previewRadioObjetivoEditar">Radio actual: 100 metros</span></div>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <label class="block text-xs uppercase text-slate-400 mb-1">Latitud</label>
-          <input type="text" id="editLatitudObjetivo" inputmode="decimal" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-emerald-300 font-mono">
-        </div>
-        <div>
-          <label class="block text-xs uppercase text-slate-400 mb-1">Longitud</label>
-          <input type="text" id="editLongitudObjetivo" inputmode="decimal" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-emerald-300 font-mono">
-        </div>
-        <div class="flex flex-col gap-2">
-          <button type="button" onclick="aplicarCoordenadasManualesObjetivo('editar')" class="bg-sky-700 hover:bg-sky-600 text-white font-bold px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 py-2.5">
-            <i class="fa-solid fa-map-pin"></i> Aplicar coordenadas manuales
+<input id="editFirebaseId" type="hidden"/>
+<div class="space-y-3">
+<div>
+<label class="block text-xs uppercase text-slate-400 mb-1">N° Legajo</label>
+<input class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-amber-500" id="editLegajo" required="" type="text"/><p class="text-[10px] text-slate-500 mt-1">El legajo es la identidad de Firebase y no se puede cambiar desde esta edición.</p>
+</div>
+<div>
+<label class="block text-xs uppercase text-slate-400 mb-1">Nombre Completo</label>
+<input class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-amber-500" id="editNombre" required="" type="text"/>
+</div>
+<div class="bg-emerald-500/5 border border-emerald-500/20 rounded-xl px-4 py-3 md:col-span-1">
+<label class="block text-xs uppercase text-emerald-300 mb-1">Credencial de acceso</label>
+<p class="text-[11px] text-slate-400">La contraseña la administra Firebase Authentication y no se muestra ni se guarda en esta base de datos.</p>
+</div>
+<div>
+<label class="block text-xs uppercase text-slate-400 mb-1">Actualizar Foto Máster</label>
+<input accept="image/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-700 file:text-amber-400 hover:file:bg-slate-600 cursor-pointer" id="editFotoMaster" type="file"/>
+<div class="mt-2 text-xs font-semibold" id="previewFotoActual"></div>
+</div>
+<div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-700">
+<div>
+<label class="block text-xs uppercase text-slate-400 mb-1">Horario habitual - Inicio</label>
+<input class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500" id="editHorarioInicio" type="time"/>
+</div>
+<div>
+<label class="block text-xs uppercase text-slate-400 mb-1">Horario habitual - Fin</label>
+<input class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500" id="editHorarioFin" type="time"/>
+</div>
+</div>
+<div>
+<label class="block text-xs uppercase text-slate-400 mb-2">Objetivos autorizados para este vigilador</label>
+<div class="max-h-40 overflow-y-auto bg-slate-950 border border-slate-700 rounded-xl p-3 space-y-2 text-xs" id="editObjetivosAsignados">
+<span class="text-slate-500">Cargando objetivos...</span>
+</div>
+<p class="text-[11px] text-slate-500 mt-1">Solo los objetivos marcados podrán aparecer en la pantalla de fichada de este vigilador.</p>
+</div>
+</div>
+<div class="flex justify-end gap-2 pt-2">
+<button class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2 rounded-xl text-sm font-semibold transition" onclick="cerrarModalEditar()" type="button">Cancelar</button>
+<button class="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-xl text-sm font-bold transition" id="btnGuardarEdicion" onclick="guardarEdicionPersonal()" type="button">Guardar Cambios</button>
+</div>
+</div>
+</div>
+<!-- MODAL GESTIONAR TURNOS POR FECHA -->
+<div class="fixed inset-0 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-[70] overflow-y-auto" id="modalTurnosPersonal">
+<div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-4xl w-full relative space-y-5 my-6 shadow-2xl">
+<button class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl" onclick="cerrarModalTurnosPersonal()" type="button"><i class="fa-solid fa-xmark"></i></button>
+<div class="pr-8">
+<h3 class="font-bold text-white text-lg flex items-center gap-2"><i class="fa-solid fa-calendar-days text-sky-400"></i> Turnos y cambios por fecha</h3>
+<p class="text-xs text-slate-400 mt-1" id="turnosPersonalSubtitulo"></p>
+</div>
+<form class="grid grid-cols-1 md:grid-cols-5 gap-3 items-end bg-slate-900/60 border border-slate-700 rounded-xl p-4" onsubmit="guardarAsignacionTurno(event)">
+<input id="turnoFirebaseId" type="hidden"/>
+<div><label class="block text-xs uppercase text-slate-400 mb-1">Fecha</label><input class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" id="turnoFecha" required="" type="date"/></div>
+<div><label class="block text-xs uppercase text-slate-400 mb-1">Objetivo</label><select class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" id="turnoObjetivo" required=""><option value="">Cargando...</option></select></div>
+<div><label class="block text-xs uppercase text-slate-400 mb-1">Inicio</label><input class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" id="turnoHoraInicio" required="" type="time"/></div>
+<div><label class="block text-xs uppercase text-slate-400 mb-1">Fin</label><input class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" id="turnoHoraFin" required="" type="time"/></div>
+<button class="bg-sky-600 hover:bg-sky-500 text-white font-bold py-2 rounded-xl text-sm" id="btnGuardarTurno" type="submit"><i class="fa-solid fa-save"></i> Guardar</button>
+<div class="md:col-span-5"><label class="block text-xs uppercase text-slate-400 mb-1">Observación (opcional)</label><input class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" id="turnoObservacion" placeholder="Ej: Cobertura de franco / cambio de objetivo" type="text"/></div>
+</form>
+<div class="bg-slate-900 border border-slate-700 rounded-xl overflow-hidden">
+<div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="bg-slate-950 text-slate-400 uppercase text-xs"><tr><th class="p-3">Fecha</th><th class="p-3">Objetivo</th><th class="p-3">Horario</th><th class="p-3">Observación</th><th class="p-3 text-center">Acciones</th></tr></thead><tbody id="cuerpoTurnosPersonal"><tr><td class="p-6 text-center text-slate-500" colspan="5">Cargando turnos...</td></tr></tbody></table></div>
+</div>
+</div>
+</div>
+<!-- MODAL EDITAR OBJETIVO -->
+<div class="fixed inset-0 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-[60] overflow-y-auto" id="modalEditarObjetivo">
+<div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-3xl w-full relative space-y-5 my-6 shadow-2xl">
+<button class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl" onclick="cerrarModalEditarObjetivo()" type="button">
+<i class="fa-solid fa-xmark"></i>
+</button>
+<div class="flex items-center gap-3 border-b border-slate-700 pb-3 pr-8">
+<div class="w-10 h-10 bg-sky-500/20 border border-sky-500/40 rounded-xl flex items-center justify-center text-sky-400 text-lg">
+<i class="fa-solid fa-location-dot"></i>
+</div>
+<div>
+<h3 class="font-bold text-white text-base">Editar objetivo / puesto</h3>
+<p class="text-xs text-slate-400">Corregí la dirección o seleccioná nuevamente la ubicación.</p>
+</div>
+</div>
+<input id="editObjetivoId" type="hidden"/>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div>
+<label class="block text-xs uppercase text-slate-400 mb-1">Nombre del Objetivo</label>
+<input class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500" id="editNombreObjetivo" type="text"/>
+</div>
+<div>
+<label class="block text-xs uppercase text-slate-400 mb-1">Dirección exacta</label>
+<div class="flex gap-2">
+<input class="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500" id="editDireccionObjetivo" type="text"/>
+<button class="bg-sky-600 hover:bg-sky-500 text-white font-bold px-4 rounded-xl text-sm transition" id="btnBuscarDireccionEditar" onclick="buscarDireccionObjetivo('editar')" title="Buscar dirección" type="button">
+<i class="fa-solid fa-magnifying-glass"></i>
+</button>
+</div>
+</div>
+</div>
+<div class="hidden" id="resultadoDireccionEditar"></div>
+<div class="rounded-2xl overflow-hidden border border-slate-700 h-72" id="mapaObjetivoEditar"></div>
+<div class="bg-slate-950/50 border border-slate-700 rounded-2xl p-4 space-y-3">
+<div>
+<label class="block text-xs uppercase text-slate-400 mb-1" for="editRadioPermitido">Radio permitido para fichar</label>
+<p class="text-[11px] text-slate-500 mb-3">La distancia máxima respecto del objetivo para aceptar una fichada.</p>
+<div class="flex flex-wrap gap-2 mb-3">
+<button class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 text-slate-300 hover:border-sky-500 hover:text-white" onclick="setRadioObjetivoEditar(25)" type="button">25 m</button>
+<button class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 text-slate-300 hover:border-sky-500 hover:text-white" onclick="setRadioObjetivoEditar(50)" type="button">50 m</button>
+<button class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 text-slate-300 hover:border-sky-500 hover:text-white" onclick="setRadioObjetivoEditar(75)" type="button">75 m</button>
+<button class="px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-600/20 border border-sky-500/30 text-sky-300" onclick="setRadioObjetivoEditar(100)" type="button">100 m</button>
+<button class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 text-slate-300 hover:border-sky-500 hover:text-white" onclick="setRadioObjetivoEditar(150)" type="button">150 m</button>
+<button class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 text-slate-300 hover:border-sky-500 hover:text-white" onclick="setRadioObjetivoEditar(200)" type="button">200 m</button>
+</div>
+<div class="flex items-center gap-2">
+<input class="w-40 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-sky-300 font-mono focus:outline-none focus:border-sky-500" id="editRadioPermitido" min="1" step="1" type="number" value="100"/>
+<span class="text-sm text-slate-300">metros</span>
+</div>
+</div>
+<div class="mt-3 text-[11px] text-slate-300 bg-sky-500/5 border border-sky-500/10 rounded-lg px-3 py-2"><i class="fa-solid fa-circle-info text-sky-400 mr-1"></i><span id="previewRadioObjetivoEditar">Radio actual: 100 metros</span></div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<div>
+<label class="block text-xs uppercase text-slate-400 mb-1">Latitud</label>
+<input class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-emerald-300 font-mono" id="editLatitudObjetivo" inputmode="decimal" type="text"/>
+</div>
+<div>
+<label class="block text-xs uppercase text-slate-400 mb-1">Longitud</label>
+<input class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-emerald-300 font-mono" id="editLongitudObjetivo" inputmode="decimal" type="text"/>
+</div>
+<div class="flex flex-col gap-2">
+<button class="bg-sky-700 hover:bg-sky-600 text-white font-bold px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 py-2.5" onclick="aplicarCoordenadasManualesObjetivo('editar')" type="button">
+<i class="fa-solid fa-map-pin"></i> Aplicar coordenadas manuales
           </button>
-          <button type="button" onclick="usarGPSObjetivo('editar')" id="btnGPSEditar" class="bg-slate-700 hover:bg-slate-600 text-white font-bold px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 self-end py-2.5">
-            <i class="fa-solid fa-location-crosshairs"></i> Usar GPS actual
+<button class="bg-slate-700 hover:bg-slate-600 text-white font-bold px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 self-end py-2.5" id="btnGPSEditar" onclick="usarGPSObjetivo('editar')" type="button">
+<i class="fa-solid fa-location-crosshairs"></i> Usar GPS actual
           </button>
-        </div>
-      </div>
-      <div id="infoUbicacionEditar" class="hidden bg-sky-500/10 border border-sky-500/20 rounded-xl p-3 text-xs text-sky-200"></div>
-      <div class="flex justify-end gap-2 pt-2 border-t border-slate-700">
-        <button type="button" onclick="cerrarModalEditarObjetivo()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2.5 rounded-xl text-sm font-semibold transition">Cancelar</button>
-        <button type="button" onclick="guardarEdicionObjetivo()" id="btnGuardarEdicionObjetivo" class="bg-sky-600 hover:bg-sky-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition">Guardar Cambios</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL DE ALERTAS DE FICHADAS BLOQUEADAS -->
-  <div id="modalAlertasFichadas" class="fixed inset-0 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-[60]">
-    <div class="bg-slate-900 border border-rose-500/40 rounded-2xl p-5 md:p-6 max-w-2xl w-full relative shadow-2xl space-y-4 max-h-[85vh] overflow-hidden flex flex-col">
-      <button onclick="cerrarModalAlertasFichadas()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-      <div class="flex items-center gap-3 border-b border-slate-700 pb-3 pr-8">
-        <div class="w-11 h-11 bg-rose-500/15 border border-rose-500/30 rounded-xl flex items-center justify-center text-rose-400 text-lg">
-          <i class="fa-solid fa-bell"></i>
-        </div>
-        <div>
-          <h3 class="font-bold text-white text-lg">Alertas de fichadas</h3>
-          <p class="text-xs text-slate-400">Ubicación fuera de radio, llegadas tarde y salidas anticipadas detectadas automáticamente</p>
-        </div>
-      </div>
-      <div class="flex flex-wrap gap-2">
-        <button onclick="solicitarNotificacionesNavegador()" class="bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 px-3 py-2 rounded-lg text-xs font-semibold transition">
-          <i class="fa-solid fa-desktop"></i> Activar avisos del navegador
+</div>
+</div>
+<div class="hidden bg-sky-500/10 border border-sky-500/20 rounded-xl p-3 text-xs text-sky-200" id="infoUbicacionEditar"></div>
+<div class="flex justify-end gap-2 pt-2 border-t border-slate-700">
+<button class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2.5 rounded-xl text-sm font-semibold transition" onclick="cerrarModalEditarObjetivo()" type="button">Cancelar</button>
+<button class="bg-sky-600 hover:bg-sky-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition" id="btnGuardarEdicionObjetivo" onclick="guardarEdicionObjetivo()" type="button">Guardar Cambios</button>
+</div>
+</div>
+</div>
+<!-- MODAL DE ALERTAS DE FICHADAS BLOQUEADAS -->
+<div class="fixed inset-0 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-[60]" id="modalAlertasFichadas">
+<div class="bg-slate-900 border border-rose-500/40 rounded-2xl p-5 md:p-6 max-w-2xl w-full relative shadow-2xl space-y-4 max-h-[85vh] overflow-hidden flex flex-col">
+<button class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl" onclick="cerrarModalAlertasFichadas()">
+<i class="fa-solid fa-xmark"></i>
+</button>
+<div class="flex items-center gap-3 border-b border-slate-700 pb-3 pr-8">
+<div class="w-11 h-11 bg-rose-500/15 border border-rose-500/30 rounded-xl flex items-center justify-center text-rose-400 text-lg">
+<i class="fa-solid fa-bell"></i>
+</div>
+<div>
+<h3 class="font-bold text-white text-lg">Alertas de fichadas</h3>
+<p class="text-xs text-slate-400">Ubicación fuera de radio, llegadas tarde y salidas anticipadas detectadas automáticamente</p>
+</div>
+</div>
+<div class="flex flex-wrap gap-2">
+<button class="bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 px-3 py-2 rounded-lg text-xs font-semibold transition" onclick="solicitarNotificacionesNavegador()">
+<i class="fa-solid fa-desktop"></i> Activar avisos del navegador
         </button>
-        <button onclick="marcarTodasAlertasFichadasVistas()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-lg text-xs font-semibold transition">
-          <i class="fa-solid fa-check-double"></i> Marcar todas como vistas
+<button class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-lg text-xs font-semibold transition" onclick="marcarTodasAlertasFichadasVistas()">
+<i class="fa-solid fa-check-double"></i> Marcar todas como vistas
         </button>
-        <button onclick="cambiarTab('alertasUbicacion'); cerrarModalAlertasFichadas();" class="bg-slate-700/70 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-lg text-xs font-semibold transition">
-          <i class="fa-solid fa-box-archive"></i> Ver historial / archivadas
+<button class="bg-slate-700/70 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-lg text-xs font-semibold transition" onclick="cambiarTab('alertasUbicacion'); cerrarModalAlertasFichadas();">
+<i class="fa-solid fa-box-archive"></i> Ver historial / archivadas
         </button>
-      </div>
-      <div id="listaAlertasFichadas" class="overflow-y-auto space-y-2 pr-1"></div>
-    </div>
-  </div>
-
-  <script>
-    const PASSWORD_ADMIN = "admin123"; 
-    const URL_FIREBASE = "https://fir-asistencia-fad12-default-rtdb.firebaseio.com";
+</div>
+<div class="overflow-y-auto space-y-2 pr-1" id="listaAlertasFichadas"></div>
+</div>
+</div>
+<script>
+    const URL_BASE_FIREBASE = "https://fir-asistencia-fad12-default-rtdb.firebaseio.com";
+    const URL_FIREBASE = URL_BASE_FIREBASE;
 
     let datosMarcaciones = [];
     let datosNovedades = [];
@@ -859,10 +1099,12 @@
     // CONFIGURACIÓN DE ASISTENCIA
     // ==========================================
     const URL_CONFIGURACION_ASISTENCIA = `${URL_FIREBASE}/configuracionAsistencia.json`;
+    const URL_CONFIGURACION_EMPRESA = `${URL_FIREBASE}/configuracionEmpresa.json`;
     const CONFIGURACION_ASISTENCIA_DEFAULT = {
       toleranciaEntradaMinutos: 15,
       toleranciaSalidaMinutos: 30
     };
+    let metodoIdentificacionAdmin = 'FOTO';
     let configuracionAsistenciaAdmin = { ...CONFIGURACION_ASISTENCIA_DEFAULT };
 
     function normalizarConfiguracionAsistenciaAdmin(data) {
@@ -892,6 +1134,8 @@
       const inputEntrada = document.getElementById('configToleranciaEntrada');
       const inputSalida = document.getElementById('configToleranciaSalida');
       const resumen = document.getElementById('resumenConfiguracionAsistencia');
+      const metodo = document.getElementById('configMetodoIdentificacion');
+      if (metodo) metodo.value = metodoIdentificacionAdmin;
       if (inputEntrada) inputEntrada.value = entrada;
       if (inputSalida) inputSalida.value = salida;
       if (resumen) resumen.innerText = `Entrada: ${entrada} min · Salida: ${salida} min`;
@@ -899,12 +1143,19 @@
 
     async function cargarConfiguracionAsistenciaAdmin() {
       try {
-        const res = await fetch(`${URL_CONFIGURACION_ASISTENCIA}?ts=${Date.now()}`, { cache: 'no-store' });
+        const [res, resEmpresa] = await Promise.all([
+          fetch(`${URL_CONFIGURACION_ASISTENCIA}?ts=${Date.now()}`, { cache: 'no-store' }),
+          fetch(`${URL_CONFIGURACION_EMPRESA}?ts=${Date.now()}`, { cache: 'no-store' })
+        ]);
         const data = res.ok ? await res.json() : null;
+        const empresa = resEmpresa.ok ? await resEmpresa.json() : null;
         configuracionAsistenciaAdmin = normalizarConfiguracionAsistenciaAdmin(data || {});
+        const metodo = String(empresa?.metodoIdentificacion || 'FOTO').toUpperCase();
+        metodoIdentificacionAdmin = ['FOTO','WEBAUTHN'].includes(metodo) ? metodo : 'FOTO';
       } catch (e) {
         configuracionAsistenciaAdmin = { ...CONFIGURACION_ASISTENCIA_DEFAULT };
-        console.warn('No se pudo cargar la configuración de asistencia. Se usan los valores predeterminados.', e);
+        metodoIdentificacionAdmin = 'FOTO';
+        console.warn('No se pudo cargar la configuración de empresa/asistencia. Se usan valores predeterminados.', e);
       }
       actualizarVistaConfiguracionAsistencia();
     }
@@ -929,6 +1180,7 @@
         toleranciaSalidaMinutos: Math.round(salida),
         actualizadoEn: new Date().toISOString()
       };
+      const metodo = String(document.getElementById('configMetodoIdentificacion')?.value || 'FOTO').toUpperCase();
 
       if (btn) {
         btn.disabled = true;
@@ -944,6 +1196,13 @@
         });
         if (!res.ok) throw new Error('Firebase rechazó la configuración.');
 
+        const resEmpresa = await fetch(URL_CONFIGURACION_EMPRESA, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ metodoIdentificacion: ['FOTO','WEBAUTHN'].includes(metodo) ? metodo : 'FOTO', actualizadoEn: new Date().toISOString() })
+        });
+        if (!resEmpresa.ok) throw new Error('Firebase rechazó la configuración del método de identificación.');
+        metodoIdentificacionAdmin = metodo;
         configuracionAsistenciaAdmin = normalizarConfiguracionAsistenciaAdmin(payload);
         actualizarVistaConfiguracionAsistencia();
         if (estado) estado.innerText = `Guardado: ${new Date().toLocaleString('es-AR', { hour12: false })}`;
@@ -2296,28 +2555,49 @@
       }
     }
 
-    window.onload = function() {
+    window.addEventListener('load', async function() {
       generarPinAleatorio();
-      if (sessionStorage.getItem('auth_admin') === 'true') {
-        mostrarAdmin();
+      try {
+        await DAAuth.init();
+        const user = await DAAuth.currentUser();
+        if (user) {
+          try {
+            await DAAuth.requireRole('admin');
+            mostrarAdmin();
+          } catch (e) {
+            await DAAuth.signOut().catch(() => {});
+            document.getElementById('msgErrorPassAdmin').classList.remove('hidden');
+            document.getElementById('msgErrorPassAdmin').querySelector('i').nextSibling.textContent = ' Esta cuenta no tiene rol de administrador.';
+          }
+        }
+      } catch (e) {
+        const msg = document.getElementById('msgErrorPassAdmin');
+        if (msg) {
+          msg.classList.remove('hidden');
+          msg.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> Configure Firebase Authentication en companies.json antes de usar el Centro de Operaciones.';
+        }
       }
-    };
+    });
 
     function generarPinAleatorio() {
-      const pin = Math.floor(1000 + Math.random() * 9000).toString();
+      const pin = String(Math.floor(100000 + Math.random() * 900000));
       const inputPin = document.getElementById('newPin');
       if (inputPin) inputPin.value = pin;
     }
 
-    function validarPasswordAdmin(e) {
+    async function validarPasswordAdmin(e) {
       e.preventDefault();
-      const input = document.getElementById('inputPassAdmin').value;
+      const email = document.getElementById('inputEmailAdmin').value.trim();
+      const password = document.getElementById('inputPassAdmin').value;
       const errorMsg = document.getElementById('msgErrorPassAdmin');
+      errorMsg.classList.add('hidden');
 
-      if (input === PASSWORD_ADMIN) {
-        sessionStorage.setItem('auth_admin', 'true');
+      try {
+        await DAAuth.signInWithEmail(email, password);
+        await DAAuth.requireRole('admin');
         mostrarAdmin();
-      } else {
+      } catch (err) {
+        console.error(err);
         errorMsg.classList.remove('hidden');
         document.getElementById('inputPassAdmin').value = '';
         document.getElementById('inputPassAdmin').focus();
@@ -2332,11 +2612,11 @@
       iniciarEscuchaAlertasFichadas();
     }
 
-    function cerrarSesionAdmin() {
-      sessionStorage.removeItem('auth_admin');
+    async function cerrarSesionAdmin() {
       if (intervaloPanicoPoll) clearInterval(intervaloPanicoPoll);
       if (intervaloAlertasFichadas) clearInterval(intervaloAlertasFichadas);
       detenerSonidoSirena();
+      await DAAuth.signOut().catch(() => {});
       location.reload();
     }
 
@@ -2418,7 +2698,7 @@
                 legajoStr,
                 d.nombre || '',
                 'Personal',
-                d.pin || '',
+                'Firebase Auth',
                 d.estado || 'ACTIVO',
                 id,
                 d.fotoMaster || ''
@@ -3149,7 +3429,7 @@
       registros.forEach(fila => {
         const legajoStr = String(fila[0]);
         const nombreStr = fila[1] || '';
-        const pinStr = fila[3] || '****';
+        const pinStr = 'Administrada por Firebase Auth';
         const estadoStr = fila[4] || 'ACTIVO';
         const firebaseId = fila[5];
         const fotoMaster = fila[6] || '';
@@ -3166,7 +3446,7 @@
         tr.innerHTML = `
           <td class="p-4 font-bold text-amber-400">${escaparHtml(legajoStr)}</td>
           <td class="p-4 font-medium text-white">${escaparHtml(nombreStr)}<div class="text-[11px] text-slate-500 mt-1">${escaparHtml(horarioTexto)} · ${escaparHtml(objetivosTexto)}</div></td>
-          <td class="p-4 text-center font-mono text-slate-400">${escaparHtml(pinStr)}</td>
+          <td class="p-4 text-center text-xs text-emerald-300">${escaparHtml(pinStr)}</td>
           <td class="p-4 text-center">${btnFotoMaster}</td>
           <td class="p-4 text-center"><span class="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded text-xs">${escaparHtml(estadoStr)}</span></td>
           <td class="p-4 text-center"><div class="flex flex-wrap justify-center gap-2">
@@ -3182,11 +3462,11 @@
       e.preventDefault();
       const btn = document.getElementById('btnGuardarGuardia');
       btn.disabled = true;
-      btn.innerText = "Guardando...";
+      btn.innerText = "Creando cuenta...";
 
-      const pinGenerado = document.getElementById('newPin').value;
-      const legajoIngresado = document.getElementById('newLegajo').value.trim();
-      const nombreIngresado = document.getElementById('newNombre').value.trim();
+      const passwordTemporal = document.getElementById('newPin').value.trim();
+      const legajo = document.getElementById('newLegajo').value.trim();
+      const nombre = document.getElementById('newNombre').value.trim();
       const inputFotoMaster = document.getElementById('newFotoMaster');
 
       let fotoMasterBase64 = null;
@@ -3194,34 +3474,23 @@
         fotoMasterBase64 = await convertirImagenBase64(inputFotoMaster.files[0]);
       }
 
-      const nuevoPersonal = {
-        legajo: legajoIngresado,
-        nombre: nombreIngresado,
-        pin: pinGenerado,
-        estado: 'ACTIVO',
-        fotoMaster: fotoMasterBase64,
-        horarioHabitual: { inicio: '', fin: '' },
-        objetivosAsignados: [],
-        timestamp: new Date().toISOString()
-      };
-
       try {
-        const res = await fetch(`${URL_FIREBASE}/personal.json`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(nuevoPersonal)
+        const result = await DAAuth.callFunction('crearVigilador', {
+          legajo,
+          nombre,
+          passwordTemporal,
+          fotoMaster: fotoMasterBase64
         });
 
-        if (!res.ok) throw new Error("No se pudo guardar en Firebase");
-
-        alert(`Personal registrado con éxito.\nPIN asignado: ${pinGenerado}`);
+        alert(`Personal registrado con éxito.\n\nCuenta: ${result.email}\nClave temporal: ${result.passwordTemporal}\n\nLa clave no se almacena en /personal.`);
         document.getElementById('newLegajo').value = "";
         document.getElementById('newNombre').value = "";
         document.getElementById('newFotoMaster').value = "";
         generarPinAleatorio();
         recargarDatosEfectivo();
       } catch (err) {
-        alert("Ocurrió un error al guardar: " + err.toString());
+        console.error(err);
+        alert("No se pudo crear el vigilador: " + (err?.message || err));
       } finally {
         btn.disabled = false;
         btn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Guardar Personal`;
@@ -3234,7 +3503,6 @@
       document.getElementById('editFirebaseId').value = id;
       document.getElementById('editLegajo').value = cfg.legajo || '';
       document.getElementById('editNombre').value = cfg.nombre || '';
-      document.getElementById('editPin').value = cfg.pin || '';
       document.getElementById('editFotoMaster').value = '';
       const h = cfg.horarioHabitual || {};
       document.getElementById('editHorarioInicio').value = h.inicio || '';
@@ -3276,16 +3544,15 @@
       const id = document.getElementById('editFirebaseId').value;
       const legajo = document.getElementById('editLegajo').value.trim();
       const nombre = document.getElementById('editNombre').value.trim();
-      const pin = document.getElementById('editPin').value.trim();
       const inputFoto = document.getElementById('editFotoMaster');
       const inicio = document.getElementById('editHorarioInicio').value;
       const fin = document.getElementById('editHorarioFin').value;
       const btn = document.getElementById('btnGuardarEdicion');
-      if (!id || !legajo || !nombre || !pin) return alert('Completá legajo, nombre y PIN.');
+      if (!id || !legajo || !nombre) return alert('Completá legajo y nombre.');
       if ((inicio && !fin) || (!inicio && fin)) return alert('Completá ambos horarios habituales o dejalos vacíos.');
       btn.disabled = true; btn.innerText = 'Guardando...';
       const objetivosAsignados = Array.from(document.querySelectorAll('.objetivo-personal-checkbox:checked')).map(cb => ({ id: cb.value, nombre: cb.dataset.nombre || '' }));
-      const datosActualizados = { legajo, nombre, pin, horarioHabitual: { inicio: inicio || '', fin: fin || '' }, objetivosAsignados };
+      const datosActualizados = { legajo: DAAuth.normalizarLegajo(legajo), authUid: DAAuth.normalizarLegajo(legajo), nombre, horarioHabitual: { inicio: inicio || '', fin: fin || '' }, objetivosAsignados };
       if (inputFoto.files && inputFoto.files[0]) datosActualizados.fotoMaster = await convertirImagenBase64(inputFoto.files[0]);
       try {
         const res = await fetch(`${URL_FIREBASE}/personal/${id}.json`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datosActualizados) });
@@ -3299,13 +3566,14 @@
     }
 
     async function eliminarPersonal(firebaseId) {
-      if (!confirm(`¿Estás seguro de que deseas eliminar este registro?`)) return;
+      if (!confirm(`¿Estás seguro de que deseas eliminar este registro? Esta acción deshabilitará también la cuenta de Firebase Authentication del vigilador.`)) return;
+      const cfg = mapaConfiguracionPersonal[firebaseId];
       try {
-        await fetch(`${URL_FIREBASE}/personal/${firebaseId}.json`, { method: 'DELETE' });
+        const result = await DAAuth.callFunction('eliminarVigilador', { personalId: firebaseId, legajo: cfg?.legajo || '' });
         delete mapaConfiguracionPersonal[firebaseId];
-        alert('Registro eliminado con éxito.');
+        alert(result?.mensaje || 'Registro y cuenta de autenticación eliminados correctamente.');
         recargarDatosEfectivo();
-      } catch(err) { alert('Ocurrió un error al eliminar: ' + err.toString()); }
+      } catch(err) { alert('Ocurrió un error al eliminar: ' + (err?.message || err)); }
     }
 
     async function abrirModalTurnosPersonal(id) {

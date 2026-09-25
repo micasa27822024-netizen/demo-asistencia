@@ -1,0 +1,21 @@
+[
+  {
+    "id": "demo",
+    "nombre": "Demo Asistencia",
+    "dominio": "localhost",
+    "metodoIdentificacion": "FOTO",
+    "firebase": {
+      "apiKey": "REEMPLAZAR_API_KEY",
+      "authDomain": "fir-asistencia-fad12.firebaseapp.com",
+      "projectId": "fir-asistencia-fad12",
+      "databaseURL": "https://fir-asistencia-fad12-default-rtdb.firebaseio.com",
+      "storageBucket": "",
+      "messagingSenderId": "",
+      "appId": ""
+    },
+    "seguridad": {
+      "authRequired": true,
+      "serverValidationRequired": true
+    }
+  }
+]
