@@ -494,16 +494,12 @@ async function buscarMisHoras(e) {
   }
 
   try {
-    // 1. Forzar inicialización de Firebase si no hay app activa
+    // 1. Inicialización de Firebase
     if (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length === 0) {
-      // Intenta usar la configuración definida en window.firebaseConfig o da-config.js
       const config = window.firebaseConfig || (typeof DAConfig !== 'undefined' ? DAConfig.firebase : null);
-      if (config) {
-        firebase.initializeApp(config);
-      }
+      if (config) firebase.initializeApp(config);
     }
 
-    // 2. Obtener la referencia a Realtime Database según el SDK/wrapper disponible
     let dbRef = null;
     if (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0) {
       dbRef = firebase.database().ref('personal');
@@ -511,19 +507,15 @@ async function buscarMisHoras(e) {
       dbRef = DAFirebase.database().ref('personal');
     } else if (typeof DAAuth !== 'undefined' && DAAuth.db) {
       dbRef = DAAuth.db.ref('personal');
-    } else {
-      throw new Error('No se encontró una configuración válida para inicializar Firebase.');
     }
 
     const legajoBuscado = String(parseInt(legajoInput, 10));
 
-    // 3. Obtener los datos de personal
+    // 2. Obtener datos del vigilador
     const snapshot = await dbRef.once('value');
     const personalData = snapshot.val() || {};
 
-    // 4. Validar Legajo y PIN
     let vigiladorEncontrado = null;
-
     Object.values(personalData).forEach(p => {
       const legajoP = String(parseInt(p.legajo || p.legajoId || '0', 10));
       const pinP = String(p.pin || p.clave || '').trim();
@@ -538,22 +530,30 @@ async function buscarMisHoras(e) {
       return;
     }
 
-    // 5. Ocultar formulario de login y mostrar horas
-    const loginCard = document.getElementById('pantallaLogin') || 
-                      document.getElementById('seccionLogin') || 
-                      elLegajo.closest('form') ||
-                      elLegajo.closest('div');
+    // 3. Ocultar solo el formulario de login (no el marco general)
+    const formulario = elLegajo.closest('form') || elLegajo.closest('div');
+    if (formulario) {
+      formulario.style.display = 'none';
+    }
 
-    const contenidoHoras = document.getElementById('contenidoMisHoras') || 
-                           document.getElementById('seccionHoras');
+    // 4. Mostrar el contenedor de horas o invocar el render existente
+    const contenedorResultados = document.getElementById('contenidoMisHoras') || 
+                                 document.getElementById('seccionHoras') || 
+                                 document.getElementById('resultadoConsulta') ||
+                                 document.getElementById('panelVigilador');
 
-    if (loginCard) loginCard.classList.add('hidden');
-    if (contenidoHoras) contenidoHoras.classList.remove('hidden');
+    if (contenedorResultados) {
+      contenedorResultados.classList.remove('hidden');
+      contenedorResultados.style.display = 'block';
+    }
 
+    // 5. Ejecutar la función propia de tu proyecto para dibujar los datos
     if (typeof cargarHorasVigilador === 'function') {
       cargarHorasVigilador(vigiladorEncontrado);
     } else if (typeof renderizarHoras === 'function') {
       renderizarHoras(vigiladorEncontrado);
+    } else if (typeof mostrarResumenHoras === 'function') {
+      mostrarResumenHoras(vigiladorEncontrado);
     }
 
   } catch (err) {
