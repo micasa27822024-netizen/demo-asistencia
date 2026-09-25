@@ -818,12 +818,3 @@ exports.crearPrimerAdmin = functions.https.onRequest(async (req, res) => {
         displayName: "Super Admin"
       });
     }
-
-    // Le asignamos el rol de admin obligatorio
-    await admin.auth().setCustomUserClaims(user.uid, { role: "admin" });
-
-    res.send(`<h1>✓ Administrador creado con éxito</h1><p><b>Email:</b> ${email}</p><p><b>Password:</b> ${password}</p>`);
-  } catch (error) {
-    res.status(500).send("Error: " + error.message);
-  }
-});
