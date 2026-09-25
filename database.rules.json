@@ -15,24 +15,24 @@
         "legajo",
         "authUid"
       ],
-      ".read": "auth != null && (auth.token.role == 'admin' || auth.token.role == 'supervisor' || (query.orderByChild == 'legajo' && query.equalTo == auth.uid))",
+      ".read": "auth != null",
       "$id": {
-        ".write": "auth != null && auth.token.role == 'admin'",
-        ".validate": "newData.hasChildren(['legajo', 'nombre', 'estado']) && newData.child('legajo').val() is string && newData.child('authUid').val() == newData.child('legajo').val()"
+        ".write": "auth != null && (auth.token.role == 'admin' || auth.token.role == 'supervisor')",
+        ".validate": "newData.hasChildren(['legajo', 'nombre', 'estado']) && newData.child('legajo').isString()"
       }
     },
     "objetivos": {
       ".read": "auth != null",
-      ".write": "auth != null && auth.token.role == 'admin'"
+      ".write": "auth != null && (auth.token.role == 'admin' || auth.token.role == 'supervisor')"
     },
     "asignacionesTurnos": {
       ".indexOn": [
         "legajo",
         "fecha"
       ],
-      ".read": "auth != null && (auth.token.role == 'admin' || auth.token.role == 'supervisor' || (query.orderByChild == 'legajo' && query.equalTo == auth.uid))",
+      ".read": "auth != null",
       "$id": {
-        ".write": "auth != null && auth.token.role == 'admin'"
+        ".write": "auth != null && (auth.token.role == 'admin' || auth.token.role == 'supervisor')"
       }
     },
     "fichadas": {
@@ -41,9 +41,10 @@
         "timestampServidor",
         "fechaHoraDispositivo"
       ],
+      ".read": "auth != null",
       "$id": {
-        ".read": "auth != null && (auth.token.role == 'admin' || auth.token.role == 'supervisor' || data.child('legajo').val() == auth.uid)",
-        ".write": false
+        ".read": "auth != null",
+        ".write": "auth != null && (auth.token.role == 'admin' || auth.token.role == 'supervisor' || !data.exists())"
       }
     },
     "fichadasPendientes": {
@@ -51,33 +52,35 @@
         "legajo",
         "estadoServidor"
       ],
+      ".read": "auth != null && (auth.token.role == 'admin' || auth.token.role == 'supervisor')",
       "$id": {
-        ".write": "auth != null && auth.token.role == 'vigilador' && !data.exists() && newData.child('legajo').val() == auth.uid && newData.child('authUid').val() == auth.uid",
-        ".validate": "newData.hasChildren(['legajo','authUid','tipo','objetivo','latitud','longitud','fechaHoraDispositivo','timestampServidor']) && newData.child('legajo').val() == auth.uid && newData.child('authUid').val() == auth.uid && newData.child('timestampServidor').val() == now"
+        ".write": "auth != null",
+        ".validate": "newData.hasChildren(['legajo','authUid','tipo','objetivo','latitud','longitud','fechaHoraDispositivo'])"
       }
     },
     "alertasFichadas": {
-      ".read": "auth != null && (auth.token.role == 'admin' || auth.token.role == 'supervisor')",
-      ".write": "auth != null && (auth.token.role == 'admin' || (auth.token.role == 'supervisor' && data.exists() && newData.exists()))"
+      ".read": "auth != null",
+      ".write": "auth != null"
     },
     "alertasFichadasPendientes": {
+      ".read": "auth != null",
       "$id": {
-        ".write": "auth != null && auth.token.role == 'vigilador' && !data.exists() && newData.child('legajo').val() == auth.uid && newData.child('authUid').val() == auth.uid",
-        ".validate": "newData.hasChildren(['legajo','authUid','tipoAlerta','fechaHora','timestampServidor']) && newData.child('legajo').val() == auth.uid && newData.child('authUid').val() == auth.uid && newData.child('timestampServidor').val() == now"
+        ".write": "auth != null",
+        ".validate": "newData.hasChildren(['legajo','authUid','tipoAlerta','fechaHora'])"
       }
     },
     "alertasLlegadasTarde": {
-      ".read": "auth != null && (auth.token.role == 'admin' || auth.token.role == 'supervisor')",
-      ".write": "auth != null && (auth.token.role == 'admin' || (auth.token.role == 'supervisor' && data.exists() && newData.exists()))"
+      ".read": "auth != null",
+      ".write": "auth != null"
     },
     "alertasSalidasAnticipadas": {
-      ".read": "auth != null && (auth.token.role == 'admin' || auth.token.role == 'supervisor')",
-      ".write": "auth != null && (auth.token.role == 'admin' || (auth.token.role == 'supervisor' && data.exists() && newData.exists()))"
+      ".read": "auth != null",
+      ".write": "auth != null"
     },
     "panicos": {
-      ".read": "auth != null && (auth.token.role == 'admin' || auth.token.role == 'supervisor')",
+      ".read": "auth != null",
       "$id": {
-        ".write": "auth != null && ((auth.token.role == 'vigilador' && !data.exists() && newData.child('legajo').val() == auth.uid) || auth.token.role == 'admin' || auth.token.role == 'supervisor')"
+        ".write": "auth != null"
       }
     },
     "novedades": {
@@ -85,14 +88,14 @@
         "legajo",
         "fechaHora"
       ],
-      ".read": "auth != null && (auth.token.role == 'admin' || auth.token.role == 'supervisor' || (query.orderByChild == 'legajo' && query.equalTo == auth.uid))",
+      ".read": "auth != null",
       "$id": {
-        ".write": "auth != null && ((auth.token.role == 'vigilador' && !data.exists() && newData.child('legajo').val() == auth.uid) || auth.token.role == 'admin' || auth.token.role == 'supervisor')"
+        ".write": "auth != null"
       }
     },
     "auditoria": {
-      ".read": "auth != null && auth.token.role == 'admin'",
-      ".write": false
+      ".read": "auth != null",
+      ".write": "auth != null"
     },
     "credencialesWebAuthn": {
       ".read": false,
@@ -103,9 +106,9 @@
       ".write": false
     },
     "alertasFichadasEliminadas": {
-      ".read": "auth != null && (auth.token.role == 'admin' || auth.token.role == 'supervisor')",
+      ".read": "auth != null",
       "$id": {
-        ".write": "auth != null && auth.token.role == 'admin'"
+        ".write": "auth != null"
       }
     }
   }
