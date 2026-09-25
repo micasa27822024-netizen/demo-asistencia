@@ -9,7 +9,7 @@ window.DAConfig = (function () {
   const CONFIG_REAL = {
     id: 'demo',
     nombre: 'Demo Asistencia S.A.',
-    dominio: 'github.io',
+    dominio: 'micasa27822024-netizen.github.io',
     metodoIdentificacion: 'FOTO',
     firebase: {
       apiKey: "AIzaSyBYsTCQWwnqEaBzsC5P-9cTM6uBKCnKAmo",
