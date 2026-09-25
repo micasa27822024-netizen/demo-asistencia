@@ -79,7 +79,7 @@
 <!-- PIN DE SEGURIDAD -->
 <div>
 <label class="block text-xs uppercase text-slate-400 mb-1">PIN / Clave de Personal</label>
-<input class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500" id="pin" maxlength="6" placeholder="****" type="password"/>
+<input class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500" id="pin" maxlength="6" onblur="precargarDatosVigilador()" placeholder="****" type="password"/>
 </div>
 <!-- OBJETIVO / PUESTO -->
 <div>
@@ -1028,6 +1028,44 @@
           : 'ℹ️ Estado actual: Última fichada fue SALIDA. Puedes marcar ENTRADA.';
       } else badgeEstado.classList.add('hidden');
       return encontrado;
+    }
+
+    // Precarga el nombre del vigilador en cuanto hay legajo + PIN completos.
+    // Autentica de forma silenciosa (Firebase Auth) para que las reglas de
+    // seguridad permitan leer los datos, y luego autocompleta nombre/estado.
+    let _precargaEnCurso = false;
+    async function precargarDatosVigilador() {
+      const legajoInput = document.getElementById('legajo').value.trim();
+      const pin = document.getElementById('pin').value.trim();
+      const statusLbl = document.getElementById('legajo-status');
+      if (!legajoInput || !pin) return;
+      if (typeof DAAuth === 'undefined') return;
+      if (!navigator.onLine) {
+        statusLbl.className = "text-xs mt-1 text-slate-400 block";
+        statusLbl.innerText = "Modo Offline: se requiere una sesi\u00f3n de vigilador previamente autenticada.";
+        verificarUltimoEstadoLocal(legajoInput);
+        return;
+      }
+      if (_precargaEnCurso) return;
+      _precargaEnCurso = true;
+      try {
+        statusLbl.className = "text-xs mt-1 text-slate-400 block";
+        statusLbl.innerText = "Verificando legajo...";
+        await DAAuth.init();
+        await DAAuth.ensureVigilador(legajoInput, pin);
+        await cargarDatosVigiladorAutenticado(legajoInput);
+      } catch (e) {
+        const msg = String(e && e.message || e);
+        if (/wrong-password|invalid-credential|user-not-found|password/i.test(msg)) {
+          statusLbl.className = "text-xs mt-1 text-rose-400 block";
+          statusLbl.innerText = "Legajo o PIN incorrectos.";
+        } else {
+          statusLbl.className = "text-xs mt-1 text-slate-400 block";
+          statusLbl.innerText = "Complete legajo y clave; se validar\u00e1 al fichar.";
+        }
+      } finally {
+        _precargaEnCurso = false;
+      }
     }
 
     async function validarLegajo() {
