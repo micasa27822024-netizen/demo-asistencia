@@ -17,6 +17,7 @@
 </link>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-functions-compat.js"></script>
 <script src="./da-config.js"></script>
 <script src="./da-security.js"></script>
@@ -67,7 +68,7 @@
 </div>
 <div>
 <h2 class="text-xl font-bold text-white">Acceso Administrador</h2>
-<p class="text-xs text-slate-400 mt-1">Ingresa la contraseña para acceder al panel admin</p>
+<p class="text-xs text-slate-400 mt-1">Ingresá tu cuenta de Firebase Authentication para acceder al panel admin</p>
 </div>
 <form class="space-y-4" onsubmit="validarPasswordAdmin(event)">
 <div class="relative">
@@ -2285,6 +2286,9 @@
       generarPinAleatorio();
       try {
         await DAAuth.init();
+        const configuredAdmin = (DAConfig.company?.admins || [])[0];
+        const emailInput = document.getElementById('inputEmailAdmin');
+        if (configuredAdmin && emailInput && !emailInput.value) emailInput.value = configuredAdmin;
         const user = await DAAuth.currentUser();
         if (user) {
           try {
@@ -2323,8 +2327,29 @@
         await DAAuth.requireRole('admin');
         mostrarAdmin();
       } catch (err) {
-        console.error(err);
+        console.error('Error autenticando administrador:', err);
         errorMsg.classList.remove('hidden');
+        const icon = '<i class="fa-solid fa-circle-exclamation"></i>';
+        const code = String(err?.code || '');
+        let detalle = 'No se pudo autenticar la cuenta administrativa.';
+        if (code === 'auth/user-not-found' || code === 'auth/invalid-credential') {
+          detalle = 'La cuenta indicada debe existir en Firebase Authentication. Si usás micasa27822024@gmail.com, creala en Authentication → Users y definí allí su contraseña.';
+        } else if (code === 'auth/wrong-password') {
+          detalle = 'La contraseña de Firebase Authentication es incorrecta. No es necesariamente la contraseña de Gmail.';
+        } else if (code === 'auth/invalid-email') {
+          detalle = 'El correo ingresado no tiene un formato válido.';
+        } else if (code === 'auth/operation-not-allowed') {
+          detalle = 'El proveedor Correo/Contraseña no está habilitado en Firebase Authentication.';
+        } else if (code === 'auth/network-request-failed') {
+          detalle = 'No se pudo conectar con Firebase Authentication. Revisá Internet y el dominio autorizado.';
+        } else if (code === 'auth/too-many-requests') {
+          detalle = 'Firebase bloqueó temporalmente nuevos intentos por demasiados accesos fallidos.';
+        } else if (String(err?.message || '').includes('rol requerido')) {
+          detalle = 'La cuenta está autenticada, pero no tiene asignado el rol admin.';
+        } else if (err?.message) {
+          detalle = String(err.message);
+        }
+        errorMsg.innerHTML = icon + ' ' + detalle;
         document.getElementById('inputPassAdmin').value = '';
         document.getElementById('inputPassAdmin').focus();
       }

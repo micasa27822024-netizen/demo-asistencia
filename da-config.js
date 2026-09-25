@@ -33,7 +33,8 @@
         messagingSenderId: '441100861030',
         appId: '1:441100861030:web:b4287e1c3a377cf892b7a7'
       },
-      metodoIdentificacion: 'FOTO'
+      metodoIdentificacion: 'FOTO',
+      admins: ['micasa27822024@gmail.com']
     }
   };
 
@@ -118,21 +119,11 @@
     return auth.signOut();
   }
 
- async function roleOf(user) {
-  if (!user) return null;
-
-  // 1. Verificar si el correo coincide directamente con el admin
-  const email = String(user.email || '').toLowerCase();
-  const allowedAdmins = (company?.admins || []).map(a => String(a).toLowerCase());
-  
-  if (email === 'micasa27822024@gmail.com' || allowedAdmins.includes(email)) {
-    return 'admin';
+  async function roleOf(user) {
+    if (!user) return null;
+    const token = await user.getIdTokenResult(true);
+    return token.claims?.role || token.claims?.rol || null;
   }
-
-  // 2. Si no es tu correo, busca el Custom Claim nativo de Firebase
-  const token = await user.getIdTokenResult(true);
-  return token.claims?.role || token.claims?.rol || null;
-}
 
   async function requireRole(role) {
     const user = await currentUser();
