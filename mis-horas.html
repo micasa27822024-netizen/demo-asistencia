@@ -473,10 +473,9 @@
       reiniciarTemporizador();
     }
 
- async function buscarMisHoras(e) {
+async function buscarMisHoras(e) {
   if (e) e.preventDefault();
 
-  // Buscar los campos de Legajo y PIN por cualquier ID posible
   const elLegajo = document.getElementById('inputLegajo') || 
                    document.getElementById('legajoInput') || 
                    document.querySelector('input[placeholder*="0286"]') ||
@@ -497,11 +496,23 @@
   try {
     const legajoBuscado = String(parseInt(legajoInput, 10));
 
-    // 1. Obtener la lista de personal desde Firebase Realtime Database
-    const snapshot = await firebase.database().ref('personal').once('value');
+    // 1. Obtener referencia a la base de datos de manera segura
+    let dbRef = null;
+    if (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0) {
+      dbRef = firebase.database().ref('personal');
+    } else if (typeof DAFirebase !== 'undefined' && DAFirebase.database) {
+      dbRef = DAFirebase.database().ref('personal');
+    } else if (typeof window.db !== 'undefined') {
+      dbRef = window.db.ref('personal');
+    } else {
+      throw new Error('La conexión a Firebase no está inicializada en esta página.');
+    }
+
+    // 2. Obtener la lista de personal
+    const snapshot = await dbRef.once('value');
     const personalData = snapshot.val() || {};
 
-    // 2. Buscar al vigilador que coincida en Legajo y PIN
+    // 3. Buscar al vigilador por Legajo y PIN
     let vigiladorEncontrado = null;
 
     Object.values(personalData).forEach(p => {
@@ -518,21 +529,18 @@
       return;
     }
 
-    // 3. Ocultar el formulario de consulta y mostrar el panel de horas
+    // 4. Mostrar el panel del vigilador
     const loginCard = document.getElementById('pantallaLogin') || 
                       document.getElementById('seccionLogin') || 
-                      document.querySelector('.max-w-md') ||
                       elLegajo.closest('form') ||
-                      elLegajo.closest('.bg-slate-800');
+                      elLegajo.closest('div');
 
     const contenidoHoras = document.getElementById('contenidoMisHoras') || 
-                           document.getElementById('seccionHoras') || 
-                           document.getElementById('contenidoPrincipal');
+                           document.getElementById('seccionHoras');
 
     if (loginCard) loginCard.classList.add('hidden');
     if (contenidoHoras) contenidoHoras.classList.remove('hidden');
 
-    // 4. Ejecutar la función de renderizado de horas si existe
     if (typeof cargarHorasVigilador === 'function') {
       cargarHorasVigilador(vigiladorEncontrado);
     } else if (typeof renderizarHoras === 'function') {
