@@ -2,14 +2,14 @@
   {
     "id": "demo",
     "nombre": "Demo Asistencia",
-    "dominio": "micasa27822024-netizen.github.io",
+    "dominio": "github.io",
     "metodoIdentificacion": "FOTO",
     "firebase": {
       "apiKey": "AIzaSyBYsTCQWwnqEaBzsC5P-9cTM6uBKCnKAmo",
       "authDomain": "fir-asistencia-fad12.firebaseapp.com",
       "projectId": "fir-asistencia-fad12",
       "databaseURL": "https://fir-asistencia-fad12-default-rtdb.firebaseio.com",
-      "storageBucket": "",
+      "storageBucket": "fir-asistencia-fad12.appspot.com",
       "messagingSenderId": "",
       "appId": ""
     },
