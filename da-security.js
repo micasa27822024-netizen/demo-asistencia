@@ -31,7 +31,7 @@
       }
 
       const fbCfg = cfg.firebase || {};
-      if (!fbCfg.apiKey || fbCfg.apiKey === 'REEMPLAZAR_API_KEY') {
+      if (!fbCfg.apiKey || fbCfg.apiKey === 'AIzaSyBYsTCQWwnqEaBzsC5P-9cTM6uBKCnKAmo') {
         throw new Error('Falta la apiKey de Firebase en companies.json.');
       }
       if (!fbCfg.projectId || !fbCfg.authDomain) {
