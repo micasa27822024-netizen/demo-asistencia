@@ -507,6 +507,18 @@
       }
     }
 
+    // ── Seguridad (anti-XSS) ─────────────────────────────────────────────
+    // Escapa caracteres peligrosos antes de insertar datos de la base (creados
+    // desde el kiosco de forma anónima) dentro de innerHTML. Evita XSS.
+    function escaparHtml(valor) {
+      return String(valor == null ? '' : valor)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
     function renderizarTabla(registros) {
       const cuerpo = document.getElementById('cuerpoTabla');
       cuerpo.innerHTML = "";
@@ -542,13 +554,13 @@
           : `<span class="text-xs text-slate-500">Sin horario</span>`;
 
         const btnMapa = (urlMapa && urlMapa.includes('http'))
-          ? `<a href="${urlMapa}" target="_blank" class="inline-flex items-center gap-1 bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
+          ? `<a href="${escaparHtml(urlMapa)}" target="_blank" class="inline-flex items-center gap-1 bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
               <i class="fa-solid fa-map-location-dot"></i> Mapa
              </a>`
           : `<span class="text-xs text-slate-500">Sin GPS</span>`;
 
         const btnFoto = (urlFoto && (urlFoto.includes('http') || urlFoto.includes('data:image')))
-          ? `<button onclick="abrirFoto('${urlFoto}')" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
+          ? `<button onclick="abrirFoto('${escaparHtml(urlFoto)}')" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
               <i class="fa-solid fa-image"></i> Ver Foto
              </button>`
           : `<span class="text-xs text-slate-500">Sin Foto</span>`;
@@ -564,11 +576,11 @@
         tr.className = "hover:bg-slate-700/30 transition";
         tr.innerHTML = `
           <td class="p-4 font-mono text-xs text-slate-300">${fecha}</td>
-          <td class="p-4 font-semibold text-white">${legajo}</td>
-          <td class="p-4 font-medium text-slate-200">${nombre}</td>
-          <td class="p-4 text-slate-400">${objetivo}</td>
+          <td class="p-4 font-semibold text-white">${escaparHtml(legajo)}</td>
+          <td class="p-4 font-medium text-slate-200">${escaparHtml(nombre)}</td>
+          <td class="p-4 text-slate-400">${escaparHtml(objetivo)}</td>
           <td class="p-4 text-center">
-            <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${badgeColor}">${tipo}</span>
+            <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${badgeColor}">${escaparHtml(tipo)}</span>
           </td>
           <td class="p-4 text-center">${celdaCumplimiento}</td>
           <td class="p-4 text-center">${btnMapa}</td>
@@ -903,7 +915,7 @@
           tr.innerHTML = `
             <td class="p-3 text-xs font-mono">${new Date(entrada[0]).toLocaleString('es-AR', { hour12: false })}</td>
             <td class="p-3 text-xs font-mono">${salida ? new Date(salida[0]).toLocaleString('es-AR', { hour12: false }) : '<span class="text-amber-400">En Turno</span>'}</td>
-            <td class="p-3 text-xs text-slate-300 font-medium">${objetivoNombre}<div class="text-[10px] text-slate-500 mt-1">${horarioProgramado ? `Turno ${horarioProgramado.inicio || '--:--'} - ${horarioProgramado.fin || '--:--'} · ${horarioProgramado.origen}` : 'Sin horario configurado'}${horas.ajusteMinutos > 0 ? ` · ${horas.ajusteMinutos} min anticipados no computados` : ''}</div></td>
+            <td class="p-3 text-xs text-slate-300 font-medium">${escaparHtml(objetivoNombre)}<div class="text-[10px] text-slate-500 mt-1">${horarioProgramado ? `Turno ${escaparHtml(horarioProgramado.inicio || '--:--')} - ${escaparHtml(horarioProgramado.fin || '--:--')} · ${escaparHtml(horarioProgramado.origen)}` : 'Sin horario configurado'}${horas.ajusteMinutos > 0 ? ` · ${horas.ajusteMinutos} min anticipados no computados` : ''}</div></td>
             <td class="p-3 text-center text-xs font-semibold text-amber-400">${formatearAHorasReloj(horas.d)}</td>
             <td class="p-3 text-center text-xs font-semibold text-indigo-400">${formatearAHorasReloj(horas.n)}</td>
             <td class="p-3 text-center text-xs font-bold text-emerald-400">${formatearAHorasReloj(horas.t)}</td>

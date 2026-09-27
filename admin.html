@@ -1136,11 +1136,11 @@
           <div class="flex flex-col md:flex-row md:items-center justify-between gap-2">
             <div>
               <div class="flex items-center gap-2">
-                <span class="text-sm font-bold text-white">${a.nombre || 'Sin nombre'}</span>
+                <span class="text-sm font-bold text-white">${escaparHtml(a.nombre || 'Sin nombre')}</span>
                 ${vista ? '<span class="text-[10px] text-slate-500 uppercase">Vista</span>' : '<span class="text-[10px] font-black text-rose-400 uppercase">Nueva</span>'}
               </div>
-              <p class="text-xs text-slate-400 mt-1">Legajo: ${a.legajo || '-'} · ${a.tipoFichada || '-'} · ${formatearFechaAlerta(a.fechaHora)}</p>
-              <p class="text-xs text-slate-300 mt-1">Objetivo: <strong>${a.objetivo || '-'}</strong></p>
+              <p class="text-xs text-slate-400 mt-1">Legajo: ${escaparHtml(a.legajo || '-')} · ${escaparHtml(a.tipoFichada || '-')} · ${formatearFechaAlerta(a.fechaHora)}</p>
+              <p class="text-xs text-slate-300 mt-1">Objetivo: <strong>${escaparHtml(a.objetivo || '-')}</strong></p>
             </div>
             <div class="text-left md:text-right">
               <p class="text-sm font-black text-rose-300">${formatearDistanciaAlerta(a.distanciaMetros)}</p>
@@ -1148,8 +1148,8 @@
             </div>
           </div>
           <div class="mt-2 flex flex-wrap gap-2">
-            ${mapa ? `<a href="${mapa}" target="_blank" class="text-xs text-sky-400 hover:underline"><i class="fa-solid fa-map-location-dot"></i> Ver ubicación</a>` : ''}
-            <span class="text-xs text-slate-500">${a.mensaje || 'Fichada bloqueada por ubicación'}</span>
+            ${mapa ? `<a href="${escaparHtml(mapa)}" target="_blank" class="text-xs text-sky-400 hover:underline"><i class="fa-solid fa-map-location-dot"></i> Ver ubicación</a>` : ''}
+            <span class="text-xs text-slate-500">${escaparHtml(a.mensaje || 'Fichada bloqueada por ubicación')}</span>
           </div>
         </div>`;
       }).join('');
@@ -1707,13 +1707,13 @@
         }
 
         const btnMapa = (urlMapa && urlMapa.includes('http'))
-          ? `<a href="${urlMapa}" target="_blank" class="inline-flex items-center gap-1 bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
+          ? `<a href="${escaparHtml(urlMapa)}" target="_blank" class="inline-flex items-center gap-1 bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
               <i class="fa-solid fa-map-location-dot"></i> Mapa
              </a>`
           : `<span class="text-xs text-slate-500">Sin GPS</span>`;
 
         const btnFoto = (urlFoto && urlFoto.length > 50)
-          ? `<button onclick="abrirFoto('${urlFoto}')" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
+          ? `<button onclick="abrirFoto('${escaparHtml(urlFoto)}')" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
               <i class="fa-solid fa-image"></i> Foto
              </button>`
           : `<span class="text-xs text-slate-500">Sin Foto</span>`;
@@ -1730,11 +1730,11 @@
         tr.className = alertaFraude ? "bg-rose-950/20 hover:bg-rose-900/30 transition border-l-4 border-l-rose-500" : ("hover:bg-slate-700/30 transition" + claseFilaCumpl);
         tr.innerHTML = `
           <td class="p-4 font-mono text-xs text-slate-300">${fecha}</td>
-          <td class="p-4 font-semibold text-white">${legajo}</td>
-          <td class="p-4 font-medium text-slate-200">${nombre}</td>
-          <td class="p-4 text-slate-400">${objetivo}</td>
+          <td class="p-4 font-semibold text-white">${escaparHtml(legajo)}</td>
+          <td class="p-4 font-medium text-slate-200">${escaparHtml(nombre)}</td>
+          <td class="p-4 text-slate-400">${escaparHtml(objetivo)}</td>
           <td class="p-4 text-center">
-            <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${badgeTipo}">${tipo}</span>
+            <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${badgeTipo}">${escaparHtml(tipo)}</span>
           </td>
           <td class="p-4 text-center">${celdaCumplimiento}</td>
           <td class="p-4 text-center">${badgeIA}</td>
@@ -1830,8 +1830,8 @@
       
       const fecha = registro[0] ? new Date(registro[0]).toLocaleString('es-AR', { hour12: false }) : '-';
       document.getElementById('fraudeDetalleFichada').innerHTML = `
-        <p><strong>Empleado:</strong> ${registro[2]} (Legajo: ${registro[1]})</p>
-        <p><strong>Objetivo:</strong> ${registro[3]} - <strong>Tipo:</strong> ${registro[4]}</p>
+        <p><strong>Empleado:</strong> ${escaparHtml(registro[2])} (Legajo: ${escaparHtml(registro[1])})</p>
+        <p><strong>Objetivo:</strong> ${escaparHtml(registro[3])} - <strong>Tipo:</strong> ${escaparHtml(registro[4])}</p>
         <p><strong>Fecha/Hora:</strong> ${fecha}</p>
       `;
 
@@ -1944,13 +1944,13 @@
         const urlFoto = fila[7] || '';
 
         const btnMapa = (urlMapa && urlMapa.includes('http'))
-          ? `<a href="${urlMapa}" target="_blank" class="inline-flex items-center gap-1 bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
+          ? `<a href="${escaparHtml(urlMapa)}" target="_blank" class="inline-flex items-center gap-1 bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
               <i class="fa-solid fa-map-location-dot"></i> Mapa
              </a>`
           : `<span class="text-xs text-slate-500">Sin GPS</span>`;
 
         const btnFoto = (urlFoto && urlFoto.length > 50)
-          ? `<button onclick="abrirFoto('${urlFoto}')" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
+          ? `<button onclick="abrirFoto('${escaparHtml(urlFoto)}')" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
               <i class="fa-solid fa-image"></i> Foto
              </button>`
           : `<span class="text-xs text-slate-500">Sin Foto</span>`;
@@ -1959,10 +1959,10 @@
         tr.className = "hover:bg-slate-700/30 transition";
         tr.innerHTML = `
           <td class="p-4 font-mono text-xs text-slate-300">${fecha}</td>
-          <td class="p-4"><span class="font-bold text-white">${nombre}</span><br><span class="text-xs text-slate-400">Leg: ${legajo}</span></td>
-          <td class="p-4 text-slate-300">${objetivo}</td>
-          <td class="p-4"><span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded text-xs font-bold">${tipoIncidencia}</span></td>
-          <td class="p-4 text-slate-200" style="max-width: 300px; white-space: normal; word-break: break-word;">${descripcion}</td>
+          <td class="p-4"><span class="font-bold text-white">${escaparHtml(nombre)}</span><br><span class="text-xs text-slate-400">Leg: ${escaparHtml(legajo)}</span></td>
+          <td class="p-4 text-slate-300">${escaparHtml(objetivo)}</td>
+          <td class="p-4"><span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded text-xs font-bold">${escaparHtml(tipoIncidencia)}</span></td>
+          <td class="p-4 text-slate-200" style="max-width: 300px; white-space: normal; word-break: break-word;">${escaparHtml(descripcion)}</td>
           <td class="p-4 text-center">${btnMapa}</td>
           <td class="p-4 text-center">${btnFoto}</td>
         `;
@@ -2008,7 +2008,7 @@
           : 'bg-rose-500/10 text-rose-400 border-rose-500/20 animate-pulse';
 
         const btnMapa = (urlMapa && urlMapa.includes('http'))
-          ? `<a href="${urlMapa}" target="_blank" class="inline-flex items-center gap-1 bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
+          ? `<a href="${escaparHtml(urlMapa)}" target="_blank" class="inline-flex items-center gap-1 bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
               <i class="fa-solid fa-map-location-dot"></i> Mapa
              </a>`
           : `<span class="text-xs text-slate-500">Sin GPS</span>`;
@@ -2017,11 +2017,11 @@
         tr.className = "hover:bg-slate-700/30 transition";
         tr.innerHTML = `
           <td class="p-4 font-mono text-xs text-slate-300">${fechaFormateada}</td>
-          <td class="p-4 font-bold text-white">${legajo}</td>
-          <td class="p-4 font-medium text-slate-200">${nombre}</td>
-          <td class="p-4 text-slate-400">${objetivo}</td>
+          <td class="p-4 font-bold text-white">${escaparHtml(legajo)}</td>
+          <td class="p-4 font-medium text-slate-200">${escaparHtml(nombre)}</td>
+          <td class="p-4 text-slate-400">${escaparHtml(objetivo)}</td>
           <td class="p-4 text-center">
-            <span class="inline-block px-2.5 py-1 rounded-full text-xs font-bold border ${badgeEstado}">${estado}</span>
+            <span class="inline-block px-2.5 py-1 rounded-full text-xs font-bold border ${badgeEstado}">${escaparHtml(estado)}</span>
           </td>
           <td class="p-4 text-center">${btnMapa}</td>
           <td class="p-4 text-center">
@@ -2077,7 +2077,7 @@
         const horarioTexto = h.inicio && h.fin ? `${h.inicio} - ${h.fin}` : 'Sin horario habitual';
         const objetivosTexto = objetivos.length ? `${objetivos.length} autorizado(s)` : 'Sin objetivos asignados';
         const btnFotoMaster = (fotoMaster && fotoMaster.length > 50)
-          ? `<button onclick="abrirFoto('${fotoMaster}')" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition"><i class="fa-solid fa-id-card"></i> Ver Foto</button>`
+          ? `<button onclick="abrirFoto('${escaparHtml(fotoMaster)}')" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition"><i class="fa-solid fa-id-card"></i> Ver Foto</button>`
           : `<span class="text-xs text-slate-500">Sin Foto</span>`;
         const tr = document.createElement('tr');
         tr.className = "hover:bg-slate-700/30 transition";
