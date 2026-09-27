@@ -887,11 +887,18 @@
     // Usa el sello de tiempo del servidor y nunca interrumpe la operación principal si falla.
     async function registrarAuditoria(accion, entidad, detalle) {
       try {
+        // Usuario REAL de la sesión (no un valor fijo): se toma de la sesión
+        // establecida en el login (uid/rol/email de Firebase Auth).
+        const uidSesion   = sessionStorage.getItem('uid_admin') || '';
+        const rolSesion   = sessionStorage.getItem('rol_admin') || '';
+        const emailSesion = sessionStorage.getItem('email_admin') || '';
         const evento = {
           accion: String(accion || ''),
           entidad: String(entidad || ''),
           detalle: detalle || {},
-          usuario: 'admin',
+          usuario: emailSesion || uidSesion || 'desconocido',
+          usuarioUid: uidSesion || null,
+          usuarioRol: rolSesion || null,
           origen: 'panel-admin',
           fechaHoraDispositivo: new Date().toISOString(),
           timestampServidor: { ".sv": "timestamp" }
@@ -1253,6 +1260,7 @@
             sessionStorage.setItem('auth_admin', 'true');
             if (res.rol) sessionStorage.setItem('rol_admin', res.rol);
             if (res.uid) sessionStorage.setItem('uid_admin', res.uid);
+            if (email) sessionStorage.setItem('email_admin', email);
             mostrarAdmin();
           } else {
             errorMsg.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> ' + ((res && res.mensaje) || 'Correo o contraseña incorrectos.');
@@ -1281,6 +1289,7 @@
       sessionStorage.removeItem('auth_admin');
       sessionStorage.removeItem('rol_admin');
       sessionStorage.removeItem('uid_admin');
+      sessionStorage.removeItem('email_admin');
       if (typeof window.logoutAdminReal === 'function') { try { window.logoutAdminReal(); } catch (_) {} }
       if (intervaloPanicoPoll) clearInterval(intervaloPanicoPoll);
       if (intervaloAlertasFichadas) clearInterval(intervaloAlertasFichadas);

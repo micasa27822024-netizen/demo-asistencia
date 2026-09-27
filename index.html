@@ -391,6 +391,7 @@
       });
     }
 
+
     function calcularDistanciaMetros(lat1, lon1, lat2, lon2) {
       const R = 6371000;
       const toRad = grados => grados * Math.PI / 180;
@@ -1094,7 +1095,7 @@
       );
     }
 
-    function ejecutarPeticionFichada(tipo, lat, lng, legajo, pin, nombre, objetivo, validacionUbicacion, precisionGPS) {
+    async function ejecutarPeticionFichada(tipo, lat, lng, legajo, pin, nombre, objetivo, validacionUbicacion, precisionGPS) {
       const datos = {
         legajo: legajo,
         // El PIN ya se validó antes de fichar (Firebase Auth / hash con salt), así que
@@ -1137,6 +1138,23 @@
         if (ultimaEntradaActivaGlobal.horarioProgramadoFin) datos.horarioProgramadoFin = ultimaEntradaActivaGlobal.horarioProgramadoFin;
         if (ultimaEntradaActivaGlobal.horarioProgramadoOrigen) datos.horarioProgramadoOrigen = ultimaEntradaActivaGlobal.horarioProgramadoOrigen;
         if (ultimaEntradaActivaGlobal.asignacionTurnoId) datos.asignacionTurnoId = ultimaEntradaActivaGlobal.asignacionTurnoId;
+
+        // Respaldo de integridad: si la ENTRADA no dejó guardado su horario, lo
+        // resolvemos por la FECHA en que se abrió esa entrada (no por la fecha de
+        // hoy), para que el turno nocturno quede íntegro en el registro de la SALIDA.
+        if ((!datos.horarioProgramadoInicio || !datos.horarioProgramadoFin) && ultimaEntradaActivaGlobal.fechaHoraDispositivo && navigator.onLine) {
+          try {
+            const fEntrada = new Date(ultimaEntradaActivaGlobal.fechaHoraDispositivo);
+            const claveEntrada = `${fEntrada.getFullYear()}-${String(fEntrada.getMonth()+1).padStart(2,'0')}-${String(fEntrada.getDate()).padStart(2,'0')}`;
+            const turnoEntrada = await obtenerTurnoProgramadoParaFecha(legajo, claveEntrada);
+            if (turnoEntrada) {
+              datos.horarioProgramadoInicio = turnoEntrada.horaInicio || datos.horarioProgramadoInicio;
+              datos.horarioProgramadoFin = turnoEntrada.horaFin || datos.horarioProgramadoFin;
+              datos.horarioProgramadoOrigen = 'ASIGNACION_FECHA_ENTRADA';
+              datos.asignacionTurnoId = turnoEntrada.id || datos.asignacionTurnoId;
+            }
+          } catch (e) { /* si no se puede resolver, se conserva el fallback previo */ }
+        }
       }
 
       const divResultado = document.getElementById('resultado');
