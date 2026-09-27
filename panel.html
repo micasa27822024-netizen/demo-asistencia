@@ -406,9 +406,26 @@
       document.getElementById('pantallaLogin').classList.add('hidden');
       document.getElementById('contenidoPanel').classList.remove('hidden');
       cargarDatos();
+      iniciarActualizacionAutomatica();
+    }
+
+    // Autoactualizacion del panel "Control en Tiempo Real" mediante polling
+    // controlado (suficiente para la infraestructura gratuita actual). Solo
+    // consulta cuando la pestana esta visible, para no gastar lecturas de mas.
+    let intervaloPolling = null;
+    const INTERVALO_POLLING_MS = 30000; // 30 segundos
+    function iniciarActualizacionAutomatica() {
+      if (intervaloPolling) return;
+      intervaloPolling = setInterval(() => {
+        if (document.visibilityState === 'visible') cargarDatos();
+      }, INTERVALO_POLLING_MS);
+    }
+    function detenerActualizacionAutomatica() {
+      if (intervaloPolling) { clearInterval(intervaloPolling); intervaloPolling = null; }
     }
 
     function cerrarSesion() {
+      detenerActualizacionAutomatica();
       sessionStorage.removeItem('auth_supervisor');
       sessionStorage.removeItem('rol_supervisor');
       sessionStorage.removeItem('uid_supervisor');
@@ -624,7 +641,7 @@
         let coincideFecha = true;
         if (fila[0]) {
           const fechaObj = new Date(fila[0]);
-          const fechaIsoFila = fechaObj.toISOString().slice(0, 10);
+          const fechaIsoFila = obtenerFechaLocalClave(fechaObj);
           
           if (valDesde && fechaIsoFila < valDesde) coincideFecha = false;
           if (valHasta && fechaIsoFila > valHasta) coincideFecha = false;
@@ -634,7 +651,9 @@
       });
 
       renderizarTabla(datosFiltradosActuales);
-      actualizarMetricasYGraficos(datosFiltradosActuales);
+      // Los KPI representan el estado GENERAL (dataset completo), no el subconjunto
+      // filtrado. Asi los indicadores no cambian al aplicar busqueda/fecha/tipo.
+      actualizarMetricasYGraficos(datosLocales);
     }
 
     // ==========================================
@@ -880,7 +899,7 @@
       if (valDesde || valHasta) {
         filtrados = filtrados.filter(f => {
           if (!f[0]) return false;
-          const fechaIsoFila = new Date(f[0]).toISOString().slice(0, 10);
+          const fechaIsoFila = obtenerFechaLocalClave(new Date(f[0]));
           if (valDesde && fechaIsoFila < valDesde) return false;
           if (valHasta && fechaIsoFila > valHasta) return false;
           return true;
@@ -1013,11 +1032,14 @@
     }
 
     function actualizarMetricasYGraficos(registros) {
-      const hoyStr = new Date().toISOString().slice(0, 10);
+      // Usa clave de fecha LOCAL (no UTC) para no descolocar el dia durante la noche.
+      const hoyStr = obtenerFechaLocalClave(new Date());
 
       let entradasHoy = 0;
       let salidasHoy = 0;
-      const estadoUltimoHoy = {};
+      // Estado operativo real: ultima fichada HISTORICA por legajo (no solo la de hoy).
+      // Asi una ENTRADA de la noche anterior sin SALIDA sigue contando "En Planta".
+      const ultimaFichadaPorLegajo = {}; // legajo -> { ts, tipo }
 
       const diasUltimaSemana = [];
       const conteoPorDia = {};
@@ -1025,7 +1047,7 @@
       for (let i = 6; i >= 0; i--) {
         const d = new Date();
         d.setDate(d.getDate() - i);
-        const fechaKey = d.toISOString().slice(0, 10);
+        const fechaKey = obtenerFechaLocalClave(d);
         diasUltimaSemana.push(fechaKey);
         conteoPorDia[fechaKey] = { entradas: 0, salidas: 0 };
       }
@@ -1034,33 +1056,40 @@
         if (!fila[0]) return;
         
         const fechaObj = new Date(fila[0]);
-        const fechaIso = fechaObj.toISOString().slice(0, 10);
+        if (isNaN(fechaObj.getTime())) return;
+        const fechaIso = obtenerFechaLocalClave(fechaObj);
         const legajo = fila[1];
         const tipo = fila[4];
 
         if (fechaIso === hoyStr) {
           if (tipo === 'ENTRADA') entradasHoy++;
           if (tipo === 'SALIDA') salidasHoy++;
-          estadoUltimoHoy[legajo] = tipo;
         }
 
         if (conteoPorDia[fechaIso]) {
           if (tipo === 'ENTRADA') conteoPorDia[fechaIso].entradas++;
           if (tipo === 'SALIDA') conteoPorDia[fechaIso].salidas++;
         }
+
+        // Rastrea la ultima fichada historica por legajo para el estado "En Planta".
+        const ts = fechaObj.getTime();
+        const prev = ultimaFichadaPorLegajo[legajo];
+        if (!prev || ts >= prev.ts) {
+          ultimaFichadaPorLegajo[legajo] = { ts, tipo };
+        }
       });
 
-      let enPlantaHoy = 0;
-      Object.values(estadoUltimoHoy).forEach(ultimoTipo => {
-        if (ultimoTipo === 'ENTRADA') enPlantaHoy++;
+      let enPlanta = 0;
+      Object.values(ultimaFichadaPorLegajo).forEach(u => {
+        if (u.tipo === 'ENTRADA') enPlanta++;
       });
 
       document.getElementById('kpiEntradasHoy').innerText = entradasHoy;
       document.getElementById('kpiSalidasHoy').innerText = salidasHoy;
-      document.getElementById('kpiEnPlanta').innerText = enPlantaHoy;
+      document.getElementById('kpiEnPlanta').innerText = enPlanta;
       document.getElementById('kpiTotalRegistros').innerText = registros.length;
 
-      renderizarGraficoDona(enPlantaHoy, salidasHoy);
+      renderizarGraficoDona(enPlanta, salidasHoy);
       renderizarGraficoBarras(diasUltimaSemana, conteoPorDia);
     }
 

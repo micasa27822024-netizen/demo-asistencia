@@ -144,6 +144,8 @@
         <div class="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden border border-rose-900/50">
           <div id="barraProgresoPanico" class="bg-rose-500 h-full w-0 transition-all duration-75"></div>
         </div>
+        <!-- Aviso de alertas de pánico que quedaron encoladas sin conexión -->
+        <p id="avisoPanicosPendientes" class="hidden text-xs font-semibold text-amber-300 bg-amber-950/40 border border-amber-600/50 rounded-lg px-3 py-2"></p>
       </div>
     </div>
 
@@ -477,6 +479,10 @@
       }
 
       inicializarBotonPanicoSostenido();
+      // Al abrir la app: mostrar avisos de alertas pendientes y reintentar la
+      // cola de pánicos por si quedó algo sin enviar en una sesión anterior.
+      actualizarAvisoPanicosPendientes();
+      reenviarPanicosPendientes();
     };
 
     function activarEscuchasInactividad() {
@@ -652,6 +658,8 @@
         procesarYRenderizar(datosVigiladorGlobal);
         activarEscuchasInactividad();
         reiniciarTemporizador();
+        actualizarAvisoPanicosPendientes();
+        reenviarPanicosPendientes();
       })
       .catch(err => {
         console.error(err);
@@ -921,6 +929,15 @@
           eventosEnviados.add(idEvento);
           panicoEnEnvio = true;
 
+          // Sin conexión: NO se pierde la alerta. Se guarda en la cola local y
+          // se reenvía automáticamente al recuperar internet.
+          if (!navigator.onLine) {
+            encolarPanicoPendiente(payloadPanico);
+            panicoEnEnvio = false;
+            alert("⚠️ SIN CONEXIÓN. La alerta de pánico quedó guardada y se enviará automáticamente apenas se recupere internet. Mantené el teléfono encendido.");
+            return;
+          }
+
           fetch(`${URL_FIREBASE}/panicos.json`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -933,8 +950,10 @@
           })
           .catch(error => {
             panicoEnEnvio = false;
-            eventosEnviados.delete(idEvento); // permitir reintento manual si falló el envío
-            alert("Error al enviar alerta de pánico: " + error.toString());
+            // Falló el envío (caída de red): en lugar de perder la alerta, la
+            // encolamos para reintento automático al volver la conexión.
+            encolarPanicoPendiente(payloadPanico);
+            alert("⚠️ No se pudo contactar a la central en este momento. La alerta quedó guardada y se reintentará automáticamente al recuperar la conexión.");
           });
         },
         function(error) {
@@ -943,6 +962,79 @@
         { enableHighAccuracy: true }
       );
     }
+
+    // ---- Cola offline de pánicos: garantiza que ninguna alerta se pierda ----
+    const CLAVE_PANICOS_PENDIENTES = 'panicos_pendientes';
+    let reenviandoPanicos = false;
+
+    // Guarda una alerta de pánico en la cola local (idempotente por idEvento).
+    function encolarPanicoPendiente(payload) {
+      try {
+        let cola = JSON.parse(localStorage.getItem(CLAVE_PANICOS_PENDIENTES) || '[]');
+        if (!cola.some(p => p && p.idEvento === payload.idEvento)) {
+          cola.push(payload);
+          localStorage.setItem(CLAVE_PANICOS_PENDIENTES, JSON.stringify(cola));
+        }
+        actualizarAvisoPanicosPendientes();
+      } catch (e) { /* si falla localStorage no interrumpimos la operatoria */ }
+    }
+
+    // Reenvía en orden todas las alertas encoladas. Solo elimina de la cola las
+    // que confirmó el servidor; las que fallan quedan para el próximo intento.
+    function reenviarPanicosPendientes() {
+      if (reenviandoPanicos || !navigator.onLine) return;
+      let cola;
+      try { cola = JSON.parse(localStorage.getItem(CLAVE_PANICOS_PENDIENTES) || '[]'); }
+      catch (e) { cola = []; }
+      if (!cola.length) return;
+
+      reenviandoPanicos = true;
+      const pendientes = [...cola];
+
+      (async () => {
+        const sobrevivientes = [];
+        for (const payload of pendientes) {
+          try {
+            const res = await fetch(`${URL_FIREBASE}/panicos.json`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            await res.json();
+            if (payload.idEvento) eventosEnviados.add(payload.idEvento);
+          } catch (e) {
+            sobrevivientes.push(payload); // sigue pendiente para reintentar luego
+          }
+        }
+        try { localStorage.setItem(CLAVE_PANICOS_PENDIENTES, JSON.stringify(sobrevivientes)); }
+        catch (e) { /* noop */ }
+        reenviandoPanicos = false;
+        actualizarAvisoPanicosPendientes();
+        const enviadas = pendientes.length - sobrevivientes.length;
+        if (enviadas > 0) {
+          alert(`🚨 Se reenvi${enviadas === 1 ? 'ó' : 'eron'} ${enviadas} alerta${enviadas === 1 ? '' : 's'} de pánico pendiente${enviadas === 1 ? '' : 's'} a la central.`);
+        }
+      })();
+    }
+
+    // Muestra/actualiza el aviso visible de alertas de pánico aún sin confirmar.
+    function actualizarAvisoPanicosPendientes() {
+      let cola;
+      try { cola = JSON.parse(localStorage.getItem(CLAVE_PANICOS_PENDIENTES) || '[]'); }
+      catch (e) { cola = []; }
+      const aviso = document.getElementById('avisoPanicosPendientes');
+      if (!aviso) return;
+      if (cola.length > 0) {
+        aviso.textContent = `⚠️ ${cola.length} alerta${cola.length === 1 ? '' : 's'} de pánico pendiente${cola.length === 1 ? '' : 's'} de envío (se reintentará al recuperar internet).`;
+        aviso.classList.remove('hidden');
+      } else {
+        aviso.classList.add('hidden');
+      }
+    }
+
+    // Al recuperar conexión reintentamos automáticamente la cola de pánicos.
+    window.addEventListener('online', reenviarPanicosPendientes);
 
     // 📝 ENVÍO DE NOVEDAD A FIREBASE
     function enviarNovedadPortal() {

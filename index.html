@@ -178,6 +178,9 @@
     let fotoBase64Global = "";
     let estaSincronizando = false;
     let ultimoTipoFichadaGlobal = "";
+    // Turno/horario de la ENTRADA activa (si la hay). Permite ligar la SALIDA
+    // al turno con el que se abrio el servicio, aunque cruce la medianoche.
+    let ultimaEntradaActivaGlobal = null;
     let fotoMasterGuardada = null;
     let modelosCargados = false;
     let resultadoSimilitudGlobal = "NO_EVALUADO";
@@ -621,6 +624,7 @@
 
         let ultimaFichadaTipo = "";
         let timestampUltimo = 0;
+        let ultimaFichadaObj = null;
 
         if (dataFichadas) {
           Object.values(dataFichadas).forEach(f => {
@@ -629,6 +633,7 @@
               if (tiempoFichada >= timestampUltimo) {
                 timestampUltimo = tiempoFichada;
                 ultimaFichadaTipo = String(f.tipo || "").trim().toUpperCase();
+                ultimaFichadaObj = f;
               }
             }
           });
@@ -641,11 +646,13 @@
             if (tiempoP >= timestampUltimo) {
               timestampUltimo = tiempoP;
               ultimaFichadaTipo = String(p.tipo || "").trim().toUpperCase();
+              ultimaFichadaObj = p;
             }
           }
         });
 
         ultimoTipoFichadaGlobal = ultimaFichadaTipo;
+        ultimaEntradaActivaGlobal = capturarEntradaActiva(ultimaFichadaTipo, ultimaFichadaObj);
 
         if (ultimaFichadaTipo) {
           badgeEstado.classList.remove('hidden');
@@ -667,9 +674,26 @@
       });
     }
 
+    // Devuelve el turno/horario de la ENTRADA activa para que la SALIDA lo
+    // herede (turnos nocturnos que cruzan la medianoche). null si no hay
+    // ENTRADA abierta.
+    function capturarEntradaActiva(tipo, obj) {
+      if (tipo !== 'ENTRADA' || !obj) return null;
+      return {
+        horarioProgramadoInicio: obj.horarioProgramadoInicio || null,
+        horarioProgramadoFin: obj.horarioProgramadoFin || null,
+        horarioProgramadoOrigen: obj.horarioProgramadoOrigen || null,
+        asignacionTurnoId: obj.asignacionTurnoId || null,
+        objetivo: obj.objetivo || null,
+        objetivoAutorizadoId: obj.objetivoAutorizadoId || null,
+        fechaHoraDispositivo: obj.fechaHoraDispositivo || null
+      };
+    }
+
     function verificarUltimoEstadoLocal(legajoInput) {
       let ultimaFichadaTipo = "";
       let timestampUltimo = 0;
+      let ultimaFichadaObj = null;
       let pendientes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
       
       pendientes.forEach(p => {
@@ -678,11 +702,13 @@
           if (tiempoP >= timestampUltimo) {
             timestampUltimo = tiempoP;
             ultimaFichadaTipo = String(p.tipo || "").trim().toUpperCase();
+            ultimaFichadaObj = p;
           }
         }
       });
 
       ultimoTipoFichadaGlobal = ultimaFichadaTipo;
+      ultimaEntradaActivaGlobal = capturarEntradaActiva(ultimaFichadaTipo, ultimaFichadaObj);
       const badgeEstado = document.getElementById('ultimo-estado-badge');
 
       if (ultimaFichadaTipo) {
@@ -1082,6 +1108,16 @@
         asignacionTurnoId: turnoProgramadoGlobal?.id || null,
         objetivoAutorizadoId: document.getElementById('objetivo').selectedOptions[0]?.dataset?.objetivoId || null
       };
+
+      // Turno nocturno: si es SALIDA y hay una ENTRADA activa (que pudo abrirse
+      // el dia anterior y cruzar la medianoche), la SALIDA hereda el turno/horario
+      // de esa ENTRADA en lugar del turno resuelto para la fecha de HOY.
+      if (tipo === 'SALIDA' && ultimaEntradaActivaGlobal) {
+        if (ultimaEntradaActivaGlobal.horarioProgramadoInicio) datos.horarioProgramadoInicio = ultimaEntradaActivaGlobal.horarioProgramadoInicio;
+        if (ultimaEntradaActivaGlobal.horarioProgramadoFin) datos.horarioProgramadoFin = ultimaEntradaActivaGlobal.horarioProgramadoFin;
+        if (ultimaEntradaActivaGlobal.horarioProgramadoOrigen) datos.horarioProgramadoOrigen = ultimaEntradaActivaGlobal.horarioProgramadoOrigen;
+        if (ultimaEntradaActivaGlobal.asignacionTurnoId) datos.asignacionTurnoId = ultimaEntradaActivaGlobal.asignacionTurnoId;
+      }
 
       const divResultado = document.getElementById('resultado');
 
