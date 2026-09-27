@@ -321,6 +321,11 @@
         await cargarModoDispositivo();
         await validarLegajo();   // lee SOLO el registro propio, con token
         reiniciarInactividad();
+        // Ya con sesion activa (idToken + legajo propio), intenta subir las
+        // fichadas/alertas offline que pertenezcan a ESTE legajo. Las Reglas de
+        // Seguridad atan cada fichada al legajo del uid autenticado, por eso la
+        // sincronizacion debe ocurrir con la sesion del propio vigilador.
+        if (navigator.onLine) { sincronizarFichadasPendientes(); sincronizarAlertasFichadasPendientes(); }
       } catch (err) {
         st.className = 'text-xs mt-1 text-center text-rose-400 block';
         st.innerText = 'Error al iniciar sesión.';
@@ -1388,13 +1393,21 @@
 
     function sincronizarFichadasPendientes() {
       if (estaSincronizando) return; 
+      if (!navigator.onLine) return;
+      // Seguridad ENFORCED server-side: las Reglas atan newData.legajo al legajo
+      // del uid autenticado. Por eso SOLO se puede sincronizar CON una sesion
+      // activa y SOLO las fichadas del propio legajo logueado; una fichada de
+      // otro legajo seria rechazada por las Reglas, asi que se conserva en la
+      // cola hasta que su verdadero dueno inicie sesion en este dispositivo.
+      if (!idTokenVig || !legajoSesion) return;
       let pendientes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
       if (pendientes.length === 0) return;
 
-      if (!navigator.onLine) return;
+      const idx = pendientes.findIndex(f => f && mismoLegajo(f.legajo, legajoSesion));
+      if (idx === -1) return; // ninguna pendiente es del vigilador logueado
 
       estaSincronizando = true;
-      let datos = pendientes.shift(); 
+      let datos = pendientes.splice(idx, 1)[0];
       localStorage.setItem('fichadas_pendientes', JSON.stringify(pendientes));
 
       fetch(urlAuth(`${URL_FIREBASE}/fichadas.json`), {
@@ -1402,12 +1415,18 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(Object.assign({}, datos, { timestamp: { ".sv": "timestamp" }, sincronizadoDesdeOffline: true }))
       })
-      .then(res => res.json())
+      .then(res => {
+        // Si el servidor RECHAZA (p. ej. permiso denegado por legajo), NO se
+        // debe dar por sincronizada: se lanza para devolverla a la cola.
+        if (!res.ok) throw new Error('Firebase rechazo la fichada pendiente (HTTP ' + res.status + ').');
+        return res.json();
+      })
       .then(respuesta => {
         estaSincronizando = false;
         console.log("🔄 Fichada pendiente sincronizada con Firebase.");
         
-        if (pendientes.length > 0) {
+        const restantes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
+        if (restantes.some(f => f && mismoLegajo(f.legajo, legajoSesion))) {
           sincronizarFichadasPendientes();
         }
       })
