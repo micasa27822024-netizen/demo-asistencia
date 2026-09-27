@@ -1037,7 +1037,7 @@
 
       if (panicoActivoActualId) {
         try {
-          await fetch(`${URL_FIREBASE}/panicos/${panicoActivoActualId}.json`, {
+          await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/panicos/${panicoActivoActualId}.json`), {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ estado: "ATENDIDO", atendidoEn: new Date().toISOString() })
@@ -1171,7 +1171,7 @@
       const pendientes = alertasFichadasCache.filter(a => a.vistoAdmin !== true && a.estado !== 'ATENDIDA');
       if (!pendientes.length) return;
       try {
-        await Promise.all(pendientes.map(a => fetch(`${URL_FIREBASE}/alertasFichadas/${a.id}.json`, {
+        await Promise.all(pendientes.map(async a => fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/alertasFichadas/${a.id}.json`), {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ vistoAdmin: true, vistoEn: new Date().toISOString() })
@@ -1371,7 +1371,7 @@
       const payload = { toleranciaIngresoMin: tolIng, toleranciaEgresoMin: tolEgr, radioFichajeMetros: radio, actualizado: new Date().toISOString() };
       if (estado) { estado.className = 'text-xs text-slate-400'; estado.innerText = 'Guardando...'; }
       try {
-        const res = await fetch(`${URL_FIREBASE}/configuracionGlobal.json`, {
+        const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/configuracionGlobal.json`), {
           method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
         });
         if (!res.ok) throw new Error('Respuesta no OK');
@@ -2037,7 +2037,7 @@
     async function eliminarPanico(id) {
       if (!confirm("¿Está seguro de que desea eliminar este registro de pánico?")) return;
       try {
-        await fetch(`${URL_FIREBASE}/panicos/${id}.json`, { method: "DELETE" });
+        await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/panicos/${id}.json`), { method: "DELETE" });
         registrarAuditoria('PANICO_ELIMINADO', `panicos/${id}`, {});
         alert("Registro de pánico eliminado.");
         recargarDatosEfectivo();
@@ -2439,7 +2439,7 @@
       const btn=document.getElementById('btnGuardarTurno'); btn.disabled=true; btn.innerText='Guardando...';
       try{
         const url=id?`${URL_FIREBASE}/asignacionesTurnos/${id}.json`:`${URL_FIREBASE}/asignacionesTurnos.json`;
-        const res=await fetch(url,{method:id?'PATCH':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+        const res=await fetch(await window.urlConAuthAdmin(url),{method:id?'PATCH':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
         if(!res.ok) throw new Error('Firebase rechazó el turno');
         registrarAuditoria(id?'TURNO_EDITADO':'TURNO_CREADO', id?`asignacionesTurnos/${id}`:'asignacionesTurnos', { legajo:String(cfg.legajo||''), fecha, objetivo:objetivoNombre, horaInicio, horaFin });
         alert(id?'Turno actualizado correctamente.':'Turno asignado correctamente.');
@@ -2453,7 +2453,7 @@
       document.getElementById('turnoFirebaseId').value=t.id; document.getElementById('turnoFecha').value=t.fecha||''; document.getElementById('turnoObjetivo').value=t.objetivoId||''; document.getElementById('turnoHoraInicio').value=t.horaInicio||''; document.getElementById('turnoHoraFin').value=t.horaFin||''; document.getElementById('turnoObservacion').value=t.observacion||'';
       document.getElementById('btnGuardarTurno').innerHTML='<i class="fa-solid fa-save"></i> Actualizar';
     }
-    async function eliminarAsignacionTurno(id){ if(!confirm('¿Eliminar esta asignación de turno?'))return; try{const r=await fetch(`${URL_FIREBASE}/asignacionesTurnos/${id}.json`,{method:'DELETE'});if(!r.ok)throw new Error('Error');registrarAuditoria('TURNO_ELIMINADO', `asignacionesTurnos/${id}`, {});cargarAsignacionesTurnoPersonal();}catch(e){alert('No se pudo eliminar el turno.');} }
+    async function eliminarAsignacionTurno(id){ if(!confirm('¿Eliminar esta asignación de turno?'))return; try{const r=await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/asignacionesTurnos/${id}.json`),{method:'DELETE'});if(!r.ok)throw new Error('Error');registrarAuditoria('TURNO_ELIMINADO', `asignacionesTurnos/${id}`, {});cargarAsignacionesTurnoPersonal();}catch(e){alert('No se pudo eliminar el turno.');} }
     function cerrarModalTurnosPersonal(){document.getElementById('modalTurnosPersonal').classList.add('hidden');personalConfigurandoId=null;}
 
     // =========================
@@ -2786,7 +2786,7 @@
         btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus"></i> Añadir Objetivo'; return;
       }
       try {
-        const res = await fetch(`${URL_FIREBASE}/objetivos.json`, {
+        const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/objetivos.json`), {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ nombre: nombreObj, direccion: direccionObj, latitud: lat, longitud: lon, estado: 'ACTIVO', timestamp: new Date().toISOString() })
         });
@@ -2845,7 +2845,7 @@
       if (!validarCoordenadas(lat, lon)) return alert('El objetivo debe tener coordenadas válidas. Buscá la dirección o usá el GPS actual.');
       btn.disabled = true; btn.innerText = 'Guardando...';
       try {
-        const res = await fetch(`${URL_FIREBASE}/objetivos/${id}.json`, {
+        const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/objetivos/${id}.json`), {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ nombre: nombreObj, direccion: direccionObj, latitud: lat, longitud: lon, estado: 'ACTIVO', fechaActualizacion: new Date().toISOString() })
         });
@@ -2864,7 +2864,7 @@
     async function eliminarObjetivo(firebaseId) {
       if (!confirm('¿Estás seguro de que deseas eliminar este objetivo?')) return;
       try {
-        await fetch(`${URL_FIREBASE}/objetivos/${firebaseId}.json`, { method: 'DELETE' });
+        await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/objetivos/${firebaseId}.json`), { method: 'DELETE' });
         registrarAuditoria('OBJETIVO_ELIMINADO', `objetivos/${firebaseId}`, {});
         alert('Objetivo eliminado con éxito.');
         recargarDatosEfectivo();
