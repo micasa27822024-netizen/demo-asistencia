@@ -254,6 +254,18 @@
     let idTokenVig = null;
     let legajoSesionVig = null;
 
+    // Comparación de legajo ÚNICA y consistente (evita mezclar string y parseInt
+    // en distintos puntos). Normaliza con trim; si ambos son numéricos compara
+    // también por valor entero (tolera ceros a la izquierda). Legajo SIEMPRE string.
+    function mismoLegajoVig(a, b) {
+      const x = String(a == null ? '' : a).trim();
+      const y = String(b == null ? '' : b).trim();
+      if (x === '' || y === '') return false;
+      if (x === y) return true;
+      const nx = parseInt(x, 10), ny = parseInt(y, 10);
+      return Number.isFinite(nx) && Number.isFinite(ny) && nx === ny;
+    }
+
     function urlAuth(url) {
       if (!idTokenVig) return url;
       return url + (url.includes('?') ? '&' : '?') + 'auth=' + encodeURIComponent(idTokenVig);
@@ -605,20 +617,33 @@
           : [];
 
         let nombreEmpleado = `Legajo ${legajoIngresado}`;
+        let estadoVigilador = 'ACTIVO';
+        let fichaEncontrada = false;
         if (personalData) {
           Object.values(personalData).forEach(p => {
             const pLegajo = String(p.legajo || "").trim();
-            if (pLegajo === legajoIngresado || parseInt(pLegajo, 10) === parseInt(legajoIngresado, 10)) {
+            if (mismoLegajoVig(pLegajo, legajoIngresado)) {
+              fichaEncontrada = true;
               if (p.nombre) nombreEmpleado = p.nombre;
+              estadoVigilador = String(p.estado || 'ACTIVO').trim().toUpperCase();
             }
           });
+        }
+
+        // Bloqueo por estado: un legajo INACTIVO / dado de baja NO puede consultar
+        // su historial ni usar el botón de pánico desde Mis Horas (misma política que index.html).
+        if (fichaEncontrada && estadoVigilador !== 'ACTIVO') {
+          try { if (typeof window.logoutVigilador === 'function') await window.logoutVigilador(); } catch (_) {}
+          idTokenVig = null; legajoSesionVig = null;
+          alert('⛔ Tu legajo figura como INACTIVO / dado de baja. No podés acceder a tus horas. Contactá al administrador.');
+          return;
         }
 
         let misFichadas = [];
         if (fichadasData) {
           Object.values(fichadasData).forEach(f => {
             const fLegajo = String(f.legajo || "").trim();
-            const coincideLegajo = (fLegajo === legajoIngresado || parseInt(fLegajo, 10) === parseInt(legajoIngresado, 10));
+            const coincideLegajo = mismoLegajoVig(fLegajo, legajoIngresado);
             if (coincideLegajo) {
               misFichadas.push({
                 fecha: f.fechaHoraDispositivo || f.fecha,
@@ -681,7 +706,7 @@
           if (fichadasData) {
             Object.values(fichadasData).forEach(f => {
               const fLegajo = String(f.legajo || '').trim();
-              if (fLegajo === legajo || parseInt(fLegajo, 10) === parseInt(legajo, 10)) {
+              if (mismoLegajoVig(fLegajo, legajo)) {
                 misFichadas.push({
                   fecha: f.fechaHoraDispositivo || f.fecha,
                   legajo: f.legajo,

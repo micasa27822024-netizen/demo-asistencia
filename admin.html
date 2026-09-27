@@ -2292,20 +2292,30 @@
         const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/personal/${id}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datosActualizados) });
         if (!res.ok) throw new Error('Error al actualizar en Firebase');
         let avisoAuth = '';
+        // ¿Cambió el legajo? El login del empleado es legajo@demo.asistencia, así que
+        // si cambia el legajo también hay que cambiar el email de Auth, no solo /usuarios.
+        const legajoAnterior = String(fichaActual.legajo || '').trim();
+        const legajoNuevo = String(legajo).trim();
+        const legajoCambio = legajoAnterior !== '' && legajoAnterior !== legajoNuevo;
+        // Guarda la credencial hasheada nueva (si se cambió el PIN).
         if (credencialNueva) {
           await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/credenciales/${id}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(credencialNueva) });
-          // Fuerza la MISMA clave en Firebase Auth vía el Worker (permiso Admin, sin la clave vieja).
-          // Así el PIN nuevo sirve para loguear de verdad, no solo para el hash local.
+        }
+        // Sincroniza Firebase Auth vía el Worker cuando cambia el PIN (clave) y/o el legajo (email).
+        // Así el empleado puede loguear de verdad con su legajo/PIN nuevos, no solo con el hash local.
+        if (credencialNueva || legajoCambio) {
           if (URL_WORKER_AUTH) {
             try {
               const tokenAdmin = await window.obtenerTokenAdmin();
-              const nuevaClaveAuth = String(pin).trim().padStart(6, '0');
-              const wr = await fetch(URL_WORKER_AUTH, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken: tokenAdmin, uid: id, nuevaClave: nuevaClaveAuth }) });
+              const cuerpoWorker = { idToken: tokenAdmin, uid: id };
+              if (credencialNueva) cuerpoWorker.nuevaClave = String(pin).trim().padStart(6, '0');
+              if (legajoCambio) cuerpoWorker.nuevoEmail = legajoNuevo + '@demo.asistencia';
+              const wr = await fetch(URL_WORKER_AUTH, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpoWorker) });
               const wd = await wr.json().catch(() => ({}));
-              if (!wr.ok || !wd.ok) avisoAuth = '\n\n⚠️ El PIN se guardó, pero NO se pudo actualizar la clave de acceso (Auth): ' + (wd.error || ('HTTP ' + wr.status)) + '. El empleado sigue ingresando con el PIN anterior hasta reintentar.';
-            } catch (e) { avisoAuth = '\n\n⚠️ El PIN se guardó, pero no se pudo contactar el servicio de claves (Auth). El empleado sigue ingresando con el PIN anterior.'; }
+              if (!wr.ok || !wd.ok) avisoAuth = '\n\n⚠️ Los datos se guardaron, pero NO se pudo sincronizar el acceso (Auth): ' + (wd.error || ('HTTP ' + wr.status)) + '. El empleado sigue ingresando con su legajo/PIN anteriores hasta reintentar.';
+            } catch (e) { avisoAuth = '\n\n⚠️ Los datos se guardaron, pero no se pudo contactar el servicio de acceso (Auth). El empleado sigue ingresando con su legajo/PIN anteriores.'; }
           } else {
-            avisoAuth = '\n\n⚠️ Nota: el cambio de PIN aún no está conectado al servicio de Auth (falta configurar URL_WORKER_AUTH), así que el empleado sigue ingresando con el PIN anterior.';
+            avisoAuth = '\n\n⚠️ Nota: el cambio de PIN/legajo aún no está conectado al servicio de Auth (falta configurar URL_WORKER_AUTH), así que el empleado sigue ingresando con sus credenciales anteriores.';
           }
         }
         // Sincroniza la identidad de acceso (/usuarios/<uid>) en la MISMA edición:
