@@ -928,6 +928,10 @@
 
   <script>
     const URL_FIREBASE = "https://fir-asistencia-fad12-default-rtdb.firebaseio.com";
+    // URL del Worker que sincroniza la clave de Firebase Auth al cambiar el PIN.
+    // Pegá acá la URL que te da Cloudflare (ej: https://vigix-auth-admin.TU-SUBDOMINIO.workers.dev).
+    // Si queda vacía, el cambio de PIN NO actualiza la clave de acceso (solo el hash local).
+    const URL_WORKER_AUTH = "https://vigix-auth-admin.micasa27822024.workers.dev/";
 
     // --- REGISTRO DE AUDITORÍA (aditivo) ---
     // Deja constancia inmutable en /auditoria de cada cambio crítico (borrado/edición) hecho por el admin.
@@ -2287,8 +2291,22 @@
       try {
         const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/personal/${id}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datosActualizados) });
         if (!res.ok) throw new Error('Error al actualizar en Firebase');
+        let avisoAuth = '';
         if (credencialNueva) {
           await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/credenciales/${id}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(credencialNueva) });
+          // Fuerza la MISMA clave en Firebase Auth vía el Worker (permiso Admin, sin la clave vieja).
+          // Así el PIN nuevo sirve para loguear de verdad, no solo para el hash local.
+          if (URL_WORKER_AUTH) {
+            try {
+              const tokenAdmin = await window.obtenerTokenAdmin();
+              const nuevaClaveAuth = String(pin).trim().padStart(6, '0');
+              const wr = await fetch(URL_WORKER_AUTH, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken: tokenAdmin, uid: id, nuevaClave: nuevaClaveAuth }) });
+              const wd = await wr.json().catch(() => ({}));
+              if (!wr.ok || !wd.ok) avisoAuth = '\n\n⚠️ El PIN se guardó, pero NO se pudo actualizar la clave de acceso (Auth): ' + (wd.error || ('HTTP ' + wr.status)) + '. El empleado sigue ingresando con el PIN anterior hasta reintentar.';
+            } catch (e) { avisoAuth = '\n\n⚠️ El PIN se guardó, pero no se pudo contactar el servicio de claves (Auth). El empleado sigue ingresando con el PIN anterior.'; }
+          } else {
+            avisoAuth = '\n\n⚠️ Nota: el cambio de PIN aún no está conectado al servicio de Auth (falta configurar URL_WORKER_AUTH), así que el empleado sigue ingresando con el PIN anterior.';
+          }
         }
         // Sincroniza la identidad de acceso (/usuarios/<uid>) en la MISMA edición:
         // si cambia el legajo o el nombre, /usuarios queda al día sin depender de
@@ -2299,7 +2317,7 @@
         } catch (e) { console.warn('No se pudo sincronizar /usuarios en la edición:', e); }
         mapaConfiguracionPersonal[id] = { ...(mapaConfiguracionPersonal[id] || {}), ...datosActualizados };
         registrarAuditoria('PERSONAL_EDITADO', `personal/${id}`, { legajo, nombre });
-        alert('Personal actualizado con éxito.');
+        alert('Personal actualizado con éxito.' + avisoAuth);
         cerrarModalEditar();
         recargarDatosEfectivo();
       } catch(err) { alert('Ocurrió un error al editar: ' + err.toString()); }
