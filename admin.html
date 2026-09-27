@@ -2290,6 +2290,13 @@
         if (credencialNueva) {
           await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/credenciales/${id}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(credencialNueva) });
         }
+        // Sincroniza la identidad de acceso (/usuarios/<uid>) en la MISMA edición:
+        // si cambia el legajo o el nombre, /usuarios queda al día sin depender de
+        // apretar "Sincronizar identidades" a mano. No pisa el rol (solo legajo/nombre).
+        // El id de /personal es el uid del empleado, así que /usuarios/<id> es su identidad.
+        try {
+          await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/usuarios/${id}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ legajo: String(legajo).trim(), nombre }) });
+        } catch (e) { console.warn('No se pudo sincronizar /usuarios en la edición:', e); }
         mapaConfiguracionPersonal[id] = { ...(mapaConfiguracionPersonal[id] || {}), ...datosActualizados };
         registrarAuditoria('PERSONAL_EDITADO', `personal/${id}`, { legajo, nombre });
         alert('Personal actualizado con éxito.');
