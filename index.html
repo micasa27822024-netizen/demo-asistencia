@@ -371,25 +371,6 @@
       if(permitidos.length===1) select.value=permitidos[0].nombre||'';
     }
 
-    function poblarSelectObjetivos(lista) {
-      const selectObj = document.getElementById('objetivo');
-      let ultimoElegido = localStorage.getItem('demo_ultimo_objetivo') || '';
-
-      selectObj.innerHTML = '<option value="">Seleccione un Objetivo</option>';
-
-      lista.forEach(item => {
-        const nombreObj = typeof item === 'string' ? item : (item.nombre || item.codigo);
-        if (!nombreObj) return;
-
-        const opt = document.createElement('option');
-        opt.value = nombreObj;
-        opt.textContent = nombreObj;
-        if (nombreObj === ultimoElegido) {
-          opt.selected = true;
-        }
-        selectObj.appendChild(opt);
-      });
-    }
 
 
     function calcularDistanciaMetros(lat1, lon1, lat2, lon2) {

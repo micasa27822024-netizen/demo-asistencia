@@ -1452,6 +1452,18 @@
       return `${y}-${m}-${d}`;
     }
 
+    // Comparación de legajos tolerante a formato (igual criterio que mis-horas.html):
+    // primero compara como texto normalizado y, de respaldo, como número, para que
+    // "007" y "7" (o con espacios) se consideren el mismo legajo.
+    function mismoLegajoAdmin(a, b) {
+      const sa = String(a == null ? '' : a).trim();
+      const sb = String(b == null ? '' : b).trim();
+      if (sa === sb) return true;
+      const na = parseInt(sa, 10);
+      const nb = parseInt(sb, 10);
+      return Number.isFinite(na) && Number.isFinite(nb) && na === nb;
+    }
+
     function obtenerHorarioProgramadoAdmin(entrada, legajo, objetivoNombre) {
       const fechaEntrada = new Date(entrada);
       if (isNaN(fechaEntrada)) return null;
@@ -1460,7 +1472,7 @@
       const objetivoStr = String(objetivoNombre || '').trim().toLowerCase();
 
       const turnosFecha = asignacionesTurnosGlobalAdmin.filter(t =>
-        String(t.legajo || '').trim() === legajoStr && String(t.fecha || '') === fechaClave
+        mismoLegajoAdmin(t.legajo, legajoStr) && String(t.fecha || '') === fechaClave
       );
 
       let turno = null;
@@ -1475,7 +1487,7 @@
         return { inicio: turno.horaInicio || '', fin: turno.horaFin || '' };
       }
 
-      const persona = Object.values(mapaConfiguracionPersonal).find(p => String(p.legajo || '').trim() === legajoStr);
+      const persona = Object.values(mapaConfiguracionPersonal).find(p => mismoLegajoAdmin(p.legajo, legajoStr));
       const h = (persona && persona.horarioHabitual) || {};
       if (h.inicio || h.fin) {
         return { inicio: h.inicio || '', fin: h.fin || '' };
@@ -2112,60 +2124,6 @@
       });
     }
 
-    async function guardarVigilador(e) {
-      e.preventDefault();
-      const btn = document.getElementById('btnGuardarGuardia');
-      btn.disabled = true;
-      btn.innerText = "Guardando...";
-
-      const pinGenerado = document.getElementById('newPin').value;
-      const legajoIngresado = document.getElementById('newLegajo').value.trim();
-      const nombreIngresado = document.getElementById('newNombre').value.trim();
-      const inputFotoMaster = document.getElementById('newFotoMaster');
-
-      let fotoMasterBase64 = null;
-      if (inputFotoMaster.files && inputFotoMaster.files[0]) {
-        fotoMasterBase64 = await convertirImagenBase64(inputFotoMaster.files[0]);
-      }
-
-      // El PIN no se guarda en texto plano: se deriva un hash con salt.
-      const pinSaltNuevo = window.generarSaltVigix();
-      const pinHashNuevo = await window.hashPinVigix(pinGenerado, pinSaltNuevo);
-      const nuevoPersonal = {
-        legajo: legajoIngresado,
-        nombre: nombreIngresado,
-        pinHash: pinHashNuevo,
-        pinSalt: pinSaltNuevo,
-        estado: 'ACTIVO',
-        fotoMaster: fotoMasterBase64,
-        horarioHabitual: { inicio: '', fin: '' },
-        objetivosAsignados: [],
-        timestamp: new Date().toISOString()
-      };
-
-      try {
-        const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/personal.json`), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(nuevoPersonal)
-        });
-
-        if (!res.ok) throw new Error("No se pudo guardar en Firebase");
-
-        alert(`Personal registrado con éxito.\nPIN asignado: ${pinGenerado}`);
-        document.getElementById('newLegajo').value = "";
-        document.getElementById('newNombre').value = "";
-        document.getElementById('newFotoMaster').value = "";
-        generarPinAleatorio();
-        recargarDatosEfectivo();
-      } catch (err) {
-        alert("Ocurrió un error al guardar: " + err.toString());
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Guardar Personal`;
-      }
-    }
-
     async function abrirModalEditar(id) {
       const cfg = mapaConfiguracionPersonal[id];
       if (!cfg) return alert('No se encontró el personal seleccionado. Actualizá los datos e intentá nuevamente.');
@@ -2448,7 +2406,7 @@
       try {
         const res = await fetch(`${URL_FIREBASE}/asignacionesTurnos.json?ts=${Date.now()}`, { cache: 'no-store' });
         const data = await res.json();
-        asignacionesTurnosAdmin = data ? Object.entries(data).map(([id,d]) => ({...d, id})).filter(d => String(d.legajo || '') === String(mapaConfiguracionPersonal[personalConfigurandoId]?.legajo || '')) : [];
+        asignacionesTurnosAdmin = data ? Object.entries(data).map(([id,d]) => ({...d, id})).filter(d => mismoLegajoAdmin(d.legajo, mapaConfiguracionPersonal[personalConfigurandoId]?.legajo)) : [];
         asignacionesTurnosAdmin.sort((a,b) => String(a.fecha || '').localeCompare(String(b.fecha || '')));
         cuerpo.innerHTML = '';
         if (!asignacionesTurnosAdmin.length) { cuerpo.innerHTML = '<tr><td colspan="5" class="p-6 text-center text-slate-500">No hay cambios de turno registrados.</td></tr>'; return; }
@@ -2764,12 +2722,6 @@
         'Google Maps se abrió en una nueva pestaña. Si Google Maps muestra el domicilio exacto, podés hacer clic derecho sobre el punto, copiar las coordenadas y pegarlas abajo en <strong>Latitud</strong> y <strong>Longitud</strong>. Después presioná <strong>Aplicar coordenadas manuales</strong>.',
         'success'
       );
-    }
-
-    function abrirGoogleMapsCoordenadas(lat, lon) {
-      if (!validarCoordenadas(lat, lon)) return;
-      const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(Number(lat))},${encodeURIComponent(Number(lon))}`;
-      window.open(url, '_blank', 'noopener,noreferrer');
     }
 
     function renderizarTablaObjetivos(registros) {
@@ -3183,9 +3135,9 @@
     const mainAuth = getAuth(mainApp);
 
     /**
-     * Login REAL de admin/supervisor: valida credenciales en Firebase Auth
+     * Login REAL de admin: valida credenciales en Firebase Auth
      * y lee el rol guardado en la base de datos: /usuarios/<uid>/rol.
-     * Solo se permite entrar con rol 'admin' o 'supervisor'.
+     * Solo se permite entrar con rol 'admin' (los supervisores quedan excluidos).
      * @returns {Promise<{ok:boolean, uid?:string, rol?:string, mensaje?:string}>}
      */
     async function loginAdminReal(email, password) {
@@ -3204,7 +3156,9 @@
           if (existeNodo) { rol = (snap.val() || {}).rol || null; }
         } catch (e2) { errorLectura = (e2 && (e2.code || e2.message)) || 'desconocido'; }
 
-        if (rol !== 'admin' && rol !== 'supervisor') {
+        // Separación de roles: este panel es EXCLUSIVO de administradores.
+        // Un supervisor NO puede ingresar al panel completo de admin.
+        if (rol !== 'admin') {
           try { await signOut(mainAuth); } catch (_) {}
           // Diagnóstico temporal: mostramos el UID real para poder compararlo con la base
           let detalle;
@@ -3212,8 +3166,10 @@
             detalle = 'No se pudo leer /usuarios (las reglas bloquean la lectura): ' + errorLectura;
           } else if (!existeNodo) {
             detalle = 'No existe el nodo usuarios/' + uid + ' . Copiá EXACTO este UID en la base: ' + uid;
+          } else if (rol === 'supervisor') {
+            detalle = 'Tu usuario es de rol "supervisor" y este panel es exclusivo de administradores. No tenés acceso al panel de administración.';
           } else {
-            detalle = 'El nodo existe pero el rol leído fue "' + (rol === null ? '(vacío)' : rol) + '". UID: ' + uid;
+            detalle = 'El nodo existe pero el rol leído fue "' + (rol === null ? '(vacío)' : rol) + '". Se requiere rol "admin". UID: ' + uid;
           }
           return { ok: false, mensaje: detalle };
         }
