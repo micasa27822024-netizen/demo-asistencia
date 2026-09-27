@@ -421,6 +421,22 @@
         <div id="migracionLog" class="hidden-empty bg-slate-950 border border-slate-700 rounded-xl p-3 max-h-60 overflow-y-auto space-y-1"></div>
       </div>
 
+      <!-- SINCRONIZAR MAPA /usuarios (identidad para las Reglas) -->
+      <div class="bg-slate-800 p-6 rounded-2xl border border-emerald-600/40 shadow-xl space-y-4">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div>
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+              <i class="fa-solid fa-id-badge text-emerald-400"></i> Sincronizar identidades (/usuarios)
+            </h3>
+            <p class="text-xs text-slate-400 mt-1 max-w-2xl">Crea el mapa <code>/usuarios/&lt;uid&gt; = { legajo, rol }</code> que las <strong class="text-emerald-400">Reglas de Seguridad</strong> necesitan para que cada empleado pueda ver <strong class="text-emerald-400">solo sus propios datos</strong>. Recorre las fichas de <code>/personal</code> y completa las que falten. <strong class="text-emerald-400">No modifica</strong> a quienes ya sean admin o supervisor. Es idempotente: podés ejecutarlo las veces que quieras.</p>
+          </div>
+          <button type="button" id="btnSincronizarUsuarios" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 shrink-0">
+            <i class="fa-solid fa-id-badge"></i> Sincronizar ahora
+          </button>
+        </div>
+        <div id="sincronizarUsuariosLog" class="hidden bg-slate-950 border border-slate-700 rounded-xl p-3 max-h-60 overflow-y-auto space-y-1"></div>
+      </div>
+
       <!-- PROTECCIÓN DE PIN (hash + salt) -->
       <div class="bg-slate-800 p-6 rounded-2xl border border-fuchsia-600/40 shadow-xl space-y-4">
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
@@ -3334,6 +3350,16 @@
           pinSalt: pinSaltNuevo
         });
 
+        // Mapa de identidad /usuarios/<uid> = { legajo, rol }. IMPRESCINDIBLE:
+        // las Reglas de Seguridad usan root.child('usuarios').child(auth.uid).child('legajo')
+        // para autorizar que el empleado lea SOLO su propia ficha e historial.
+        // Sin esta entrada, el empleado no podría ver sus datos ni fichar con
+        // validación completa. rol 'empleado' (no admin ni supervisor).
+        await set(ref(mainDb, `usuarios/${uid}`), {
+          legajo: legajoLimpio,
+          rol: 'empleado'
+        });
+
         // d. Cerrar de inmediato la sesión secundaria
         await signOut(secondaryAuth);
 
@@ -3450,6 +3476,13 @@
         if (clave === uid) {
           try {
             await set(ref(mainDb, `personal/${uid}/authUid`), uid);
+            // Mapa de identidad /usuarios/<uid> para las Reglas (no pisa un rol
+            // admin/supervisor ya existente; por defecto 'empleado').
+            try {
+              const uSnap = await get(ref(mainDb, `usuarios/${uid}`));
+              const rolPrev = uSnap.exists() ? (uSnap.val() || {}).rol : null;
+              await set(ref(mainDb, `usuarios/${uid}`), { legajo: String(legajo).trim(), rol: rolPrev || 'empleado' });
+            } catch (_) {}
             escribir(`✅ ${legajo} (${nombre}) actualizado.`, 'text-emerald-400');
             migrados++;
           } catch (e) { escribir(`❌ ${legajo}: ${e.message || e}`, 'text-rose-400'); errores++; }
@@ -3470,6 +3503,13 @@
         try {
           await set(ref(mainDb, `personal/${uid}`), nuevaFicha);
           if (credencialMig) { await set(ref(mainDb, `credenciales/${uid}`), credencialMig); }
+          // Mapa de identidad /usuarios/<uid> para las Reglas (no pisa un rol
+          // admin/supervisor ya existente; por defecto 'empleado').
+          try {
+            const uSnap = await get(ref(mainDb, `usuarios/${uid}`));
+            const rolPrev = uSnap.exists() ? (uSnap.val() || {}).rol : null;
+            await set(ref(mainDb, `usuarios/${uid}`), { legajo: String(legajo).trim(), rol: rolPrev || 'empleado' });
+          } catch (_) {}
           // Verificar que quedó escrita antes de borrar la vieja
           const verif = await get(ref(mainDb, `personal/${uid}`));
           if (!verif.exists()) throw new Error('no se pudo verificar la escritura');
@@ -3500,6 +3540,74 @@
         try { await migrarEmpleadosAnteriores(); } finally {
           btnMigrar.disabled = false;
           btnMigrar.innerHTML = original;
+        }
+      });
+    }
+
+    /**
+     * SINCRONIZAR /usuarios DESDE /personal (backfill de identidades).
+     * Recorre /personal y asegura /usuarios/<uid> = { legajo, rol } para cada
+     * ficha con legajo. Requisito de las Reglas: sin esta entrada el empleado
+     * no puede leer su propia ficha/historial (query.equalTo compara contra
+     * /usuarios/<uid>/legajo). Es idempotente y NO pisa un rol admin/supervisor
+     * ya existente (solo completa 'empleado' donde falta).
+     */
+    async function sincronizarUsuariosDesdePersonal() {
+      const logEl = document.getElementById('sincronizarUsuariosLog');
+      const escribir = (txt, color) => {
+        if (!logEl) return;
+        logEl.classList.remove('hidden');
+        const p = document.createElement('div');
+        p.className = 'text-xs ' + (color || 'text-slate-300');
+        p.textContent = txt;
+        logEl.appendChild(p);
+        logEl.scrollTop = logEl.scrollHeight;
+      };
+      escribir('— Sincronizando identidades /usuarios desde /personal… —', 'text-white');
+      let personal;
+      try {
+        const snap = await get(ref(mainDb, 'personal'));
+        personal = snap.exists() ? snap.val() : null;
+      } catch (e) { escribir(`❌ No se pudo leer /personal: ${e.message || e}`, 'text-rose-400'); alert('No se pudo leer /personal.'); return; }
+      if (!personal) { escribir('↷ /personal sin registros.', 'text-slate-500'); alert('No hay empleados en /personal.'); return; }
+
+      let creados = 0, existentes = 0, omitidos = 0, errores = 0;
+      for (const [uid, ficha] of Object.entries(personal)) {
+        const legajo = ficha && ficha.legajo != null ? String(ficha.legajo).trim() : '';
+        if (!legajo) { omitidos++; escribir(`↷ ${uid}: ficha sin legajo, se omite.`, 'text-slate-500'); continue; }
+        try {
+          const uSnap = await get(ref(mainDb, `usuarios/${uid}`));
+          if (uSnap.exists()) {
+            const prev = uSnap.val() || {};
+            // Ya existe: solo aseguramos que el legajo coincida, sin tocar el rol.
+            if (String(prev.legajo || '').trim() !== legajo) {
+              await set(ref(mainDb, `usuarios/${uid}`), { legajo, rol: prev.rol || 'empleado' });
+              escribir(`🔄 ${legajo}: legajo actualizado (rol '${prev.rol || 'empleado'}' conservado).`, 'text-sky-400');
+            }
+            existentes++;
+          } else {
+            await set(ref(mainDb, `usuarios/${uid}`), { legajo, rol: 'empleado' });
+            creados++;
+            escribir(`✅ ${legajo}: identidad creada (rol 'empleado').`, 'text-emerald-400');
+          }
+        } catch (e) { errores++; escribir(`❌ ${legajo || uid}: ${e.message || e}`, 'text-rose-400'); }
+      }
+      escribir(`— Sincronización finalizada: ${creados} creada(s), ${existentes} ya existían, ${omitidos} sin legajo, ${errores} error(es). —`, 'text-white');
+      alert(`Sincronización de identidades finalizada.\nCreadas: ${creados}\nYa existían: ${existentes}\nSin legajo: ${omitidos}\nErrores: ${errores}`);
+    }
+    window.sincronizarUsuariosDesdePersonal = sincronizarUsuariosDesdePersonal;
+
+    // ---- Botón de sincronización de identidades ----
+    const btnSincUsuarios = document.getElementById('btnSincronizarUsuarios');
+    if (btnSincUsuarios) {
+      btnSincUsuarios.addEventListener('click', async () => {
+        if (!confirm('Se va a crear/completar el mapa /usuarios para que cada empleado pueda ver solo sus propios datos. No modifica a admin ni supervisores. ¿Continuar?')) return;
+        btnSincUsuarios.disabled = true;
+        const original = btnSincUsuarios.innerHTML;
+        btnSincUsuarios.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sincronizando...';
+        try { await sincronizarUsuariosDesdePersonal(); } finally {
+          btnSincUsuarios.disabled = false;
+          btnSincUsuarios.innerHTML = original;
         }
       });
     }
