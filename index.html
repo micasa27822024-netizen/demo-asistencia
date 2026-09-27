@@ -181,6 +181,9 @@
     // Turno/horario de la ENTRADA activa (si la hay). Permite ligar la SALIDA
     // al turno con el que se abrio el servicio, aunque cruce la medianoche.
     let ultimaEntradaActivaGlobal = null;
+    // Marca si el legajo validado figura como INACTIVO / dado de baja. Si es
+    // asi, se bloquea toda posibilidad de fichar.
+    let vigiladorInactivoGlobal = false;
     let fotoMasterGuardada = null;
     let modelosCargados = false;
     let resultadoSimilitudGlobal = "NO_EVALUADO";
@@ -609,18 +612,26 @@
         }
 
         if (encontrado) {
+          const estadoVigilador = String(encontrado.estado || 'ACTIVO').trim().toUpperCase();
+          vigiladorInactivoGlobal = (estadoVigilador !== 'ACTIVO');
           document.getElementById('nombre').value = encontrado.nombre || "";
           fotoMasterGuardada = encontrado.fotoMaster || null;
-          statusLbl.className = "text-xs mt-1 text-emerald-400 block";
-          statusLbl.innerText = `✓ ${encontrado.nombre || 'Legajo Encontrado'} ${fotoMasterGuardada ? '📸 (Foto Master OK)' : '⚠️ (Sin Foto Master)'}`;
+          if (vigiladorInactivoGlobal) {
+            statusLbl.className = "text-xs mt-1 text-rose-400 block";
+            statusLbl.innerText = `⛔ Legajo INACTIVO / dado de baja. No podés fichar. Contactá al administrador.`;
+          } else {
+            statusLbl.className = "text-xs mt-1 text-emerald-400 block";
+            statusLbl.innerText = `✓ ${encontrado.nombre || 'Legajo Encontrado'} ${fotoMasterGuardada ? '📸 (Foto Master OK)' : '⚠️ (Sin Foto Master)'}`;
+          }
         } else {
+          vigiladorInactivoGlobal = false;
           document.getElementById('nombre').value = "";
           statusLbl.className = "text-xs mt-1 text-rose-400 block";
           statusLbl.innerText = "❌ Legajo no encontrado en el sistema.";
         }
 
-        if (encontrado) { aplicarConfiguracionVigilador(encontrado); }
-        else { personalActualGlobal = null; turnoProgramadoGlobal = null; document.getElementById('objetivo').innerHTML = '<option value="">Legajo no autorizado</option>'; document.getElementById('objetivo-status').innerText = ''; document.getElementById('turno-status').classList.add('hidden'); }
+        if (encontrado && !vigiladorInactivoGlobal) { aplicarConfiguracionVigilador(encontrado); }
+        else { personalActualGlobal = null; turnoProgramadoGlobal = null; document.getElementById('objetivo').innerHTML = '<option value="">' + (vigiladorInactivoGlobal ? 'Legajo inactivo' : 'Legajo no autorizado') + '</option>'; document.getElementById('objetivo-status').innerText = ''; document.getElementById('turno-status').classList.add('hidden'); }
 
         let ultimaFichadaTipo = "";
         let timestampUltimo = 0;
@@ -949,6 +960,10 @@
       if (!personalActualGlobal || String(personalActualGlobal.legajo||'').trim() !== String(legajo).trim()) {
         alert('❌ No se pudo validar la configuración del vigilador. Ingrese nuevamente su legajo.'); return;
       }
+      // Bloqueo por estado: un legajo INACTIVO / dado de baja no puede fichar.
+      if (vigiladorInactivoGlobal) {
+        alert('⛔ FICHADA BLOQUEADA. Tu legajo figura como INACTIVO / dado de baja. Contactá al administrador.'); return;
+      }
       // VALIDACIÓN DE PIN: primero contra Firebase Auth (servidor). Si no se puede
       // confirmar online, se valida localmente contra el hash con salt de la ficha
       // (o, para fichas viejas aún sin proteger, contra el PIN en texto plano).
@@ -978,7 +993,12 @@
       if (!objetivoIdSeleccionado || !objetivoAutorizadoIdsGlobal.includes(String(objetivoIdSeleccionado))) {
         alert('❌ FICHADA BLOQUEADA. Ese objetivo no está autorizado para este vigilador.'); return;
       }
-      if (!turnoProgramadoGlobal && (!personalActualGlobal.horarioHabitual?.inicio || !personalActualGlobal.horarioHabitual?.fin)) {
+      // Turno nocturno: una SALIDA que cierra una ENTRADA activa NO exige que
+      // haya un turno programado para HOY (la entrada pudo abrirse ayer y cruzar
+      // la medianoche). En ese caso el horario se hereda de la ENTRADA (ver mas
+      // abajo, override del payload). Para ENTRADA si se exige horario vigente.
+      const cerrandoEntradaActiva = (tipo === "SALIDA" && ultimoTipoFichadaGlobal === "ENTRADA");
+      if (!cerrandoEntradaActiva && !turnoProgramadoGlobal && (!personalActualGlobal.horarioHabitual?.inicio || !personalActualGlobal.horarioHabitual?.fin)) {
         alert('❌ FICHADA BLOQUEADA. No hay un horario programado para este vigilador. El administrador debe asignar un horario.'); return;
       }
 
