@@ -12,6 +12,36 @@
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
 
+  <!-- ========================================================================= -->
+  <!--  SEGURIDAD DE PIN - hash con salt (Web Crypto / PBKDF2-SHA256)             -->
+  <!--  Respaldo offline: valida el PIN contra pinHash+pinSalt sin exponerlo.      -->
+  <!-- ========================================================================= -->
+  <script>
+    (function () {
+      function generarSaltVigix() {
+        const a = crypto.getRandomValues(new Uint8Array(16));
+        return Array.from(a).map(b => b.toString(16).padStart(2, '0')).join('');
+      }
+      async function hashPinVigix(pin, saltHex) {
+        const enc = new TextEncoder();
+        const salt = Uint8Array.from((String(saltHex).match(/.{1,2}/g) || []).map(b => parseInt(b, 16)));
+        const km = await crypto.subtle.importKey('raw', enc.encode(String(pin)), 'PBKDF2', false, ['deriveBits']);
+        const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, km, 256);
+        return Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('');
+      }
+      async function verificarPinHashVigix(pin, ficha) {
+        if (!ficha) return false;
+        const h = String(ficha.pinHash || '').trim();
+        const s = String(ficha.pinSalt || '').trim();
+        if (!h || !s) return false;
+        try { return (await hashPinVigix(pin, s)) === h; } catch (_) { return false; }
+      }
+      window.generarSaltVigix = generarSaltVigix;
+      window.hashPinVigix = hashPinVigix;
+      window.verificarPinHashVigix = verificarPinHashVigix;
+    })();
+  </script>
+
   <!-- ENCABEZADO Y MENÚ CORPORATIVO -->
   <header class="bg-slate-900 border-b border-slate-800 shadow-md mb-4">
     <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -876,7 +906,7 @@
       preview.classList.remove('hidden');
     }
 
-    function procesarEnvio(tipoRecibido) {
+    async function procesarEnvio(tipoRecibido) {
       const tipo = String(tipoRecibido).trim().toUpperCase();
       const legajo = document.getElementById('legajo').value.trim();
       const pin = document.getElementById('pin').value.trim();
@@ -893,13 +923,31 @@
       if (!personalActualGlobal || String(personalActualGlobal.legajo||'').trim() !== String(legajo).trim()) {
         alert('❌ No se pudo validar la configuración del vigilador. Ingrese nuevamente su legajo.'); return;
       }
-      // VALIDACIÓN DE PIN REAL: solo se permite fichar con el PIN correcto del empleado.
+      // VALIDACIÓN DE PIN: primero contra Firebase Auth (servidor). Si no se puede
+      // confirmar online, se valida localmente contra el hash con salt de la ficha
+      // (o, para fichas viejas aún sin proteger, contra el PIN en texto plano).
       const pinRealVigilador = String(personalActualGlobal.pin || personalActualGlobal.clave || '').trim();
-      if (!pinRealVigilador) {
-        alert('❌ Este legajo no tiene un PIN configurado. Contactá al administrador.'); return;
+      const tieneHashLocal = !!(personalActualGlobal.pinHash && personalActualGlobal.pinSalt);
+      let pinVerificadoServidor = false;
+      if (typeof window.verificarPinVigilador === 'function') {
+        try {
+          const ver = await window.verificarPinVigilador(legajo, pin);
+          if (ver && ver.ok) pinVerificadoServidor = true;
+        } catch (_) {}
       }
-      if (String(pin).trim() !== pinRealVigilador) {
-        alert('❌ PIN incorrecto. No podés fichar sin el PIN real de tu legajo.'); return;
+      if (!pinVerificadoServidor) {
+        if (!tieneHashLocal && !pinRealVigilador) {
+          alert('❌ Este legajo no tiene un PIN configurado. Contactá al administrador.'); return;
+        }
+        let pinLocalOk = false;
+        if (tieneHashLocal && typeof window.verificarPinHashVigix === 'function') {
+          pinLocalOk = await window.verificarPinHashVigix(pin, personalActualGlobal);
+        } else if (pinRealVigilador) {
+          pinLocalOk = (String(pin).trim() === pinRealVigilador);
+        }
+        if (!pinLocalOk) {
+          alert('❌ PIN incorrecto. No podés fichar sin el PIN real de tu legajo.'); return;
+        }
       }
       if (!objetivoIdSeleccionado || !objetivoAutorizadoIdsGlobal.includes(String(objetivoIdSeleccionado))) {
         alert('❌ FICHADA BLOQUEADA. Ese objetivo no está autorizado para este vigilador.'); return;
@@ -988,7 +1036,8 @@
     function ejecutarPeticionFichada(tipo, lat, lng, legajo, pin, nombre, objetivo, validacionUbicacion, precisionGPS) {
       const datos = {
         legajo: legajo,
-        pin: pin,
+        // El PIN ya se validó antes de fichar (Firebase Auth / hash con salt), así que
+        // NO se guarda dentro de la fichada: evitamos exponer PIN en /fichadas.
         nombre: nombre || ("Legajo " + legajo),
         objetivo: objetivo,
         tipo: tipo,  
@@ -1155,6 +1204,55 @@
         estaSincronizando = false;
       });
     }
+  </script>
+
+  <!-- ============================================================================= -->
+  <!--  VERIFICACIÓN DE PIN DEL VIGILADOR - Firebase Auth (Web SDK v10 modular)       -->
+  <!--  Bloque aditivo: el vigilador ficha con legajo + PIN validados en el servidor.-->
+  <!-- ============================================================================= -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBYsTCQWwnqEaBzsC5P-9cTM6uBKCnKAmo",
+      authDomain: "fir-asistencia-fad12.firebaseapp.com",
+      databaseURL: "https://fir-asistencia-fad12-default-rtdb.firebaseio.com",
+      projectId: "fir-asistencia-fad12",
+      storageBucket: "fir-asistencia-fad12.firebasestorage.app",
+      messagingSenderId: "441100861030",
+      appId: "1:441100861030:web:b4287e1c3a377cf892b7a7"
+    };
+
+    // Instancia dedicada para NO interferir con ninguna otra sesión de la app.
+    const vigApp  = initializeApp(firebaseConfig, "VigAuthApp");
+    const vigAuth = getAuth(vigApp);
+
+    /**
+     * Verifica legajo + PIN del vigilador contra Firebase Auth.
+     * El empleado se autentica con el correo sintético legajo@demo.asistencia
+     * y el PIN completado a 6 dígitos con ceros a la izquierda (igual que en el alta).
+     * Cierra la sesión inmediatamente: solo sirve para confirmar el PIN.
+     * @returns {Promise<{ok:boolean, razon?:string}>}
+     */
+    async function verificarPinVigilador(legajo, pin) {
+      const legajoLimpio = String(legajo || '').trim();
+      const pinLimpio    = String(pin || '').trim();
+      if (!legajoLimpio || !pinLimpio) return { ok: false, razon: 'faltan_datos' };
+
+      const email    = `${legajoLimpio}@demo.asistencia`;
+      const password = pinLimpio.padStart(6, '0');
+      try {
+        await signInWithEmailAndPassword(vigAuth, email, password);
+        try { await signOut(vigAuth); } catch (_) {}
+        return { ok: true };
+      } catch (e) {
+        // Cualquier fallo (PIN erróneo, sin cuenta, sin conexión) devuelve ok:false;
+        // el respaldo local decide (y también rechaza un PIN incorrecto).
+        return { ok: false, razon: (e && e.code) || 'error' };
+      }
+    }
+    window.verificarPinVigilador = verificarPinVigilador;
   </script>
 </body>
 </html>
