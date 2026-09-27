@@ -458,6 +458,9 @@
       if (icono) icono.classList.add('fa-spin');
 
       try {
+        // Esperar a que Firebase Auth restaure la sesión tras un reload, para que
+        // urlConAuthPanel pueda adjuntar el token y las reglas permitan la lectura.
+        try { if (window.authListoPanel) await window.authListoPanel; } catch (_) {}
         const [res, resPersonal, resTurnos] = await Promise.all([
           fetch(await window.urlConAuthPanel(URL_FIREBASE)),
           fetch(await window.urlConAuthPanel(`${URL_PERSONAL}?ts=${Date.now()}`), { cache: 'no-store' }),
@@ -1259,7 +1262,7 @@
   <!-- ============================================================================= -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getAuth, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
     import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
     const firebaseConfig = {
@@ -1275,6 +1278,18 @@
     const app  = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db   = getDatabase(app);
+
+    // --- Sesión lista: al recargar, Firebase Auth restaura la sesión de forma
+    // asíncrona. Esta promesa se resuelve en el primer onAuthStateChanged, para
+    // que cargarDatos() no pida datos SIN token (lo que la regla rechaza).
+    // Aditivo: no modifica ninguna lógica existente.
+    window.authListoPanel = new Promise((resolve) => {
+      let resuelto = false;
+      const marcar = () => { if (!resuelto) { resuelto = true; resolve(); } };
+      onAuthStateChanged(auth, () => marcar());
+      // Red de seguridad: si por algún motivo no llega el evento, no bloquear.
+      setTimeout(marcar, 4000);
+    });
 
     /**
      * Login REAL del supervisor: valida credenciales en Firebase Auth y lee
