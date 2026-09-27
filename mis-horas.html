@@ -285,17 +285,15 @@
       return urlAuth(url);
     }
 
-    // Lee SOLO la ficha propia (query scoped por legajo, texto y numero) en
+    // Lee SOLO la ficha propia (query scoped por legajo, SIEMPRE string) en
     // vez de descargar todo /personal. Requiere .indexOn:["legajo"] en reglas.
+    // El legajo se guarda y se compara SIEMPRE como string (tambien en las
+    // Reglas de Seguridad), por eso NO se hace variante numerica: un equalTo
+    // numerico contra un indice string nunca coincide (query denegado/vacio).
     async function fetchPersonalScoped(legajo) {
       const base = `${URL_FIREBASE}/personal.json?orderBy=${encodeURIComponent('"legajo"')}`;
-      let r = await fetch(urlAuth(base + '&equalTo=' + encodeURIComponent('"' + legajo + '"') + '&ts=' + Date.now()), { cache: 'no-store' }).then(x => x.json()).catch(() => null);
-      if (r && Object.keys(r).length) return r;
-      const n = Number(legajo);
-      if (Number.isFinite(n)) {
-        const r2 = await fetch(urlAuth(base + '&equalTo=' + n + '&ts=' + Date.now()), { cache: 'no-store' }).then(x => x.json()).catch(() => null);
-        if (r2 && Object.keys(r2).length) return r2;
-      }
+      const legajoStr = String(legajo == null ? '' : legajo).trim();
+      const r = await fetch(urlAuth(base + '&equalTo=' + encodeURIComponent('"' + legajoStr + '"') + '&ts=' + Date.now()), { cache: 'no-store' }).then(x => x.json()).catch(() => null);
       return r || null;
     }
 
@@ -348,22 +346,17 @@
     const eventosEnviados = new Set();
 
     // Consulta SOLO las fichadas del legajo indicado usando el índice del
-    // servidor (orderBy="legajo"&equalTo=...), en vez de descargar el nodo
-    // completo y filtrar en el cliente. Si la consulta indexada falla o no
-    // devuelve datos (p. ej. legajo guardado con otro tipo), cae al nodo
-    // completo para no perder registros (compatibilidad).
+    // servidor (orderBy="legajo"&equalTo="..."), en vez de descargar el nodo
+    // completo y filtrar en el cliente. El legajo se guarda y se compara
+    // SIEMPRE como string (tambien en las Reglas de Seguridad), por eso NO se
+    // hace variante numerica: un equalTo numerico contra un indice string
+    // nunca coincide (query denegado/vacio).
     function fetchFichadasLegajo(legajo) {
-      const legajoStr = String(legajo || '').trim();
+      const legajoStr = String(legajo == null ? '' : legajo).trim();
       const urlScoped = urlAuth(`${URL_FIREBASE}/fichadas.json?orderBy=%22legajo%22&equalTo=%22${encodeURIComponent(legajoStr)}%22&ts=${Date.now()}`);
-      const urlScopedNum = Number.isFinite(Number(legajoStr))
-        ? urlAuth(`${URL_FIREBASE}/fichadas.json?orderBy=%22legajo%22&equalTo=${Number(legajoStr)}&ts=${Date.now()}`)
-        : null;
       return fetch(urlScoped, { cache: 'no-store' })
-        .then(res => res.ok ? res.json() : Promise.reject(new Error('scoped no ok')))
-        .then(data => (data && Object.keys(data).length)
-          ? data
-          : (urlScopedNum ? fetch(urlScopedNum, { cache: 'no-store' }).then(r => r.json()).catch(() => data) : data))
-        .catch(() => (urlScopedNum ? fetch(urlScopedNum, { cache: 'no-store' }).then(r => r.json()).catch(() => null) : null));
+        .then(res => res.ok ? res.json() : null)
+        .catch(() => null);
     }
 
     function parseFechaSegura(fechaStr) {

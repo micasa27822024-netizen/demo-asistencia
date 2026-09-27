@@ -191,6 +191,27 @@
 
     </div>
 
+    <!-- MÓDULO: ALERTAS DE SUPERVISIÓN (llegadas tarde / salidas anticipadas) -->
+    <div id="seccionAlertasSupervision" class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-bell text-rose-400"></i> Alertas de Supervisión
+          <span id="contadorAlertasSup" class="hidden ml-1 text-xs font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded-full">0</span>
+        </h3>
+        <div class="flex items-center gap-3">
+          <label class="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer select-none">
+            <input type="checkbox" id="chkMostrarArchivadasSup" onchange="renderAlertasSupervision()" class="accent-emerald-500">
+            Ver archivadas
+          </label>
+          <button onclick="cargarDatos()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5">
+            <i class="fa-solid fa-rotate-right"></i> Refrescar
+          </button>
+        </div>
+      </div>
+      <p class="text-xs text-slate-400">Se listan las <strong>llegadas tarde</strong> y <strong>salidas anticipadas</strong> detectadas según el horario programado y las tolerancias configuradas. Podés archivarlas cuando ya fueron revisadas (queda guardado y no vuelve a aparecer al recargar).</p>
+      <div id="listaAlertasSupervision" class="space-y-2"></div>
+    </div>
+
     <!-- MÓDULO OPTIMIZADO: CONSULTA Y GESTIÓN DE HORAS POR VIGILADOR -->
     <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
       <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -512,6 +533,8 @@
 
         datosLocales = fichadasArray;
         filtrarTabla();
+        // Deriva y sincroniza las alertas de supervisión (llegadas tarde / salidas anticipadas).
+        generarAlertasSupervision(datosLocales);
 
       } catch (err) {
         console.error(err);
@@ -538,6 +561,179 @@
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
     }
+
+    // ==========================================
+    // ALERTAS DE SUPERVISIÓN (llegadas tarde / salidas anticipadas)
+    // ==========================================
+    // Nodos Firebase: /alertasLlegadasTarde y /alertasSalidasAnticipadas.
+    // - Se derivan de las fichadas con la MISMA lógica de cumplimiento del panel.
+    // - Se guardan con clave ESTABLE (legajo+fecha+objetivo+tipo) para no duplicar
+    //   entre recargas ni entre dispositivos (Firebase = consistencia multi-equipo).
+    // - El archivado es persistente: se marca en Firebase y como respaldo local,
+    //   así una alerta revisada NO reaparece al recargar.
+    const NODO_ALERTA = { LLEGADA_TARDE: 'alertasLlegadasTarde', SALIDA_ANTICIPADA: 'alertasSalidasAnticipadas' };
+    const CLAVE_ALERTAS_SUP_ARCHIVADAS = 'vigix_alertas_sup_archivadas';
+    let alertasSupervisionDetectadas = [];
+
+    function leerArchivadasSupLocal() {
+      try { const a = JSON.parse(localStorage.getItem(CLAVE_ALERTAS_SUP_ARCHIVADAS) || '[]'); return Array.isArray(a) ? a : []; }
+      catch (_) { return []; }
+    }
+    function guardarArchivadasSupLocal(claves) {
+      try { localStorage.setItem(CLAVE_ALERTAS_SUP_ARCHIVADAS, JSON.stringify(Array.from(new Set(claves)))); } catch (_) {}
+    }
+    // Deja SOLO caracteres seguros para claves de Firebase y para el onclick inline.
+    function sanitizarClaveFirebase(v) {
+      return String(v == null ? '' : v).trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '_').slice(0, 120) || '_';
+    }
+    function construirClaveAlerta(legajo, fechaClave, objetivo, tipoAlerta) {
+      return [sanitizarClaveFirebase(legajo), sanitizarClaveFirebase(fechaClave), sanitizarClaveFirebase(objetivo), tipoAlerta].join('__');
+    }
+
+    // Deriva las alertas de las fichadas cargadas y las sincroniza con Firebase.
+    async function generarAlertasSupervision(registros) {
+      const detectadas = [];
+      (registros || []).forEach(fila => {
+        const tipo = String(fila[4] || '').toUpperCase();
+        const horario = obtenerHorarioProgramado(fila[0], fila[1], fila[3]);
+        const cumpl = calcularCumplimientoFichada(tipo, fila[0], horario);
+        if (!cumpl) return;
+        let tipoAlerta = null;
+        if (tipo === 'ENTRADA' && /Llegada tarde/i.test(cumpl.texto)) tipoAlerta = 'LLEGADA_TARDE';
+        else if (tipo === 'SALIDA' && /Salida anticipada/i.test(cumpl.texto)) tipoAlerta = 'SALIDA_ANTICIPADA';
+        if (!tipoAlerta) return;
+        const fechaObj = new Date(fila[0]);
+        const fechaClave = obtenerFechaLocalClave(fechaObj);
+        const legajo = String(fila[1] == null ? '' : fila[1]).trim();
+        const objetivo = String(fila[3] || 'Objetivo General').trim();
+        const clave = construirClaveAlerta(legajo, fechaClave, objetivo, tipoAlerta);
+        detectadas.push({
+          clave, tipoAlerta, legajo, nombre: fila[2] || `Legajo ${legajo}`,
+          objetivo, fecha: fila[0], fechaClave, detalle: cumpl.texto,
+          horarioProgramado: { inicio: (horario && horario.inicio) || '', fin: (horario && horario.fin) || '' }
+        });
+      });
+      alertasSupervisionDetectadas = detectadas;
+
+      // Sincroniza con Firebase: lee lo ya guardado (para respetar archivadas de
+      // otros dispositivos) y sube SOLO las nuevas que aún no existen.
+      try {
+        const [rt, rs] = await Promise.all([
+          fetch(await window.urlConAuthPanel(`${URL_BASE_FIREBASE}/${NODO_ALERTA.LLEGADA_TARDE}.json?ts=${Date.now()}`), { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
+          fetch(await window.urlConAuthPanel(`${URL_BASE_FIREBASE}/${NODO_ALERTA.SALIDA_ANTICIPADA}.json?ts=${Date.now()}`), { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null)
+        ]);
+        const existentes = Object.assign({}, rt || {}, rs || {});
+        // Merge de archivadas del server hacia el respaldo local (multi-dispositivo).
+        const archLocal = new Set(leerArchivadasSupLocal());
+        Object.entries(existentes).forEach(([k, v]) => { if (v && v.archivada) archLocal.add(k); });
+        guardarArchivadasSupLocal(Array.from(archLocal));
+
+        const authUid = sessionStorage.getItem('uid_supervisor') || '';
+        for (const a of detectadas) {
+          if (existentes[a.clave]) continue; // ya existe: no pisar (podría estar archivada)
+          const payload = {
+            legajo: a.legajo, nombre: a.nombre, objetivo: a.objetivo,
+            fecha: a.fecha, fechaClave: a.fechaClave, tipoAlerta: a.tipoAlerta,
+            detalle: a.detalle, horarioInicio: a.horarioProgramado.inicio,
+            horarioFin: a.horarioProgramado.fin, authUid, archivada: false,
+            registradoEnMs: Date.now()
+          };
+          try {
+            await fetch(await window.urlConAuthPanel(`${URL_BASE_FIREBASE}/${NODO_ALERTA[a.tipoAlerta]}/${a.clave}.json`), {
+              method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+            });
+          } catch (_) { /* si falla el guardado, igual se muestra localmente */ }
+        }
+      } catch (_) { /* sin conexión: se muestran las detectadas localmente */ }
+
+      renderAlertasSupervision();
+    }
+
+    function renderAlertasSupervision() {
+      const cont = document.getElementById('listaAlertasSupervision');
+      const contador = document.getElementById('contadorAlertasSup');
+      if (!cont) return;
+      const chk = document.getElementById('chkMostrarArchivadasSup');
+      const mostrarArch = !!(chk && chk.checked);
+      const archivadas = new Set(leerArchivadasSupLocal());
+      const visibles = alertasSupervisionDetectadas
+        .filter(a => mostrarArch ? true : !archivadas.has(a.clave))
+        .sort((x, y) => new Date(y.fecha) - new Date(x.fecha));
+
+      const activas = alertasSupervisionDetectadas.filter(a => !archivadas.has(a.clave)).length;
+      if (contador) {
+        contador.textContent = String(activas);
+        contador.classList.toggle('hidden', activas === 0);
+      }
+
+      if (!visibles.length) {
+        cont.innerHTML = `<p class="text-sm text-slate-400 py-4 text-center"><i class="fa-solid fa-circle-check text-emerald-400"></i> No hay alertas ${mostrarArch ? '' : 'pendientes '}de supervisión.</p>`;
+        return;
+      }
+
+      cont.innerHTML = '';
+      visibles.forEach(a => {
+        const estaArch = archivadas.has(a.clave);
+        const esTarde = a.tipoAlerta === 'LLEGADA_TARDE';
+        const icono = esTarde ? 'fa-user-clock' : 'fa-person-walking-arrow-right';
+        const etiqueta = esTarde ? 'Llegada tarde' : 'Salida anticipada';
+        const colorBorde = estaArch ? 'border-slate-600' : 'border-rose-500/50';
+        const fechaTxt = a.fecha ? new Date(a.fecha).toLocaleString('es-AR', { hour12: false }) : '-';
+        const hp = a.horarioProgramado || { inicio: '', fin: '' };
+        const horarioTxt = (hp.inicio || hp.fin) ? ` · Horario ${escaparHtml(hp.inicio || '?')}-${escaparHtml(hp.fin || '?')}` : '';
+        const div = document.createElement('div');
+        div.className = `flex flex-col md:flex-row md:items-center justify-between gap-2 bg-slate-900/70 border ${colorBorde} rounded-xl px-4 py-3 ${estaArch ? 'opacity-60' : ''}`;
+        div.innerHTML = `
+          <div class="flex items-start gap-3">
+            <i class="fa-solid ${icono} ${esTarde ? 'text-rose-400' : 'text-amber-400'} mt-0.5"></i>
+            <div class="text-xs">
+              <p class="font-bold text-white">${escaparHtml(a.nombre)} <span class="text-slate-400 font-normal">(Legajo ${escaparHtml(a.legajo)})</span></p>
+              <p class="text-slate-300"><span class="font-semibold ${esTarde ? 'text-rose-300' : 'text-amber-300'}">${etiqueta}</span> · ${escaparHtml(a.detalle)}</p>
+              <p class="text-slate-400">${escaparHtml(a.objetivo)} · ${escaparHtml(fechaTxt)}${horarioTxt}</p>
+            </div>
+          </div>
+          <div class="flex-shrink-0">
+            ${estaArch
+              ? `<button onclick="desarchivarAlertaSupervision('${escaparHtml(a.clave)}')" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 px-3 py-1.5 rounded-lg transition flex items-center gap-1.5"><i class="fa-solid fa-rotate-left"></i> Restaurar</button>`
+              : `<button onclick="archivarAlertaSupervision('${escaparHtml(a.clave)}')" class="text-xs bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/40 px-3 py-1.5 rounded-lg transition flex items-center gap-1.5"><i class="fa-solid fa-box-archive"></i> Archivar</button>`}
+          </div>`;
+        cont.appendChild(div);
+      });
+    }
+
+    async function archivarAlertaSupervision(clave) {
+      const arch = new Set(leerArchivadasSupLocal());
+      arch.add(clave);
+      guardarArchivadasSupLocal(Array.from(arch));
+      renderAlertasSupervision();
+      // Persistir en Firebase (consistencia entre dispositivos).
+      const a = alertasSupervisionDetectadas.find(x => x.clave === clave);
+      const patch = { archivada: true, archivadaEnMs: Date.now(), archivadaPor: sessionStorage.getItem('uid_supervisor') || '' };
+      const nodos = a ? [NODO_ALERTA[a.tipoAlerta]] : Object.values(NODO_ALERTA);
+      for (const nodo of nodos) {
+        try {
+          await fetch(await window.urlConAuthPanel(`${URL_BASE_FIREBASE}/${nodo}/${clave}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+        } catch (_) {}
+      }
+    }
+
+    async function desarchivarAlertaSupervision(clave) {
+      const arch = new Set(leerArchivadasSupLocal());
+      arch.delete(clave);
+      guardarArchivadasSupLocal(Array.from(arch));
+      renderAlertasSupervision();
+      const a = alertasSupervisionDetectadas.find(x => x.clave === clave);
+      const patch = { archivada: false, archivadaEnMs: null };
+      const nodos = a ? [NODO_ALERTA[a.tipoAlerta]] : Object.values(NODO_ALERTA);
+      for (const nodo of nodos) {
+        try {
+          await fetch(await window.urlConAuthPanel(`${URL_BASE_FIREBASE}/${nodo}/${clave}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+        } catch (_) {}
+      }
+    }
+    window.archivarAlertaSupervision = archivarAlertaSupervision;
+    window.desarchivarAlertaSupervision = desarchivarAlertaSupervision;
+    window.renderAlertasSupervision = renderAlertasSupervision;
 
     function renderizarTabla(registros) {
       const cuerpo = document.getElementById('cuerpoTabla');
