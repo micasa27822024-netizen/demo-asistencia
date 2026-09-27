@@ -17,6 +17,40 @@
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
 
+  <!-- ========================================================================= -->
+  <!--  SEGURIDAD DE PIN - hash con salt (Web Crypto / PBKDF2-SHA256)             -->
+  <!--  El PIN NO se guarda en texto plano en /personal: se guarda pinHash+pinSalt.-->
+  <!--  Bloque compartido y aditivo; no altera ninguna lógica existente.          -->
+  <!-- ========================================================================= -->
+  <script>
+    (function () {
+      // Genera un salt aleatorio (16 bytes) en hexadecimal.
+      function generarSaltVigix() {
+        const a = crypto.getRandomValues(new Uint8Array(16));
+        return Array.from(a).map(b => b.toString(16).padStart(2, '0')).join('');
+      }
+      // Deriva el hash del PIN con PBKDF2-SHA256 (100k iteraciones) y el salt dado.
+      async function hashPinVigix(pin, saltHex) {
+        const enc = new TextEncoder();
+        const salt = Uint8Array.from((String(saltHex).match(/.{1,2}/g) || []).map(b => parseInt(b, 16)));
+        const km = await crypto.subtle.importKey('raw', enc.encode(String(pin)), 'PBKDF2', false, ['deriveBits']);
+        const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, km, 256);
+        return Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('');
+      }
+      // Verifica un PIN contra una ficha que tenga pinHash + pinSalt.
+      async function verificarPinHashVigix(pin, ficha) {
+        if (!ficha) return false;
+        const h = String(ficha.pinHash || '').trim();
+        const s = String(ficha.pinSalt || '').trim();
+        if (!h || !s) return false;
+        try { return (await hashPinVigix(pin, s)) === h; } catch (_) { return false; }
+      }
+      window.generarSaltVigix = generarSaltVigix;
+      window.hashPinVigix = hashPinVigix;
+      window.verificarPinHashVigix = verificarPinHashVigix;
+    })();
+  </script>
+
   <!-- ENCABEZADO Y MENÚ CORPORATIVO -->
   <header class="bg-slate-900 border-b border-slate-800 shadow-md">
     <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -61,12 +95,16 @@
       </div>
       <div>
         <h2 class="text-xl font-bold text-white">Acceso Administrador</h2>
-        <p class="text-xs text-slate-400 mt-1">Ingresa la contraseña para acceder al panel admin</p>
+        <p class="text-xs text-slate-400 mt-1">Ingresa tu correo y contraseña para acceder al panel admin</p>
       </div>
       <form onsubmit="validarPasswordAdmin(event)" class="space-y-4">
         <div class="relative">
+          <i class="fa-solid fa-envelope absolute left-3 top-3.5 text-slate-400 text-sm"></i>
+          <input type="email" id="inputEmailAdmin" placeholder="Correo (ej: admin@vigix.com)" required autocomplete="username" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500 text-center text-sm">
+        </div>
+        <div class="relative">
           <i class="fa-solid fa-lock absolute left-3 top-3.5 text-slate-400 text-sm"></i>
-          <input type="password" id="inputPassAdmin" placeholder="Contraseña de acceso" required class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500 text-center tracking-widest text-lg">
+          <input type="password" id="inputPassAdmin" placeholder="Contraseña de acceso" required autocomplete="current-password" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500 text-center tracking-widest text-lg">
         </div>
         <p id="msgErrorPassAdmin" class="text-xs text-rose-400 hidden flex items-center justify-center gap-1">
           <i class="fa-solid fa-circle-exclamation"></i> Contraseña incorrecta. Intenta nuevamente.
@@ -123,6 +161,9 @@
       <button id="tabBtnObjetivos" onclick="cambiarTab('objetivos')" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
         <i class="fa-solid fa-building"></i> Objetivos / Puestos
       </button>
+      <button id="tabBtnConfiguracion" onclick="cambiarTab('configuracion')" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
+        <i class="fa-solid fa-sliders"></i> Configurar
+      </button>
     </div>
 
     <!-- TAB 1: MARCACIONES -->
@@ -153,6 +194,34 @@
           <button onclick="exportarPDF()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md w-full md:w-auto">
             <i class="fa-solid fa-file-pdf"></i> PDF
           </button>
+          <input type="month" id="mesReporteCumpl" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 w-full md:w-auto" title="Mes del reporte mensual de cumplimiento">
+          <button onclick="exportarPDFCumplimientoMensual()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md w-full md:w-auto">
+            <i class="fa-solid fa-calendar-check"></i> PDF Cumplimiento
+          </button>
+        </div>
+      </div>
+
+      <!-- RESUMEN DE CUMPLIMIENTO PARA EL SUPERVISOR (aditivo) -->
+      <div id="resumenCumplimiento" class="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div class="bg-slate-800 border border-emerald-500/25 rounded-2xl p-3 flex flex-col">
+          <span class="text-[11px] uppercase tracking-wide text-slate-400">A tiempo</span>
+          <span id="resCumplATiempo" class="text-2xl font-extrabold text-emerald-400">0</span>
+        </div>
+        <div class="bg-slate-800 border border-amber-500/40 rounded-2xl p-3 flex flex-col">
+          <span class="text-[11px] uppercase tracking-wide text-slate-400">Con tolerancia</span>
+          <span id="resCumplTolerancia" class="text-2xl font-extrabold text-amber-300">0</span>
+        </div>
+        <div class="bg-slate-800 border border-rose-500/40 rounded-2xl p-3 flex flex-col">
+          <span class="text-[11px] uppercase tracking-wide text-slate-400">Llegadas tarde</span>
+          <span id="resCumplTarde" class="text-2xl font-extrabold text-rose-300">0</span>
+        </div>
+        <div class="bg-slate-800 border border-rose-500/40 rounded-2xl p-3 flex flex-col">
+          <span class="text-[11px] uppercase tracking-wide text-slate-400">Salidas anticipadas</span>
+          <span id="resCumplAnticipada" class="text-2xl font-extrabold text-rose-300">0</span>
+        </div>
+        <div class="bg-slate-800 border border-sky-500/40 rounded-2xl p-3 flex flex-col">
+          <span class="text-[11px] uppercase tracking-wide text-slate-400">Con horas extra</span>
+          <span id="resCumplExtra" class="text-2xl font-extrabold text-sky-300">0</span>
         </div>
       </div>
 
@@ -166,6 +235,7 @@
                 <th class="p-4">Nombre</th>
                 <th class="p-4">Objetivo</th>
                 <th class="p-4 text-center">Tipo</th>
+                <th class="p-4 text-center">Cumplimiento</th>
                 <th class="p-4 text-center">Auditoría IA (2do Plano)</th>
                 <th class="p-4 text-center">Ubicación</th>
                 <th class="p-4 text-center">Acciones</th>
@@ -173,13 +243,31 @@
             </thead>
             <tbody id="cuerpoTablaMarcaciones" class="divide-y divide-slate-700/50">
               <tr>
-                <td colspan="8" class="p-8 text-center text-slate-400">
+                <td colspan="9" class="p-8 text-center text-slate-400">
                   <i class="fa-solid fa-spinner fa-spin text-2xl text-emerald-500 mb-2"></i>
                   <p>Cargando información...</p>
                 </td>
               </tr>
             </tbody>
           </table>
+        </div>
+        <!-- CONTROLES DE PAGINACIÓN (aditivo) -->
+        <div id="paginacionMarcaciones" class="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 border-t border-slate-700 bg-slate-950/40">
+          <div class="flex items-center gap-2 text-xs text-slate-400">
+            <span>Filas por página</span>
+            <select id="selectFilasPorPagina" onchange="cambiarFilasPorPagina()" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white focus:outline-none focus:border-emerald-500">
+              <option value="10">10</option>
+              <option value="25" selected>25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+            <span id="infoRangoMarcaciones" class="ml-2"></span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="irPaginaMarcaciones(-1)" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 transition"><i class="fa-solid fa-chevron-left"></i> Anterior</button>
+            <span id="infoPaginaMarcaciones" class="text-xs text-slate-300 font-semibold px-2">1 / 1</span>
+            <button onclick="irPaginaMarcaciones(1)" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 transition">Siguiente <i class="fa-solid fa-chevron-right"></i></button>
+          </div>
         </div>
       </div>
     </div>
@@ -283,37 +371,86 @@
 
     <!-- TAB 3: PERSONAL -->
     <div id="tabPersonal" class="hidden space-y-6">
-      <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
+      <!-- ALTA DE EMPLEADO CON ACCESO -->
+      <div class="bg-slate-800 p-6 rounded-2xl border border-emerald-600/40 shadow-xl space-y-4">
         <h3 class="text-lg font-bold text-white flex items-center gap-2">
-          <i class="fa-solid fa-user-plus text-amber-500"></i> Registrar Nuevo Personal
+          <i class="fa-solid fa-user-shield text-emerald-400"></i> Agregar Empleado con Acceso
         </h3>
-        <p class="text-xs text-slate-400">El horario habitual y los objetivos autorizados se administran desde <strong class="text-slate-200">Configurar</strong>. Los cambios de un día puntual se gestionan desde <strong class="text-slate-200">Turnos</strong>.</p>
-        <form onsubmit="guardarVigilador(event)" class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+        <p class="text-xs text-slate-400">Registrá un nuevo empleado y su credencial de acceso. El horario y los objetivos se configuran luego desde <strong class="text-slate-200">Configurar</strong>.</p>
+        <form id="formAltaEmpleado" class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
           <div>
             <label class="block text-xs uppercase text-slate-400 mb-1">N° Legajo</label>
-            <input type="text" id="newLegajo" required placeholder="Ej: 0286" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
+            <input type="text" id="altaLegajo" required placeholder="Ej: 0297" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
           </div>
           <div>
             <label class="block text-xs uppercase text-slate-400 mb-1">Nombre Completo</label>
-            <input type="text" id="newNombre" required placeholder="Ej: Juan Pérez" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
+            <input type="text" id="altaNombre" required placeholder="Ej: Juan Pérez" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
           </div>
           <div>
             <label class="block text-xs uppercase text-slate-400 mb-1">PIN Generado</label>
             <div class="flex gap-2">
-              <input type="text" id="newPin" readonly required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm text-amber-400 font-mono font-bold tracking-widest text-center cursor-not-allowed">
-              <button type="button" onclick="generarPinAleatorio()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 p-2 rounded-xl text-sm transition">
+              <input type="text" id="altaPin" readonly required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm text-emerald-400 font-mono font-bold tracking-widest text-center cursor-not-allowed">
+              <button type="button" onclick="generarPinEmpleado()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 p-2 rounded-xl text-sm transition" title="Generar nuevo PIN">
                 <i class="fa-solid fa-arrows-rotate"></i>
               </button>
             </div>
           </div>
           <div>
             <label class="block text-xs uppercase text-slate-400 mb-1">Foto Máster (IA)</label>
-            <input type="file" id="newFotoMaster" accept="image/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-700 file:text-amber-400 hover:file:bg-slate-600 cursor-pointer">
+            <input type="file" id="altaFotoMaster" accept="image/*" class="w-full text-xs text-slate-400 file:mr-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-700 file:text-emerald-400 hover:file:bg-slate-600 cursor-pointer">
           </div>
-          <button type="submit" id="btnGuardarGuardia" class="bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2">
-            <i class="fa-solid fa-floppy-disk"></i> Guardar Personal
+          <button type="submit" id="btnAltaEmpleado" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-user-shield"></i> Crear empleado
           </button>
         </form>
+      </div>
+
+      <!-- MIGRACIÓN DE EMPLEADOS ANTERIORES -->
+      <div class="bg-slate-800 p-6 rounded-2xl border border-sky-600/40 shadow-xl space-y-4">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div>
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+              <i class="fa-solid fa-arrows-turn-to-dots text-sky-400"></i> Migrar empleados anteriores
+            </h3>
+            <p class="text-xs text-slate-400 mt-1 max-w-2xl">Crea el acceso de los empleados que se cargaron antes y normaliza sus fichas. <strong class="text-emerald-400">Las fichadas históricas no se pierden</strong> porque se vinculan por el número de legajo. Ejecutalo una sola vez; los que ya tienen acceso se omiten automáticamente.</p>
+          </div>
+          <button type="button" id="btnMigrarEmpleados" class="bg-sky-600 hover:bg-sky-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 shrink-0">
+            <i class="fa-solid fa-arrows-turn-to-dots"></i> Migrar ahora
+          </button>
+        </div>
+        <div id="migracionLog" class="hidden-empty bg-slate-950 border border-slate-700 rounded-xl p-3 max-h-60 overflow-y-auto space-y-1"></div>
+      </div>
+
+      <!-- PROTECCIÓN DE PIN (hash + salt) -->
+      <div class="bg-slate-800 p-6 rounded-2xl border border-fuchsia-600/40 shadow-xl space-y-4">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div>
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+              <i class="fa-solid fa-shield-halved text-fuchsia-400"></i> Proteger PIN (hash + salt)
+            </h3>
+            <p class="text-xs text-slate-400 mt-1 max-w-2xl">Reemplaza el PIN en <strong class="text-rose-300">texto plano</strong> por un <strong class="text-emerald-400">hash con salt</strong> en cada ficha, para que nadie pueda leer los PIN aunque acceda a la base. El ingreso por PIN sigue funcionando igual. Ejecutalo una sola vez; las fichas ya protegidas se omiten.</p>
+          </div>
+          <button type="button" id="btnProtegerPins" class="bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 shrink-0">
+            <i class="fa-solid fa-shield-halved"></i> Proteger ahora
+          </button>
+        </div>
+        <div id="proteccionPinLog" class="hidden bg-slate-950 border border-slate-700 rounded-xl p-3 max-h-60 overflow-y-auto space-y-1"></div>
+      </div>
+
+      <!-- LIMPIEZA DE PIN EN FICHADAS -->
+      <div class="bg-slate-800 p-6 rounded-2xl border border-rose-600/40 shadow-xl space-y-4">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div>
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+              <i class="fa-solid fa-broom text-rose-400"></i> Limpiar PIN en fichadas
+            </h3>
+            <p class="text-xs text-slate-400 mt-1 max-w-2xl">Elimina el <strong class="text-rose-300">PIN en texto plano</strong> que quedó guardado dentro de las fichadas históricas (<code>/fichadas</code> y <code>/fichadasPendientes</code>). No borra ninguna fichada ni afecta el acceso; solo quita ese dato sensible. Las fichadas nuevas ya no lo guardan.</p>
+          </div>
+          <button type="button" id="btnLimpiarPinsFichadas" class="bg-rose-600 hover:bg-rose-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 shrink-0">
+            <i class="fa-solid fa-broom"></i> Limpiar ahora
+          </button>
+        </div>
+        <div id="limpiezaFichadasLog" class="hidden bg-slate-950 border border-slate-700 rounded-xl p-3 max-h-60 overflow-y-auto space-y-1"></div>
       </div>
 
       <div class="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
@@ -420,6 +557,40 @@
               <tr><td colspan="6" class="p-8 text-center text-slate-400">Cargando objetivos...</td></tr>
             </tbody>
           </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: CONFIGURAR (tolerancias y radio) -->
+    <div id="tabConfiguracion" class="hidden space-y-6">
+      <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl max-w-2xl">
+        <div class="flex items-center gap-3 mb-1">
+          <i class="fa-solid fa-sliders text-emerald-400 text-lg"></i>
+          <h3 class="font-bold text-white text-base">Reglas de tolerancia y radio de fichaje</h3>
+        </div>
+        <p class="text-xs text-slate-400 mb-5">Estos valores definen cómo se clasifican las fichadas (tolerancia, llegada tarde, salida anticipada y horas extra) y a qué distancia del objetivo puede fichar un empleado. Aplican como valor por defecto para todos los objetivos.</p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-xs uppercase text-slate-400 mb-1">Tolerancia de ingreso (min)</label>
+            <input type="number" id="cfgToleranciaIngreso" min="0" max="120" value="15" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+            <p class="text-[11px] text-slate-500 mt-1">Desde el inicio del turno hasta este minuto = tolerancia (amarillo). A partir del minuto siguiente = llegada tarde (rojo).</p>
+          </div>
+          <div>
+            <label class="block text-xs uppercase text-slate-400 mb-1">Ventana de egreso (min)</label>
+            <input type="number" id="cfgToleranciaEgreso" min="0" max="120" value="30" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+            <p class="text-[11px] text-slate-500 mt-1">Tras el fin del turno hay este margen para marcar salida. A partir del minuto siguiente se cuentan horas extra.</p>
+          </div>
+          <div>
+            <label class="block text-xs uppercase text-slate-400 mb-1">Radio de fichaje (m)</label>
+            <input type="number" id="cfgRadioFichaje" min="10" max="5000" value="100" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+            <p class="text-[11px] text-slate-500 mt-1">Distancia máxima al objetivo para poder fichar. Por defecto 100 m.</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 mt-5">
+          <button type="button" onclick="guardarConfiguracionGlobal()" id="btnGuardarConfig" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center gap-2">
+            <i class="fa-solid fa-floppy-disk"></i> Guardar configuración
+          </button>
+          <span id="cfgEstadoGuardado" class="text-xs"></span>
         </div>
       </div>
     </div>
@@ -565,8 +736,8 @@
           <input type="text" id="editNombre" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
         </div>
         <div>
-          <label class="block text-xs uppercase text-slate-400 mb-1">PIN</label>
-          <input type="text" id="editPin" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-amber-400 font-mono font-bold tracking-widest text-center focus:outline-none focus:border-amber-500">
+          <label class="block text-xs uppercase text-slate-400 mb-1">PIN <span class="text-slate-500 normal-case">(dejar vacío para no cambiar)</span></label>
+          <input type="text" id="editPin" placeholder="••••" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-amber-400 font-mono font-bold tracking-widest text-center focus:outline-none focus:border-amber-500">
         </div>
         <div>
           <label class="block text-xs uppercase text-slate-400 mb-1">Actualizar Foto Máster</label>
@@ -709,18 +880,45 @@
   </div>
 
   <script>
-    const PASSWORD_ADMIN = "admin123"; 
     const URL_FIREBASE = "https://fir-asistencia-fad12-default-rtdb.firebaseio.com";
+
+    // --- REGISTRO DE AUDITORÍA (aditivo) ---
+    // Deja constancia inmutable en /auditoria de cada cambio crítico (borrado/edición) hecho por el admin.
+    // Usa el sello de tiempo del servidor y nunca interrumpe la operación principal si falla.
+    async function registrarAuditoria(accion, entidad, detalle) {
+      try {
+        const evento = {
+          accion: String(accion || ''),
+          entidad: String(entidad || ''),
+          detalle: detalle || {},
+          usuario: 'admin',
+          origen: 'panel-admin',
+          fechaHoraDispositivo: new Date().toISOString(),
+          timestampServidor: { ".sv": "timestamp" }
+        };
+        await fetch(`${URL_FIREBASE}/auditoria.json`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(evento)
+        });
+      } catch (err) {
+        console.warn('No se pudo registrar el evento de auditoría:', err);
+      }
+    }
 
     let datosMarcaciones = [];
     let datosNovedades = [];
     let datosPanicos = [];
     let datosFiltradosNovedades = [];
     let datosFiltradosMarcaciones = [];
+    // Estado de paginación de la tabla de marcaciones (aditivo).
+    let paginaActualMarcaciones = 1;
+    let filasPorPaginaMarcaciones = 25;
     let datosPersonal = [];
     let datosObjetivos = [];
     let mapaConfiguracionPersonal = {};
     let asignacionesTurnosAdmin = [];
+    let asignacionesTurnosGlobalAdmin = [];
     let personalConfigurandoId = null;
     let registroFraudeSeleccionado = null;
 
@@ -735,6 +933,8 @@
     let alertasFichadasCache = [];
     let alertasFichadasConocidas = new Set();
     let alertasFichadasInicializadas = false;
+    // Configuración global de reglas laborales y radio de fichaje (persistida en Firebase /configuracionGlobal).
+    let configGlobalAdmin = { toleranciaIngresoMin: 15, toleranciaEgresoMin: 30, radioFichajeMetros: 100 };
 
     function iniciarSonidoSirena() {
       if (audioCtxPanico) return; 
@@ -1017,6 +1217,7 @@
 
     window.onload = function() {
       generarPinAleatorio();
+      generarPinEmpleado();
       if (sessionStorage.getItem('auth_admin') === 'true') {
         mostrarAdmin();
       }
@@ -1028,19 +1229,44 @@
       if (inputPin) inputPin.value = pin;
     }
 
+    // Genera un PIN aleatorio de 4 dígitos para el alta de empleado con acceso
+    function generarPinEmpleado() {
+      const pin = Math.floor(1000 + Math.random() * 9000).toString();
+      const inputPin = document.getElementById('altaPin');
+      if (inputPin) inputPin.value = pin;
+    }
+
     function validarPasswordAdmin(e) {
       e.preventDefault();
+      const email = (document.getElementById('inputEmailAdmin') ? document.getElementById('inputEmailAdmin').value : '').trim();
       const input = document.getElementById('inputPassAdmin').value;
       const errorMsg = document.getElementById('msgErrorPassAdmin');
+      errorMsg.classList.add('hidden');
 
-      if (input === PASSWORD_ADMIN) {
-        sessionStorage.setItem('auth_admin', 'true');
-        mostrarAdmin();
-      } else {
-        errorMsg.classList.remove('hidden');
-        document.getElementById('inputPassAdmin').value = '';
-        document.getElementById('inputPassAdmin').focus();
+      // --- Login REAL con Firebase Auth (correo + contraseña) ---
+      if (typeof window.loginAdminReal === 'function') {
+        const btnLogin = e.target ? e.target.querySelector('button[type="submit"]') : null;
+        if (btnLogin) btnLogin.disabled = true;
+        window.loginAdminReal(email, input).then(function(res) {
+          if (btnLogin) btnLogin.disabled = false;
+          if (res && res.ok) {
+            sessionStorage.setItem('auth_admin', 'true');
+            if (res.rol) sessionStorage.setItem('rol_admin', res.rol);
+            if (res.uid) sessionStorage.setItem('uid_admin', res.uid);
+            mostrarAdmin();
+          } else {
+            errorMsg.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> ' + ((res && res.mensaje) || 'Correo o contraseña incorrectos.');
+            errorMsg.classList.remove('hidden');
+            document.getElementById('inputPassAdmin').value = '';
+            document.getElementById('inputPassAdmin').focus();
+          }
+        });
+        return;
       }
+
+      // El sistema de login aún no terminó de cargar (sin conexión o CDN de Firebase no disponible)
+      errorMsg.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> El sistema de acceso está cargando. Verificá tu conexión y reintentá en unos segundos.';
+      errorMsg.classList.remove('hidden');
     }
 
     function mostrarAdmin() {
@@ -1053,6 +1279,9 @@
 
     function cerrarSesionAdmin() {
       sessionStorage.removeItem('auth_admin');
+      sessionStorage.removeItem('rol_admin');
+      sessionStorage.removeItem('uid_admin');
+      if (typeof window.logoutAdminReal === 'function') { try { window.logoutAdminReal(); } catch (_) {} }
       if (intervaloPanicoPoll) clearInterval(intervaloPanicoPoll);
       if (intervaloAlertasFichadas) clearInterval(intervaloAlertasFichadas);
       detenerSonidoSirena();
@@ -1066,6 +1295,7 @@
       document.getElementById('tabPanicos').classList.add('hidden');
       document.getElementById('tabPersonal').classList.add('hidden');
       document.getElementById('tabObjetivos').classList.add('hidden');
+      document.getElementById('tabConfiguracion').classList.add('hidden');
 
       document.getElementById('tabBtnMarcaciones').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
       document.getElementById('tabBtnAlertasUbicacion').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
@@ -1074,6 +1304,7 @@
       document.getElementById('tabBtnPersonal').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
       document.getElementById('tabBtnObjetivos').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
 
+      document.getElementById('tabBtnConfiguracion').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
       if (tab === 'marcaciones') {
         document.getElementById('tabMarcaciones').classList.remove('hidden');
         document.getElementById('tabBtnMarcaciones').className = "px-5 py-3 font-semibold text-sm border-b-2 border-emerald-500 text-emerald-400 flex items-center gap-2 transition";
@@ -1093,7 +1324,167 @@
       } else if (tab === 'objetivos') {
         document.getElementById('tabObjetivos').classList.remove('hidden');
         document.getElementById('tabBtnObjetivos').className = "px-5 py-3 font-semibold text-sm border-b-2 border-sky-500 text-sky-400 flex items-center gap-2 transition";
+      } else if (tab === 'configuracion') {
+        document.getElementById('tabConfiguracion').classList.remove('hidden');
+        document.getElementById('tabBtnConfiguracion').className = "px-5 py-3 font-semibold text-sm border-b-2 border-emerald-500 text-emerald-400 flex items-center gap-2 transition";
+        aplicarConfigGlobalAInputs();
       }
+    }
+
+    // ====== CONFIGURACIÓN GLOBAL (tolerancias + radio) Y CÁLCULO DE CUMPLIMIENTO ======
+    function minutosDesdeHHMM(hora) {
+      if (!hora || !/^\d{1,2}:\d{2}$/.test(String(hora))) return null;
+      const [h, m] = String(hora).split(':').map(Number);
+      if (h < 0 || h > 23 || m < 0 || m > 59) return null;
+      return h * 60 + m;
+    }
+
+    function aplicarConfigGlobalAInputs() {
+      const i = document.getElementById('cfgToleranciaIngreso');
+      const e = document.getElementById('cfgToleranciaEgreso');
+      const r = document.getElementById('cfgRadioFichaje');
+      if (i) i.value = configGlobalAdmin.toleranciaIngresoMin;
+      if (e) e.value = configGlobalAdmin.toleranciaEgresoMin;
+      if (r) r.value = configGlobalAdmin.radioFichajeMetros;
+    }
+
+    async function cargarConfiguracionGlobal() {
+      try {
+        const res = await fetch(`${URL_FIREBASE}/configuracionGlobal.json?ts=${Date.now()}`, { cache: 'no-store' });
+        const data = await res.json();
+        if (data && typeof data === 'object') {
+          if (Number.isFinite(Number(data.toleranciaIngresoMin))) configGlobalAdmin.toleranciaIngresoMin = Number(data.toleranciaIngresoMin);
+          if (Number.isFinite(Number(data.toleranciaEgresoMin))) configGlobalAdmin.toleranciaEgresoMin = Number(data.toleranciaEgresoMin);
+          if (Number.isFinite(Number(data.radioFichajeMetros)) && Number(data.radioFichajeMetros) > 0) configGlobalAdmin.radioFichajeMetros = Number(data.radioFichajeMetros);
+        }
+      } catch (err) {
+        console.warn('No se pudo cargar la configuración global, se usan valores por defecto.', err);
+      }
+      aplicarConfigGlobalAInputs();
+    }
+
+    async function guardarConfiguracionGlobal() {
+      const estado = document.getElementById('cfgEstadoGuardado');
+      const tolIng = Math.max(0, Math.min(120, parseInt(document.getElementById('cfgToleranciaIngreso').value, 10) || 0));
+      const tolEgr = Math.max(0, Math.min(120, parseInt(document.getElementById('cfgToleranciaEgreso').value, 10) || 0));
+      const radio = Math.max(10, Math.min(5000, parseInt(document.getElementById('cfgRadioFichaje').value, 10) || 100));
+      const payload = { toleranciaIngresoMin: tolIng, toleranciaEgresoMin: tolEgr, radioFichajeMetros: radio, actualizado: new Date().toISOString() };
+      if (estado) { estado.className = 'text-xs text-slate-400'; estado.innerText = 'Guardando...'; }
+      try {
+        const res = await fetch(`${URL_FIREBASE}/configuracionGlobal.json`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error('Respuesta no OK');
+        configGlobalAdmin.toleranciaIngresoMin = tolIng;
+        configGlobalAdmin.toleranciaEgresoMin = tolEgr;
+        configGlobalAdmin.radioFichajeMetros = radio;
+        if (estado) { estado.className = 'text-xs text-emerald-400 font-semibold'; estado.innerText = '✓ Configuración guardada.'; }
+        filtrarTablaMarcaciones();
+      } catch (err) {
+        console.error('Error al guardar configuración global:', err);
+        if (estado) { estado.className = 'text-xs text-rose-400 font-semibold'; estado.innerText = '❌ No se pudo guardar. Reintentá.'; }
+      }
+    }
+
+    // Clasifica una fichada según el horario programado y las tolerancias configuradas.
+    // Devuelve null si no hay datos suficientes para evaluar.
+    function calcularCumplimientoFichada(tipo, fechaFichadaStr, horaProgInicio, horaProgFin) {
+      const t = String(tipo || '').toUpperCase();
+      const f = new Date(fechaFichadaStr);
+      if (isNaN(f)) return null;
+      const minFichada = f.getHours() * 60 + f.getMinutes();
+      const tolIng = Number(configGlobalAdmin.toleranciaIngresoMin);
+      const tolEgr = Number(configGlobalAdmin.toleranciaEgresoMin);
+
+      const normalizar = (diff) => {
+        // Ajuste para turnos que cruzan la medianoche.
+        if (diff > 720) return diff - 1440;
+        if (diff < -720) return diff + 1440;
+        return diff;
+      };
+
+      if (t === 'ENTRADA') {
+        const ini = minutosDesdeHHMM(horaProgInicio);
+        if (ini === null) return null;
+        const diff = normalizar(minFichada - ini);
+        if (diff <= 0) {
+          return { estado: 'A_TIEMPO', texto: 'A tiempo', clase: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25', fila: '' };
+        } else if (diff <= tolIng) {
+          return { estado: 'TOLERANCIA', texto: `Tolerancia (+${diff} min)`, clase: 'bg-amber-500/15 text-amber-300 border-amber-500/40', fila: 'bg-amber-950/20 border-l-4 border-l-amber-500' };
+        } else {
+          return { estado: 'TARDE', texto: `Llegada tarde (+${diff} min)`, clase: 'bg-rose-500/15 text-rose-300 border-rose-500/40', fila: 'bg-rose-950/20 border-l-4 border-l-rose-500' };
+        }
+      }
+
+      if (t === 'SALIDA') {
+        const fin = minutosDesdeHHMM(horaProgFin);
+        if (fin === null) return null;
+        const diff = normalizar(minFichada - fin);
+        if (diff < 0) {
+          return { estado: 'ANTICIPADA', texto: `Salida anticipada (${Math.abs(diff)} min antes)`, clase: 'bg-rose-500/15 text-rose-300 border-rose-500/40', fila: 'bg-rose-950/20 border-l-4 border-l-rose-500' };
+        } else if (diff <= tolEgr) {
+          return { estado: 'EN_HORARIO', texto: 'Salida en horario', clase: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25', fila: '' };
+        } else {
+          const extra = diff - tolEgr;
+          return { estado: 'EXTRA', texto: `Horas extra (+${extra} min)`, clase: 'bg-sky-500/15 text-sky-300 border-sky-500/40', fila: 'bg-sky-950/20 border-l-4 border-l-sky-500' };
+        }
+      }
+      return null;
+    }
+
+    // Deriva el horario programado igual que el Panel: primero un turno puntual asignado
+    // para esa fecha, si no existe usa el horario habitual del legajo. Sirve como respaldo
+    // para fichadas antiguas que no tienen el horario guardado en el registro.
+    function obtenerFechaLocalClaveAdmin(fecha) {
+      if (!(fecha instanceof Date) || isNaN(fecha)) return '';
+      const y = fecha.getFullYear();
+      const m = String(fecha.getMonth() + 1).padStart(2, '0');
+      const d = String(fecha.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function obtenerHorarioProgramadoAdmin(entrada, legajo, objetivoNombre) {
+      const fechaEntrada = new Date(entrada);
+      if (isNaN(fechaEntrada)) return null;
+      const fechaClave = obtenerFechaLocalClaveAdmin(fechaEntrada);
+      const legajoStr = String(legajo || '').trim();
+      const objetivoStr = String(objetivoNombre || '').trim().toLowerCase();
+
+      const turnosFecha = asignacionesTurnosGlobalAdmin.filter(t =>
+        String(t.legajo || '').trim() === legajoStr && String(t.fecha || '') === fechaClave
+      );
+
+      let turno = null;
+      if (turnosFecha.length) {
+        turno = turnosFecha.find(t => {
+          const nombre = String(t.objetivoNombre || t.objetivo || '').trim().toLowerCase();
+          return objetivoStr && nombre && (nombre === objetivoStr || nombre.includes(objetivoStr) || objetivoStr.includes(nombre));
+        }) || turnosFecha[0];
+      }
+
+      if (turno && (turno.horaInicio || turno.horaFin)) {
+        return { inicio: turno.horaInicio || '', fin: turno.horaFin || '' };
+      }
+
+      const persona = Object.values(mapaConfiguracionPersonal).find(p => String(p.legajo || '').trim() === legajoStr);
+      const h = (persona && persona.horarioHabitual) || {};
+      if (h.inicio || h.fin) {
+        return { inicio: h.inicio || '', fin: h.fin || '' };
+      }
+
+      return null;
+    }
+
+    // Resuelve el horario de una fila: usa el guardado en la fichada y, si falta,
+    // lo deriva igual que el Panel. Devuelve la clasificación de cumplimiento.
+    function calcularCumplimientoFilaAdmin(fila) {
+      let ini = fila[12];
+      let fin = fila[13];
+      if (!ini && !fin) {
+        const derivado = obtenerHorarioProgramadoAdmin(fila[0], fila[1], fila[3]);
+        if (derivado) { ini = derivado.inicio; fin = derivado.fin; }
+      }
+      return calcularCumplimientoFichada(fila[4], fila[0], ini, fin);
     }
 
     function convertirImagenBase64(file) {
@@ -1112,6 +1503,9 @@
       if (icono) icono.classList.add('fa-spin');
 
       try {
+        // 0. Cargar configuración global (tolerancias + radio)
+        await cargarConfiguracionGlobal();
+
         // 1. Cargar Personal primero
         const resPersonal = await fetch(`${URL_FIREBASE}/personal.json`);
         const dataPersonal = await resPersonal.json();
@@ -1124,7 +1518,7 @@
             if (d) {
               const legajoStr = d.legajo ? String(d.legajo).trim() : '';
               mapaConfiguracionPersonal[id] = d;
-              datosPersonal.push([legajoStr, d.nombre || '', 'Personal', d.pin || '', d.estado || 'ACTIVO', id, d.fotoMaster || '']);
+              datosPersonal.push([legajoStr, d.nombre || '', 'Personal', ((d.pinHash || d.pinSalt) ? '••••' : (d.pin || '')), d.estado || 'ACTIVO', id, d.fotoMaster || '']);
               if (legajoStr && d.fotoMaster) {
                 mapaFotosMaster[legajoStr] = d.fotoMaster;
               }
@@ -1132,6 +1526,17 @@
           });
         }
         renderizarTablaPersonal(datosPersonal);
+
+        // 1b. Cargar TODOS los cambios de turno (para derivar el horario programado
+        //     en fichadas antiguas que no lo tienen guardado, igual que el Panel).
+        try {
+          const resTurnosGlobal = await fetch(`${URL_FIREBASE}/asignacionesTurnos.json?ts=${Date.now()}`, { cache: 'no-store' });
+          const dataTurnosGlobal = await resTurnosGlobal.json();
+          asignacionesTurnosGlobalAdmin = dataTurnosGlobal ? Object.entries(dataTurnosGlobal).map(([id, d]) => ({ ...d, id })) : [];
+        } catch (err) {
+          console.warn('No se pudieron cargar los turnos para el cálculo de cumplimiento.', err);
+          asignacionesTurnosGlobalAdmin = [];
+        }
 
         // 2. Cargar Marcaciones
         const resMarcaciones = await fetch(`${URL_FIREBASE}/fichadas.json`);
@@ -1162,12 +1567,15 @@
                 distanciaEuclidiana,
                 motivoFraude,
                 fotoMaster,
-                id
+                id,
+                d.horarioProgramadoInicio || '',
+                d.horarioProgramadoFin || ''
               ]);
             }
           });
         }
         filtrarTablaMarcaciones();
+        notificarAlertasCumplimiento(datosMarcaciones);
 
         // 3. Cargar Novedades
         const resNovedades = await fetch(`${URL_FIREBASE}/novedades.json`);
@@ -1242,13 +1650,28 @@
       cuerpo.innerHTML = "";
 
       if (!registros || registros.length === 0) {
-        cuerpo.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-400">No hay registros cargados aún en Firebase.</td></tr>`;
+        cuerpo.innerHTML = `<tr><td colspan="9" class="p-8 text-center text-slate-400">No hay registros cargados aún en Firebase.</td></tr>`;
+        actualizarResumenCumplimiento(registros || []);
+        actualizarControlesPaginacion(0, 0, 0);
         return;
       }
 
+      // Resumen de cumplimiento sobre el total filtrado (no solo la página visible).
+      actualizarResumenCumplimiento(registros);
+
       const ordenados = [...registros].reverse();
 
-      ordenados.forEach(fila => {
+      // Paginación (aditivo): recorta el conjunto ordenado a la página actual.
+      const totalRegistros = ordenados.length;
+      const totalPaginas = Math.max(1, Math.ceil(totalRegistros / filasPorPaginaMarcaciones));
+      if (paginaActualMarcaciones > totalPaginas) paginaActualMarcaciones = totalPaginas;
+      if (paginaActualMarcaciones < 1) paginaActualMarcaciones = 1;
+      const inicio = (paginaActualMarcaciones - 1) * filasPorPaginaMarcaciones;
+      const fin = Math.min(inicio + filasPorPaginaMarcaciones, totalRegistros);
+      const paginaRegistros = ordenados.slice(inicio, fin);
+      actualizarControlesPaginacion(totalRegistros, inicio, fin);
+
+      paginaRegistros.forEach(fila => {
         const fecha = fila[0] ? new Date(fila[0]).toLocaleString('es-AR', { hour12: false }) : '-';
         const legajo = fila[1] !== undefined ? String(fila[1]) : '-';
         const nombre = fila[2] || '-';
@@ -1260,6 +1683,12 @@
         const alertaFraude = fila[7];
         const distanciaEuclidiana = fila[8];
         const firebaseId = fila[11];
+
+        // Clasificación de cumplimiento (tolerancia / tarde / anticipada / extra) según el horario programado.
+        const cumplimiento = calcularCumplimientoFilaAdmin(fila);
+        const celdaCumplimiento = cumplimiento
+          ? `<span class="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${cumplimiento.clase}">${cumplimiento.texto}</span>`
+          : `<span class="text-xs text-slate-500">Sin horario</span>`;
 
         const badgeTipo = tipo === 'ENTRADA' 
           ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
@@ -1297,7 +1726,8 @@
         }
 
         const tr = document.createElement('tr');
-        tr.className = alertaFraude ? "bg-rose-950/20 hover:bg-rose-900/30 transition border-l-4 border-l-rose-500" : "hover:bg-slate-700/30 transition";
+        let claseFilaCumpl = (cumplimiento && cumplimiento.fila) ? (' ' + cumplimiento.fila) : '';
+        tr.className = alertaFraude ? "bg-rose-950/20 hover:bg-rose-900/30 transition border-l-4 border-l-rose-500" : ("hover:bg-slate-700/30 transition" + claseFilaCumpl);
         tr.innerHTML = `
           <td class="p-4 font-mono text-xs text-slate-300">${fecha}</td>
           <td class="p-4 font-semibold text-white">${legajo}</td>
@@ -1306,6 +1736,7 @@
           <td class="p-4 text-center">
             <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${badgeTipo}">${tipo}</span>
           </td>
+          <td class="p-4 text-center">${celdaCumplimiento}</td>
           <td class="p-4 text-center">${badgeIA}</td>
           <td class="p-4 text-center">${btnMapa}</td>
           <td class="p-4 text-center flex items-center justify-center gap-2">${btnFoto} ${btnAccionFraude}</td>
@@ -1331,7 +1762,52 @@
         return coincideBusqueda && coincideTipo && coincideAuditoria;
       });
 
+      paginaActualMarcaciones = 1;
       renderizarTablaMarcaciones(datosFiltradosMarcaciones);
+    }
+
+    // --- PAGINACIÓN Y RESUMEN DE CUMPLIMIENTO (aditivo) ---
+    function actualizarControlesPaginacion(total, inicio, fin) {
+      const totalPaginas = Math.max(1, Math.ceil(total / filasPorPaginaMarcaciones));
+      const infoPagina = document.getElementById('infoPaginaMarcaciones');
+      const infoRango = document.getElementById('infoRangoMarcaciones');
+      if (infoPagina) infoPagina.innerText = `${paginaActualMarcaciones} / ${totalPaginas}`;
+      if (infoRango) infoRango.innerText = total > 0 ? `Mostrando ${inicio + 1}-${fin} de ${total}` : 'Sin registros';
+    }
+
+    function irPaginaMarcaciones(delta) {
+      const total = (datosFiltradosMarcaciones || []).length;
+      const totalPaginas = Math.max(1, Math.ceil(total / filasPorPaginaMarcaciones));
+      paginaActualMarcaciones = Math.min(totalPaginas, Math.max(1, paginaActualMarcaciones + delta));
+      renderizarTablaMarcaciones(datosFiltradosMarcaciones);
+    }
+
+    function cambiarFilasPorPagina() {
+      const sel = document.getElementById('selectFilasPorPagina');
+      const val = parseInt(sel ? sel.value : '25', 10);
+      filasPorPaginaMarcaciones = Number.isFinite(val) && val > 0 ? val : 25;
+      paginaActualMarcaciones = 1;
+      renderizarTablaMarcaciones(datosFiltradosMarcaciones);
+    }
+
+    // Cuenta los estados de cumplimiento sobre el conjunto filtrado y actualiza las tarjetas.
+    function actualizarResumenCumplimiento(registros) {
+      let aTiempo = 0, tolerancia = 0, tarde = 0, anticipada = 0, extra = 0;
+      (registros || []).forEach(fila => {
+        const c = calcularCumplimientoFilaAdmin(fila);
+        if (!c) return;
+        if (c.estado === 'A_TIEMPO' || c.estado === 'EN_HORARIO') aTiempo++;
+        else if (c.estado === 'TOLERANCIA') tolerancia++;
+        else if (c.estado === 'TARDE') tarde++;
+        else if (c.estado === 'ANTICIPADA') anticipada++;
+        else if (c.estado === 'EXTRA') extra++;
+      });
+      const set = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
+      set('resCumplATiempo', aTiempo);
+      set('resCumplTolerancia', tolerancia);
+      set('resCumplTarde', tarde);
+      set('resCumplAnticipada', anticipada);
+      set('resCumplExtra', extra);
     }
 
     function obtenerRegistroPorId(id) {
@@ -1371,11 +1847,12 @@
       if (!id) return;
 
       try {
-        await fetch(`${URL_FIREBASE}/fichadas/${id}.json`, {
+        await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/fichadas/${id}.json`), {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ alertaFraude: false, motivoFraude: "Validado manualmente por administrador" })
         });
+        registrarAuditoria('FICHADA_APROBADA', `fichadas/${id}`, { motivo: 'Validado manualmente por administrador' });
         alert("Marcación aprobada y sospecha descartada exitosamente.");
         cerrarModalAccionFraude();
         recargarDatosEfectivo();
@@ -1391,7 +1868,8 @@
       if (!confirm("¿Está seguro de que desea eliminar permanentemente esta marcación por considerar fraude de identidad?")) return;
 
       try {
-        await fetch(`${URL_FIREBASE}/fichadas/${id}.json`, { method: "DELETE" });
+        await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/fichadas/${id}.json`), { method: "DELETE" });
+        registrarAuditoria('FICHADA_ELIMINADA', `fichadas/${id}`, { motivo: 'Eliminada por sospecha de fraude de identidad' });
         alert("Marcación eliminada.");
         cerrarModalAccionFraude();
         recargarDatosEfectivo();
@@ -1560,6 +2038,7 @@
       if (!confirm("¿Está seguro de que desea eliminar este registro de pánico?")) return;
       try {
         await fetch(`${URL_FIREBASE}/panicos/${id}.json`, { method: "DELETE" });
+        registrarAuditoria('PANICO_ELIMINADO', `panicos/${id}`, {});
         alert("Registro de pánico eliminado.");
         recargarDatosEfectivo();
       } catch (e) {
@@ -1633,10 +2112,14 @@
         fotoMasterBase64 = await convertirImagenBase64(inputFotoMaster.files[0]);
       }
 
+      // El PIN no se guarda en texto plano: se deriva un hash con salt.
+      const pinSaltNuevo = window.generarSaltVigix();
+      const pinHashNuevo = await window.hashPinVigix(pinGenerado, pinSaltNuevo);
       const nuevoPersonal = {
         legajo: legajoIngresado,
         nombre: nombreIngresado,
-        pin: pinGenerado,
+        pinHash: pinHashNuevo,
+        pinSalt: pinSaltNuevo,
         estado: 'ACTIVO',
         fotoMaster: fotoMasterBase64,
         horarioHabitual: { inicio: '', fin: '' },
@@ -1645,7 +2128,7 @@
       };
 
       try {
-        const res = await fetch(`${URL_FIREBASE}/personal.json`, {
+        const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/personal.json`), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(nuevoPersonal)
@@ -1673,7 +2156,7 @@
       document.getElementById('editFirebaseId').value = id;
       document.getElementById('editLegajo').value = cfg.legajo || '';
       document.getElementById('editNombre').value = cfg.nombre || '';
-      document.getElementById('editPin').value = cfg.pin || '';
+      document.getElementById('editPin').value = ''; // el PIN se guarda hasheado; vacío = no se cambia
       document.getElementById('editFotoMaster').value = '';
       const h = cfg.horarioHabitual || {};
       document.getElementById('editHorarioInicio').value = h.inicio || '';
@@ -1720,16 +2203,28 @@
       const inicio = document.getElementById('editHorarioInicio').value;
       const fin = document.getElementById('editHorarioFin').value;
       const btn = document.getElementById('btnGuardarEdicion');
-      if (!id || !legajo || !nombre || !pin) return alert('Completá legajo, nombre y PIN.');
+      if (!id || !legajo || !nombre) return alert('Completá legajo y nombre.');
       if ((inicio && !fin) || (!inicio && fin)) return alert('Completá ambos horarios habituales o dejalos vacíos.');
       btn.disabled = true; btn.innerText = 'Guardando...';
       const objetivosAsignados = Array.from(document.querySelectorAll('.objetivo-personal-checkbox:checked')).map(cb => ({ id: cb.value, nombre: cb.dataset.nombre || '' }));
-      const datosActualizados = { legajo, nombre, pin, horarioHabitual: { inicio: inicio || '', fin: fin || '' }, objetivosAsignados };
+      // El PIN nunca se guarda en texto plano: si se ingresó uno nuevo se deriva hash+salt;
+      // si el campo queda vacío, se conserva el PIN actual.
+      const fichaActual = mapaConfiguracionPersonal[id] || {};
+      const datosActualizados = { legajo, nombre, horarioHabitual: { inicio: inicio || '', fin: fin || '' }, objetivosAsignados };
+      if (pin) {
+        const pinSaltEdit = window.generarSaltVigix();
+        datosActualizados.pinHash = await window.hashPinVigix(pin, pinSaltEdit);
+        datosActualizados.pinSalt = pinSaltEdit;
+        datosActualizados.pin = null; // borrar texto plano si hubiera quedado
+      } else if (fichaActual.pinHash) {
+        datosActualizados.pin = null; // ya está protegido; garantizar que no quede texto plano
+      }
       if (inputFoto.files && inputFoto.files[0]) datosActualizados.fotoMaster = await convertirImagenBase64(inputFoto.files[0]);
       try {
-        const res = await fetch(`${URL_FIREBASE}/personal/${id}.json`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datosActualizados) });
+        const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/personal/${id}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datosActualizados) });
         if (!res.ok) throw new Error('Error al actualizar en Firebase');
         mapaConfiguracionPersonal[id] = { ...(mapaConfiguracionPersonal[id] || {}), ...datosActualizados };
+        registrarAuditoria('PERSONAL_EDITADO', `personal/${id}`, { legajo, nombre });
         alert('Personal actualizado con éxito.');
         cerrarModalEditar();
         recargarDatosEfectivo();
@@ -1737,10 +2232,144 @@
       finally { btn.disabled = false; btn.innerText = 'Guardar Cambios'; }
     }
 
+    /**
+     * PROTECCIÓN DE PIN: recorre /personal y reemplaza el PIN en texto plano por
+     * un hash con salt (pinHash + pinSalt), borrando el campo `pin`. Idempotente:
+     * las fichas ya protegidas se omiten. El acceso por PIN (Auth) no se toca.
+     */
+    async function protegerPinsPersonal() {
+      const logEl = document.getElementById('proteccionPinLog');
+      const escribir = (txt, color) => {
+        if (!logEl) return;
+        logEl.classList.remove('hidden');
+        const p = document.createElement('div');
+        p.className = 'text-xs ' + (color || 'text-slate-300');
+        p.textContent = txt;
+        logEl.appendChild(p);
+        logEl.scrollTop = logEl.scrollHeight;
+      };
+      escribir('— Iniciando protección de PIN (hash + salt)… —', 'text-white');
+      let resp;
+      try {
+        resp = await fetch(`${URL_FIREBASE}/personal.json?ts=${Date.now()}`, { cache: 'no-store' });
+      } catch (e) { escribir('❌ No se pudo leer el personal: ' + e, 'text-rose-400'); return; }
+      const data = await resp.json();
+      if (!data) { escribir('No hay personal para procesar.', 'text-amber-400'); return; }
+      let protegidos = 0, yaOk = 0, sinPin = 0, errores = 0;
+      for (const [id, ficha] of Object.entries(data)) {
+        if (!ficha) continue;
+        const etiqueta = (ficha.legajo || id) + (ficha.nombre ? ` (${ficha.nombre})` : '');
+        if (ficha.pinHash && ficha.pinSalt) {
+          if (ficha.pin != null) {
+            try {
+              await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/personal/${id}/pin.json`), { method: 'DELETE' });
+              escribir(`🧹 ${etiqueta}: ya tenía hash; se eliminó el PIN en texto plano.`, 'text-emerald-400');
+            } catch (_) { errores++; }
+          } else {
+            escribir(`↷ ${etiqueta}: ya está protegido. Se omite.`, 'text-slate-500');
+          }
+          yaOk++;
+          continue;
+        }
+        const pinPlano = String(ficha.pin || ficha.clave || '').trim();
+        if (!pinPlano) { escribir(`⚠️ ${etiqueta}: sin PIN guardado; no se puede derivar hash. Se omite.`, 'text-amber-400'); sinPin++; continue; }
+        try {
+          const salt = window.generarSaltVigix();
+          const hash = await window.hashPinVigix(pinPlano, salt);
+          await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/personal/${id}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pinHash: hash, pinSalt: salt, pin: null }) });
+          escribir(`✅ ${etiqueta}: PIN protegido (hash+salt) y texto plano eliminado.`, 'text-emerald-400');
+          protegidos++;
+        } catch (e) { escribir(`❌ ${etiqueta}: error al proteger (${e}).`, 'text-rose-400'); errores++; }
+      }
+      escribir(`— Protección finalizada: ${protegidos} protegido(s), ${yaOk} ya OK, ${sinPin} sin PIN, ${errores} con error. —`, 'text-white');
+      alert(`Protección de PIN finalizada.\nProtegidos: ${protegidos}\nYa estaban: ${yaOk}\nSin PIN: ${sinPin}\nErrores: ${errores}`);
+      if (typeof recargarDatosEfectivo === 'function') recargarDatosEfectivo();
+    }
+    window.protegerPinsPersonal = protegerPinsPersonal;
+
+    (function () {
+      const btnProtegerPins = document.getElementById('btnProtegerPins');
+      if (!btnProtegerPins) return;
+      btnProtegerPins.addEventListener('click', async () => {
+        if (!confirm('Se va a reemplazar el PIN en texto plano por un hash con salt en todos los empleados. El acceso por PIN sigue funcionando igual. ¿Continuar?')) return;
+        btnProtegerPins.disabled = true;
+        const original = btnProtegerPins.innerHTML;
+        btnProtegerPins.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Protegiendo…';
+        try { await protegerPinsPersonal(); } finally {
+          btnProtegerPins.disabled = false;
+          btnProtegerPins.innerHTML = original;
+        }
+      });
+    })();
+
+    /**
+     * LIMPIEZA DE PIN EN FICHADAS: elimina el campo `pin` en texto plano de las
+     * fichadas históricas (/fichadas y /fichadasPendientes) usando escrituras
+     * multi-ruta por lote. Idempotente: si no hay PIN, no hace nada. No borra
+     * ninguna fichada ni afecta el acceso.
+     */
+    async function limpiarPinsFichadas() {
+      const logEl = document.getElementById('limpiezaFichadasLog');
+      const escribir = (txt, color) => {
+        if (!logEl) return;
+        logEl.classList.remove('hidden');
+        const p = document.createElement('div');
+        p.className = 'text-xs ' + (color || 'text-slate-300');
+        p.textContent = txt;
+        logEl.appendChild(p);
+        logEl.scrollTop = logEl.scrollHeight;
+      };
+      escribir('— Iniciando limpieza de PIN en fichadas… —', 'text-white');
+      const nodos = ['fichadas', 'fichadasPendientes'];
+      let totalLimpiadas = 0, totalRevisadas = 0, errores = 0;
+      for (const nodo of nodos) {
+        let data;
+        try {
+          const r = await fetch(`${URL_FIREBASE}/${nodo}.json?ts=${Date.now()}`, { cache: 'no-store' });
+          data = await r.json();
+        } catch (e) { escribir(`❌ No se pudo leer /${nodo}: ${e}`, 'text-rose-400'); errores++; continue; }
+        if (!data) { escribir(`↷ /${nodo}: sin registros.`, 'text-slate-500'); continue; }
+        const idsConPin = Object.entries(data).filter(([id, f]) => f && f.pin != null).map(([id]) => id);
+        totalRevisadas += Object.keys(data).length;
+        if (!idsConPin.length) { escribir(`✔ /${nodo}: no hay PIN en texto plano (${Object.keys(data).length} revisadas).`, 'text-emerald-400'); continue; }
+        const LOTE = 200;
+        for (let i = 0; i < idsConPin.length; i += LOTE) {
+          const lote = idsConPin.slice(i, i + LOTE);
+          const patch = {};
+          lote.forEach(id => { patch[`${id}/pin`] = null; });
+          try {
+            const rp = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/${nodo}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+            if (!rp.ok) throw new Error('HTTP ' + rp.status);
+            totalLimpiadas += lote.length;
+            escribir(`🧹 /${nodo}: limpiadas ${Math.min(i + LOTE, idsConPin.length)}/${idsConPin.length}…`, 'text-emerald-400');
+          } catch (e) { escribir(`❌ /${nodo}: error en un lote (${e}).`, 'text-rose-400'); errores++; }
+        }
+      }
+      escribir(`— Limpieza finalizada: ${totalLimpiadas} fichada(s) sin PIN, ${totalRevisadas} revisadas, ${errores} error(es). —`, 'text-white');
+      alert(`Limpieza de PIN en fichadas finalizada.\nLimpiadas: ${totalLimpiadas}\nRevisadas: ${totalRevisadas}\nErrores: ${errores}`);
+    }
+    window.limpiarPinsFichadas = limpiarPinsFichadas;
+
+    (function () {
+      const btnLimpiar = document.getElementById('btnLimpiarPinsFichadas');
+      if (!btnLimpiar) return;
+      btnLimpiar.addEventListener('click', async () => {
+        if (!confirm('Se va a eliminar el PIN en texto plano de todas las fichadas ya registradas. No borra fichadas ni afecta el acceso. ¿Continuar?')) return;
+        btnLimpiar.disabled = true;
+        const original = btnLimpiar.innerHTML;
+        btnLimpiar.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Limpiando…';
+        try { await limpiarPinsFichadas(); } finally {
+          btnLimpiar.disabled = false;
+          btnLimpiar.innerHTML = original;
+        }
+      });
+    })();
+
     async function eliminarPersonal(firebaseId) {
       if (!confirm(`¿Estás seguro de que deseas eliminar este registro?`)) return;
       try {
-        await fetch(`${URL_FIREBASE}/personal/${firebaseId}.json`, { method: 'DELETE' });
+        await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/personal/${firebaseId}.json`), { method: 'DELETE' });
+        registrarAuditoria('PERSONAL_ELIMINADO', `personal/${firebaseId}`, { legajo: (mapaConfiguracionPersonal[firebaseId] || {}).legajo || '' });
         delete mapaConfiguracionPersonal[firebaseId];
         alert('Registro eliminado con éxito.');
         recargarDatosEfectivo();
@@ -1812,6 +2441,7 @@
         const url=id?`${URL_FIREBASE}/asignacionesTurnos/${id}.json`:`${URL_FIREBASE}/asignacionesTurnos.json`;
         const res=await fetch(url,{method:id?'PATCH':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
         if(!res.ok) throw new Error('Firebase rechazó el turno');
+        registrarAuditoria(id?'TURNO_EDITADO':'TURNO_CREADO', id?`asignacionesTurnos/${id}`:'asignacionesTurnos', { legajo:String(cfg.legajo||''), fecha, objetivo:objetivoNombre, horaInicio, horaFin });
         alert(id?'Turno actualizado correctamente.':'Turno asignado correctamente.');
         document.getElementById('turnoFirebaseId').value=''; document.getElementById('turnoFecha').value=''; document.getElementById('turnoHoraInicio').value=''; document.getElementById('turnoHoraFin').value=''; document.getElementById('turnoObservacion').value='';
         cargarAsignacionesTurnoPersonal();
@@ -1823,7 +2453,7 @@
       document.getElementById('turnoFirebaseId').value=t.id; document.getElementById('turnoFecha').value=t.fecha||''; document.getElementById('turnoObjetivo').value=t.objetivoId||''; document.getElementById('turnoHoraInicio').value=t.horaInicio||''; document.getElementById('turnoHoraFin').value=t.horaFin||''; document.getElementById('turnoObservacion').value=t.observacion||'';
       document.getElementById('btnGuardarTurno').innerHTML='<i class="fa-solid fa-save"></i> Actualizar';
     }
-    async function eliminarAsignacionTurno(id){ if(!confirm('¿Eliminar esta asignación de turno?'))return; try{const r=await fetch(`${URL_FIREBASE}/asignacionesTurnos/${id}.json`,{method:'DELETE'});if(!r.ok)throw new Error('Error');cargarAsignacionesTurnoPersonal();}catch(e){alert('No se pudo eliminar el turno.');} }
+    async function eliminarAsignacionTurno(id){ if(!confirm('¿Eliminar esta asignación de turno?'))return; try{const r=await fetch(`${URL_FIREBASE}/asignacionesTurnos/${id}.json`,{method:'DELETE'});if(!r.ok)throw new Error('Error');registrarAuditoria('TURNO_ELIMINADO', `asignacionesTurnos/${id}`, {});cargarAsignacionesTurnoPersonal();}catch(e){alert('No se pudo eliminar el turno.');} }
     function cerrarModalTurnosPersonal(){document.getElementById('modalTurnosPersonal').classList.add('hidden');personalConfigurandoId=null;}
 
     // =========================
@@ -2220,6 +2850,7 @@
           body: JSON.stringify({ nombre: nombreObj, direccion: direccionObj, latitud: lat, longitud: lon, estado: 'ACTIVO', fechaActualizacion: new Date().toISOString() })
         });
         if (!res.ok) throw new Error('Error al actualizar en Firebase');
+        registrarAuditoria('OBJETIVO_EDITADO', `objetivos/${id}`, { nombre: nombreObj, direccion: direccionObj });
         alert('Objetivo actualizado correctamente.');
         cerrarModalEditarObjetivo();
         recargarDatosEfectivo();
@@ -2234,6 +2865,7 @@
       if (!confirm('¿Estás seguro de que deseas eliminar este objetivo?')) return;
       try {
         await fetch(`${URL_FIREBASE}/objetivos/${firebaseId}.json`, { method: 'DELETE' });
+        registrarAuditoria('OBJETIVO_ELIMINADO', `objetivos/${firebaseId}`, {});
         alert('Objetivo eliminado con éxito.');
         recargarDatosEfectivo();
       } catch (err) {
@@ -2309,6 +2941,127 @@
       doc.save(`Reporte_Marcaciones_${new Date().toISOString().slice(0,10)}.pdf`);
     }
 
+    // --- REPORTE MENSUAL DE CUMPLIMIENTO EN PDF (aditivo) ---
+    function exportarPDFCumplimientoMensual() {
+      if (!datosMarcaciones || datosMarcaciones.length === 0) {
+        return alert('No hay marcaciones cargadas para generar el reporte.');
+      }
+      // Mes objetivo: el elegido en el selector o, si está vacío, el mes actual.
+      const inputMes = document.getElementById('mesReporteCumpl');
+      let anio, mes; // mes 0-11
+      if (inputMes && inputMes.value && /^\d{4}-\d{2}$/.test(inputMes.value)) {
+        const partes = inputMes.value.split('-');
+        anio = parseInt(partes[0], 10);
+        mes = parseInt(partes[1], 10) - 1;
+      } else {
+        const hoy = new Date();
+        anio = hoy.getFullYear();
+        mes = hoy.getMonth();
+      }
+
+      // Agrupar por empleado y contar estados de cumplimiento dentro del mes.
+      const porEmpleado = {};
+      let totalMes = 0;
+      const tot = { aTiempo: 0, tolerancia: 0, tarde: 0, anticipada: 0, extra: 0 };
+      datosMarcaciones.forEach(fila => {
+        const f = new Date(fila[0]);
+        if (isNaN(f) || f.getFullYear() !== anio || f.getMonth() !== mes) return;
+        const c = calcularCumplimientoFilaAdmin(fila);
+        if (!c) return;
+        totalMes++;
+        const legajo = fila[1] !== undefined ? String(fila[1]) : '-';
+        const clave = legajo + '|' + (fila[2] || '');
+        if (!porEmpleado[clave]) porEmpleado[clave] = { legajo, nombre: fila[2] || '', aTiempo: 0, tolerancia: 0, tarde: 0, anticipada: 0, extra: 0 };
+        const e = porEmpleado[clave];
+        if (c.estado === 'A_TIEMPO' || c.estado === 'EN_HORARIO') { e.aTiempo++; tot.aTiempo++; }
+        else if (c.estado === 'TOLERANCIA') { e.tolerancia++; tot.tolerancia++; }
+        else if (c.estado === 'TARDE') { e.tarde++; tot.tarde++; }
+        else if (c.estado === 'ANTICIPADA') { e.anticipada++; tot.anticipada++; }
+        else if (c.estado === 'EXTRA') { e.extra++; tot.extra++; }
+      });
+
+      if (totalMes === 0) {
+        return alert('No hay marcaciones con horario evaluable en el mes seleccionado.');
+      }
+
+      const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+      const etiquetaMes = `${meses[mes]} ${anio}`;
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      doc.setFontSize(16);
+      doc.text('Reporte Mensual de Cumplimiento', 14, 15);
+      doc.setFontSize(11);
+      doc.text(`Período: ${etiquetaMes}`, 14, 23);
+      doc.setFontSize(9);
+      doc.text(`Generado el: ${new Date().toLocaleString('es-AR', { hour12: false })}`, 14, 29);
+      doc.text(`Total de marcaciones evaluadas: ${totalMes}  |  A tiempo: ${tot.aTiempo}  Tolerancia: ${tot.tolerancia}  Tarde: ${tot.tarde}  Anticipadas: ${tot.anticipada}  Extra: ${tot.extra}`, 14, 35);
+
+      const columnas = ['Legajo', 'Nombre', 'A tiempo', 'Tolerancia', 'Tarde', 'Anticipada', 'Horas extra', 'Total'];
+      const filas = Object.values(porEmpleado)
+        .sort((a, b) => (b.tarde + b.anticipada) - (a.tarde + a.anticipada))
+        .map(e => {
+          const total = e.aTiempo + e.tolerancia + e.tarde + e.anticipada + e.extra;
+          return [e.legajo, e.nombre, e.aTiempo, e.tolerancia, e.tarde, e.anticipada, e.extra, total];
+        });
+
+      doc.autoTable({
+        head: [columnas],
+        body: filas,
+        startY: 40,
+        theme: 'grid',
+        headStyles: { fillColor: [49, 46, 129] },
+        styles: { fontSize: 8 },
+        didParseCell: function (data) {
+          if (data.section === 'body') {
+            if (data.column.index === 4 && Number(data.cell.raw) > 0) { data.cell.styles.textColor = [190, 18, 60]; data.cell.styles.fontStyle = 'bold'; }
+            if (data.column.index === 5 && Number(data.cell.raw) > 0) { data.cell.styles.textColor = [190, 18, 60]; data.cell.styles.fontStyle = 'bold'; }
+            if (data.column.index === 3 && Number(data.cell.raw) > 0) { data.cell.styles.textColor = [180, 120, 0]; }
+          }
+        }
+      });
+
+      doc.save(`Reporte_Cumplimiento_${anio}-${String(mes + 1).padStart(2, '0')}.pdf`);
+    }
+
+    // --- NOTIFICACIONES DE CUMPLIMIENTO (aditivo) ---
+    // Dispara un aviso del navegador por cada NUEVA llegada tarde / salida anticipada.
+    // Guarda los ids ya avisados en localStorage para no repetir al recargar la página.
+    // En la primera carga solo marca lo existente como visto (no spamea al abrir el panel).
+    function notificarAlertasCumplimiento(registros) {
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+      const primeraCarga = (localStorage.getItem('cumpl_notificadas') === null);
+      let yaAvisadas = [];
+      try { yaAvisadas = JSON.parse(localStorage.getItem('cumpl_notificadas') || '[]'); } catch (e) { yaAvisadas = []; }
+      const setAvisadas = new Set(yaAvisadas);
+
+      (registros || []).forEach(fila => {
+        const id = fila[11];
+        if (!id || setAvisadas.has(id)) return;
+        const c = calcularCumplimientoFilaAdmin(fila);
+        const esAlerta = c && (c.estado === 'TARDE' || c.estado === 'ANTICIPADA');
+
+        if (primeraCarga) {
+          // Sembrar lo existente sin avisar.
+          if (esAlerta) setAvisadas.add(id);
+          return;
+        }
+        if (!esAlerta) return;
+
+        // Solo avisar de eventos de las últimas 24 h.
+        const ts = fila[0] ? new Date(fila[0]).getTime() : 0;
+        if (ts && (Date.now() - ts) > 86400000) { setAvisadas.add(id); return; }
+        try {
+          const titulo = c.estado === 'TARDE' ? '⏰ Llegada tarde' : '🚪 Salida anticipada';
+          new Notification(titulo, { body: `${fila[2] || 'Empleado'} (Legajo ${fila[1]}) · ${fila[3] || ''} · ${c.texto}`, tag: `cumpl-${id}` });
+        } catch (e) {}
+        setAvisadas.add(id);
+      });
+
+      const arr = Array.from(setAvisadas).slice(-800);
+      try { localStorage.setItem('cumpl_notificadas', JSON.stringify(arr)); } catch (e) {}
+    }
+
     function exportarExcelNovedades() {
       const registrosAExportar = (datosFiltradosNovedades && datosFiltradosNovedades.length > 0) ? datosFiltradosNovedades : datosNovedades;
       if (!registrosAExportar || registrosAExportar.length === 0) {
@@ -2364,6 +3117,348 @@
       });
 
       doc.save(`Reporte_Novedades_${new Date().toISOString().slice(0,10)}.pdf`);
+    }
+  </script>
+
+  <!-- ============================================================================= -->
+  <!--  ALTA DE EMPLEADOS - Firebase Web SDK v10 (Modular) con App secundaria        -->
+  <!--  Bloque aditivo: no modifica ninguna lógica existente del panel.            -->
+  <!-- ============================================================================= -->
+  <script type="module">
+    // ---- Módulos requeridos desde la CDN de Firebase (v10.8.0) ----
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { getDatabase, ref, set, get, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    // ---- Configuración de tu proyecto Firebase ----
+    const firebaseConfig = {
+      apiKey: "AIzaSyBYsTCQWwnqEaBzsC5P-9cTM6uBKCnKAmo",
+      authDomain: "fir-asistencia-fad12.firebaseapp.com",
+      databaseURL: "https://fir-asistencia-fad12-default-rtdb.firebaseio.com",
+      projectId: "fir-asistencia-fad12",
+      storageBucket: "fir-asistencia-fad12.firebasestorage.app",
+      messagingSenderId: "441100861030",
+      appId: "1:441100861030:web:b4287e1c3a377cf892b7a7"
+    };
+
+    // ---- App PRINCIPAL (sesión del Administrador) ----
+    const mainApp = initializeApp(firebaseConfig);
+    const mainDb  = getDatabase(mainApp);
+    const mainAuth = getAuth(mainApp);
+
+    /**
+     * Login REAL de admin/supervisor: valida credenciales en Firebase Auth
+     * y lee el rol guardado en la base de datos: /usuarios/<uid>/rol.
+     * Solo se permite entrar con rol 'admin' o 'supervisor'.
+     * @returns {Promise<{ok:boolean, uid?:string, rol?:string, mensaje?:string}>}
+     */
+    async function loginAdminReal(email, password) {
+      if (!email || !password) {
+        return { ok: false, mensaje: 'Ingresá el correo y la contraseña.' };
+      }
+      try {
+        const cred = await signInWithEmailAndPassword(mainAuth, email, password);
+        const uid  = cred.user.uid;
+
+        // Leer el rol desde /usuarios/<uid>
+        let rol = null, existeNodo = false, errorLectura = null;
+        try {
+          const snap = await get(ref(mainDb, `usuarios/${uid}`));
+          existeNodo = snap.exists();
+          if (existeNodo) { rol = (snap.val() || {}).rol || null; }
+        } catch (e2) { errorLectura = (e2 && (e2.code || e2.message)) || 'desconocido'; }
+
+        if (rol !== 'admin' && rol !== 'supervisor') {
+          try { await signOut(mainAuth); } catch (_) {}
+          // Diagnóstico temporal: mostramos el UID real para poder compararlo con la base
+          let detalle;
+          if (errorLectura) {
+            detalle = 'No se pudo leer /usuarios (las reglas bloquean la lectura): ' + errorLectura;
+          } else if (!existeNodo) {
+            detalle = 'No existe el nodo usuarios/' + uid + ' . Copiá EXACTO este UID en la base: ' + uid;
+          } else {
+            detalle = 'El nodo existe pero el rol leído fue "' + (rol === null ? '(vacío)' : rol) + '". UID: ' + uid;
+          }
+          return { ok: false, mensaje: detalle };
+        }
+        return { ok: true, uid, rol };
+      } catch (e) {
+        let mensaje = 'Correo o contraseña incorrectos.';
+        switch (e && e.code) {
+          case 'auth/invalid-email':          mensaje = 'El correo no es válido.'; break;
+          case 'auth/user-disabled':          mensaje = 'Esta cuenta está deshabilitada.'; break;
+          case 'auth/user-not-found':
+          case 'auth/wrong-password':
+          case 'auth/invalid-credential':     mensaje = 'Correo o contraseña incorrectos.'; break;
+          case 'auth/too-many-requests':      mensaje = 'Demasiados intentos. Esperá unos minutos e intentá de nuevo.'; break;
+          case 'auth/network-request-failed': mensaje = 'Sin conexión. Revisá tu internet.'; break;
+        }
+        return { ok: false, mensaje };
+      }
+    }
+    window.loginAdminReal = loginAdminReal;
+
+    // --- Token del admin/supervisor para autenticar escrituras REST (reglas .write endurecidas) ---
+    // Aditivo: no modifica ninguna lógica existente. Devuelve la URL con ?auth=<idToken> si hay sesión.
+    window.obtenerTokenAdmin = async () => {
+      try { const u = mainAuth.currentUser; return u ? await u.getIdToken() : null; } catch (_) { return null; }
+    };
+    window.urlConAuthAdmin = async (url) => {
+      let token = null;
+      try { token = await window.obtenerTokenAdmin(); } catch (_) {}
+      if (!token) return url;
+      return url + (url.includes('?') ? '&' : '?') + 'auth=' + encodeURIComponent(token);
+    };
+
+    async function logoutAdminReal() { try { await signOut(mainAuth); } catch (_) {} }
+    window.logoutAdminReal = logoutAdminReal;
+
+    // ---- App SECUNDARIA (crea empleados SIN cerrar la sesión del admin) ----
+    const secondaryApp  = initializeApp(firebaseConfig, "SecondaryApp");
+    const secondaryAuth = getAuth(secondaryApp);
+
+    /**
+     * Registra un empleado creando su credencial real de acceso en Firebase Auth
+     * (usando la instancia secundaria) y guardando su ficha en Realtime Database.
+     * @param {string} legajo  N° de legajo (ej: "0297")
+     * @param {string} nombre  Nombre completo (ej: "Juan Pérez")
+     * @param {string} pin     PIN numérico de 4+ dígitos (ej: "3456")
+     */
+    async function registrarEmpleado(legajo, nombre, pin, fotoMaster = null) {
+      // a. Formateo de datos -> email y password sintéticos
+      const legajoLimpio = String(legajo).trim();
+      const nombreLimpio = String(nombre).trim();
+      const pinLimpio    = String(pin).trim();
+
+      const emailEmpleado    = `${legajoLimpio}@demo.asistencia`;
+      const passwordEmpleado = pinLimpio.padStart(6, '0'); // "3456" -> "003456"
+
+      try {
+        // b. Crear la credencial en la instancia SECUNDARIA
+        const credencial = await createUserWithEmailAndPassword(secondaryAuth, emailEmpleado, passwordEmpleado);
+        const uid = credencial.user.uid;
+
+        // c. Guardar la ficha del empleado en personal/${uid}
+        // El PIN no se guarda en texto plano: se deriva un hash con salt.
+        const pinSaltNuevo = window.generarSaltVigix();
+        const pinHashNuevo = await window.hashPinVigix(pinLimpio, pinSaltNuevo);
+        await set(ref(mainDb, `personal/${uid}`), {
+          legajo: legajoLimpio,
+          nombre: nombreLimpio,
+          estado: "activo",
+          authUid: uid,
+          fechaAlta: new Date().toISOString(),
+          // --- Campos adicionales para compatibilidad con el panel actual ---
+          // (necesarios para que la tabla y "Configurar" sigan funcionando)
+          pinHash: pinHashNuevo,
+          pinSalt: pinSaltNuevo,
+          fotoMaster: fotoMaster || null,
+          horarioHabitual: { inicio: '', fin: '' },
+          objetivosAsignados: []
+        });
+
+        // d. Cerrar de inmediato la sesión secundaria
+        await signOut(secondaryAuth);
+
+        alert(`✅ Empleado registrado con éxito.\nLegajo: ${legajoLimpio}\nNombre: ${nombreLimpio}\nPIN de acceso: ${pinLimpio}`);
+        return { ok: true, uid };
+      } catch (error) {
+        // e. Manejo claro de errores
+        let mensaje;
+        switch (error && error.code) {
+          case 'auth/email-already-in-use':
+            mensaje = `⚠️ El legajo "${legajoLimpio}" ya está registrado. Usá otro número de legajo.`;
+            break;
+          case 'auth/invalid-email':
+            mensaje = '⚠️ El legajo genera un correo inválido. Revisá el dato ingresado.';
+            break;
+          case 'auth/weak-password':
+            mensaje = '⚠️ El PIN es demasiado corto: la contraseña debe tener al menos 6 caracteres.';
+            break;
+          default:
+            mensaje = '❌ Ocurrió un problema al registrar el empleado: ' + ((error && error.message) || (error && error.code) || error);
+        }
+        alert(mensaje);
+        // Por seguridad, intentar cerrar la sesión secundaria si quedó abierta
+        try { await signOut(secondaryAuth); } catch (_) {}
+        return { ok: false, error };
+      }
+    }
+
+    // Exponer la función por si querés invocarla desde otras partes del panel
+    window.registrarEmpleado = registrarEmpleado;
+
+    /**
+     * MIGRACIÓN de empleados creados con el sistema anterior (sin credencial de acceso).
+     * - Crea la cuenta de acceso (legajo@demo.asistencia / PIN a 6 dígitos) en la instancia secundaria.
+     * - Mueve la ficha a personal/{uid} conservando TODOS sus datos (foto, horario, objetivos, etc.).
+     * - Borra la ficha vieja SOLO después de confirmar que la nueva quedó guardada.
+     * NOTA: las fichadas, turnos y alertas se vinculan por LEGAJO, no por la clave de la ficha,
+     *       por lo que la migración NO afecta ni borra ninguna fichada histórica.
+     */
+    async function migrarEmpleadosAnteriores() {
+      const logEl = document.getElementById('migracionLog');
+      const escribir = (txt, color) => {
+        if (!logEl) return;
+        const p = document.createElement('div');
+        p.className = 'text-xs ' + (color || 'text-slate-300');
+        p.textContent = txt;
+        logEl.appendChild(p);
+        logEl.scrollTop = logEl.scrollHeight;
+      };
+
+      if (!confirm('Se crearán las credenciales de acceso de los empleados anteriores y se normalizarán sus fichas. Las fichadas históricas NO se tocan. ¿Continuar?')) return;
+
+      if (logEl) logEl.innerHTML = '';
+      escribir('⏳ Leyendo personal...', 'text-slate-400');
+
+      let snapshot;
+      try {
+        snapshot = await get(ref(mainDb, 'personal'));
+      } catch (e) {
+        escribir('❌ No se pudo leer el personal: ' + (e.message || e), 'text-rose-400');
+        return;
+      }
+
+      const data = snapshot.exists() ? snapshot.val() : null;
+      if (!data) { escribir('No hay personal registrado.', 'text-slate-400'); return; }
+
+      const entradas = Object.entries(data);
+      let migrados = 0, omitidos = 0, errores = 0;
+
+      for (const [clave, ficha] of entradas) {
+        const legajo = ficha && ficha.legajo ? String(ficha.legajo).trim() : '';
+        const nombre = ficha && ficha.nombre ? String(ficha.nombre) : '';
+
+        // Ya migrado: la clave del nodo coincide con su authUid
+        if (ficha && ficha.authUid && clave === ficha.authUid) {
+          escribir(`↷ ${legajo || clave} (${nombre}) ya está en el sistema nuevo. Se omite.`, 'text-slate-500');
+          omitidos++;
+          continue;
+        }
+
+        if (!legajo) { escribir(`⚠️ Ficha ${clave} sin legajo. Se omite.`, 'text-amber-400'); omitidos++; continue; }
+        if (!ficha.pin) { escribir(`⚠️ ${legajo} (${nombre}) no tiene PIN guardado. No se puede crear su acceso; se omite.`, 'text-amber-400'); omitidos++; continue; }
+
+        const email = `${legajo}@demo.asistencia`;
+        const password = String(ficha.pin).trim().padStart(6, '0');
+
+        let uid = null;
+        try {
+          const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+          uid = cred.user.uid;
+        } catch (e) {
+          if (e && e.code === 'auth/email-already-in-use') {
+            // La cuenta ya existe: iniciamos sesión para recuperar su uid
+            try {
+              const cred = await signInWithEmailAndPassword(secondaryAuth, email, password);
+              uid = cred.user.uid;
+              escribir(`ℹ️ ${legajo} ya tenía cuenta de acceso. Se normaliza su ficha.`, 'text-sky-400');
+            } catch (e2) {
+              escribir(`❌ ${legajo}: la cuenta ya existe pero el PIN no coincide. Revisar manualmente.`, 'text-rose-400');
+              errores++;
+              continue;
+            }
+          } else {
+            escribir(`❌ ${legajo}: ${e.message || e.code || e}`, 'text-rose-400');
+            errores++;
+            continue;
+          }
+        }
+
+        // Cerrar la sesión secundaria de inmediato
+        try { await signOut(secondaryAuth); } catch (_) {}
+
+        // Si la clave ya es el uid, solo aseguramos authUid
+        if (clave === uid) {
+          try {
+            await set(ref(mainDb, `personal/${uid}/authUid`), uid);
+            escribir(`✅ ${legajo} (${nombre}) actualizado.`, 'text-emerald-400');
+            migrados++;
+          } catch (e) { escribir(`❌ ${legajo}: ${e.message || e}`, 'text-rose-400'); errores++; }
+          continue;
+        }
+
+        // Mover la ficha a personal/{uid} conservando todos los datos
+        const nuevaFicha = { ...ficha, authUid: uid, estado: ficha.estado || 'activo' };
+
+        try {
+          await set(ref(mainDb, `personal/${uid}`), nuevaFicha);
+          // Verificar que quedó escrita antes de borrar la vieja
+          const verif = await get(ref(mainDb, `personal/${uid}`));
+          if (!verif.exists()) throw new Error('no se pudo verificar la escritura');
+          // Borrar la ficha vieja (las fichadas por legajo NO se ven afectadas)
+          await remove(ref(mainDb, `personal/${clave}`));
+          escribir(`✅ ${legajo} (${nombre}) migrado correctamente.`, 'text-emerald-400');
+          migrados++;
+        } catch (e) {
+          escribir(`❌ ${legajo}: error al mover la ficha (${e.message || e}). La ficha original NO se borró.`, 'text-rose-400');
+          errores++;
+        }
+      }
+
+      escribir(`— Migración finalizada: ${migrados} migrado(s), ${omitidos} omitido(s), ${errores} con error. —`, 'text-white');
+      if (typeof window.recargarDatosEfectivo === 'function') window.recargarDatosEfectivo();
+      alert(`Migración finalizada.\nMigrados: ${migrados}\nOmitidos: ${omitidos}\nErrores: ${errores}`);
+    }
+
+    window.migrarEmpleadosAnteriores = migrarEmpleadosAnteriores;
+
+    // ---- Botón de migración ----
+    const btnMigrar = document.getElementById('btnMigrarEmpleados');
+    if (btnMigrar) {
+      btnMigrar.addEventListener('click', async () => {
+        btnMigrar.disabled = true;
+        const original = btnMigrar.innerHTML;
+        btnMigrar.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Migrando...';
+        try { await migrarEmpleadosAnteriores(); } finally {
+          btnMigrar.disabled = false;
+          btnMigrar.innerHTML = original;
+        }
+      });
+    }
+
+    // ---- Listener del formulario de alta con acceso ----
+    const formAltaEmpleado = document.getElementById('formAltaEmpleado');
+    if (formAltaEmpleado) {
+      formAltaEmpleado.addEventListener('submit', async (event) => {
+        event.preventDefault();
+
+        const btn    = document.getElementById('btnAltaEmpleado');
+        const legajo = document.getElementById('altaLegajo').value;
+        const nombre = document.getElementById('altaNombre').value;
+        const pin    = document.getElementById('altaPin').value;
+        const inputFoto = document.getElementById('altaFotoMaster');
+
+        if (btn) {
+          btn.disabled = true;
+          btn.dataset.original = btn.innerHTML;
+          btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Creando...';
+        }
+
+        // Convertir la Foto Máster (IA) a base64 si el admin cargó una
+        let fotoMasterBase64 = null;
+        if (inputFoto && inputFoto.files && inputFoto.files[0] && typeof window.convertirImagenBase64 === 'function') {
+          try { fotoMasterBase64 = await window.convertirImagenBase64(inputFoto.files[0]); } catch (_) { fotoMasterBase64 = null; }
+        }
+
+        const resultado = await registrarEmpleado(legajo, nombre, pin, fotoMasterBase64);
+
+        if (resultado && resultado.ok) {
+          formAltaEmpleado.reset();
+          // Generar un nuevo PIN para la próxima alta
+          if (typeof window.generarPinEmpleado === 'function') window.generarPinEmpleado();
+          // Refrescar la tabla de personal si la función del panel existe
+          if (typeof window.recargarDatosEfectivo === 'function') {
+            window.recargarDatosEfectivo();
+          }
+        }
+
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = btn.dataset.original || '<i class="fa-solid fa-user-shield"></i> Crear empleado';
+        }
+      });
     }
   </script>
 </body>
