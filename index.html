@@ -965,6 +965,21 @@
         return;
       }
 
+      // Maquina de estados: SIN_SERVICIO -> ENTRADA -> SALIDA -> ENTRADA.
+      // Bloquea una SALIDA cuando no hay una ENTRADA activa (sin fichada previa
+      // o cuando la ultima fichada valida ya fue una SALIDA).
+      if (tipo === "SALIDA" && ultimoTipoFichadaGlobal !== "ENTRADA") {
+        const motivo = (ultimoTipoFichadaGlobal === "SALIDA")
+          ? "Tu última fichada válida ya fue una SALIDA. Tu próxima acción debe ser una ENTRADA."
+          : "No tenés una ENTRADA activa. Primero recordá tu ENTRADA antes de marcar SALIDA.";
+        alert("⚠️ Acción bloqueada: " + motivo);
+        const divRes = document.getElementById('resultado');
+        divRes.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
+        divRes.innerText = "❌ Bloqueado: SALIDA sin una ENTRADA activa.";
+        divRes.classList.remove('hidden');
+        return;
+      }
+
       localStorage.setItem('demo_ultimo_objetivo', objetivo);
 
       if (!fotoBase64Global) {

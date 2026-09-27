@@ -1585,9 +1585,10 @@
           Object.keys(dataNovedades).forEach(id => {
             const d = dataNovedades[id];
             if (d) {
-              const fecha = d.fechaHoraDispositivo || d.timestamp || '';
+              const fecha = d.fechaHoraDispositivo || d.timestamp || d.fechaHora || '';
               const mapaUrl = (d.latitud && d.longitud) ? `https://maps.google.com/?q=${d.latitud},${d.longitud}` : '';
-              datosNovedades.push([fecha, d.legajo ? String(d.legajo) : '', d.nombre || '', d.objetivo || '', d.tipoIncidencia || 'General', d.descripcion || '', mapaUrl, d.fotoBase64 || '']);
+              const fotoNovedad = d.fotoBase64 || d.foto || '';
+              datosNovedades.push([fecha, d.legajo ? String(d.legajo) : '', d.nombre || '', d.objetivo || '', d.tipoIncidencia || 'General', d.descripcion || '', mapaUrl, fotoNovedad]);
             }
           });
         }

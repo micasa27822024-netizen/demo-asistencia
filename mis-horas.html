@@ -58,7 +58,7 @@
           <img src="https://i.ibb.co/qYcVxcTH/Chat-GPT-Image-3-sept-2026-13-19-18.png" alt="Logo VGA Security" class="w-full h-full object-contain">
         </div>
         <div>
-          <span class="text-[10px] font-extrabold tracking-widest text-emerald-400 uppercase block"Demo Asistencia</span>
+          <span class="text-[10px] font-extrabold tracking-widest text-emerald-400 uppercase block">VGA Security 24 S.A.</span>
           <h1 class="text-lg font-bold text-white tracking-wide">Portal del Vigilador</h1>
         </div>
       </div>
@@ -1011,8 +1011,13 @@
       if (novedadEnEnvio) return; // ya hay una novedad en curso: no duplicar
       const idEvento = generarIdEvento();
       if (eventosEnviados.has(idEvento)) return;
+      const fechaNovedad = new Date().toISOString();
       const payload = {
-        fechaHora: new Date().toISOString(),
+        // Esquema unificado con Admin (nombres estandar) + compatibilidad con
+        // los nombres antiguos (fechaHora / foto) que ya existen en Firebase.
+        fechaHora: fechaNovedad,
+        fechaHoraDispositivo: fechaNovedad,
+        timestamp: fechaNovedad,
         legajo: legajo,
         nombre: nombre,
         objetivo: objetivo,
@@ -1021,6 +1026,7 @@
         latitud: lat,
         longitud: lon,
         foto: fotoBase64,
+        fotoBase64: fotoBase64,
         // Clave de idempotencia + token de sesión para descartar duplicados.
         idEvento: idEvento,
         tokenSesion: sessionStorage.getItem('vigilador_token') || '',
