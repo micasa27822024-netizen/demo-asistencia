@@ -466,6 +466,12 @@
     let datosFiltradosActuales = [];
     let datosSupervisorGlobal = [];
     let firebaseKeysMap = {}; // Guarda la relación de los elementos con sus IDs de Firebase
+    // Clave estable de una fichada para el mapa de IDs de Firebase. Usa solo los
+    // campos identificatorios (fecha, legajo, nombre, objetivo, tipo, mapa) y
+    // EXCLUYE la foto en base64: esa foto puede pesar cientos de KB y, al
+    // serializarse con JSON.stringify por cada fila y en cada render, disparaba
+    // el costo de memoria/CPU del panel. La combinación restante ya es única.
+    function claveFichada(arr) { return JSON.stringify(Array.isArray(arr) ? arr.slice(0, 6) : arr); }
     let mapaConfiguracionPersonalPanel = {};
     let asignacionesTurnosPanel = [];
     // Configuración global de tolerancias (misma fuente que Admin: /configuracionGlobal).
@@ -482,19 +488,30 @@
         // Esperar a que Firebase Auth restaure la sesión tras un reload, para que
         // urlConAuthPanel pueda adjuntar el token y las reglas permitan la lectura.
         try { if (window.authListoPanel) await window.authListoPanel; } catch (_) {}
-        const [res, resPersonal, resTurnos] = await Promise.all([
-          fetch(await window.urlConAuthPanel(URL_FIREBASE)),
-          fetch(await window.urlConAuthPanel(`${URL_PERSONAL}?ts=${Date.now()}`), { cache: 'no-store' }),
-          fetch(await window.urlConAuthPanel(`${URL_TURNOS}?ts=${Date.now()}`), { cache: 'no-store' })
+        // Construir las 4 URLs firmadas en paralelo (urlConAuthPanel adjunta el token)
+        // y disparar las 4 lecturas en un único Promise.all, para que la config
+        // global viaje junto con fichadas/personal/turnos en vez de esperar una
+        // segunda vuelta secuencial (una round-trip menos en cada polling de 30s).
+        const [urlFichadas, urlPersonal, urlTurnos, urlCfg] = await Promise.all([
+          window.urlConAuthPanel(URL_FIREBASE),
+          window.urlConAuthPanel(`${URL_PERSONAL}?ts=${Date.now()}`),
+          window.urlConAuthPanel(`${URL_TURNOS}?ts=${Date.now()}`),
+          window.urlConAuthPanel(`${URL_BASE_FIREBASE}/configuracionGlobal.json?ts=${Date.now()}`)
+        ]);
+        const [res, resPersonal, resTurnos, resCfg] = await Promise.all([
+          fetch(urlFichadas),
+          fetch(urlPersonal, { cache: 'no-store' }),
+          fetch(urlTurnos, { cache: 'no-store' }),
+          // La config es opcional: si falla, no debe tumbar el resto del panel.
+          fetch(urlCfg, { cache: 'no-store' }).catch(() => null)
         ]);
         const resFirebase = res.ok ? await res.json() : null;
         const resPersonalData = resPersonal.ok ? await resPersonal.json() : null;
         const resTurnosData = resTurnos.ok ? await resTurnos.json() : null;
 
-        // Cargar tolerancias globales (aditivo, no interrumpe si falla).
+        // Aplicar tolerancias globales (aditivo, no interrumpe si falla).
         try {
-          const resCfg = await fetch(await window.urlConAuthPanel(`${URL_BASE_FIREBASE}/configuracionGlobal.json?ts=${Date.now()}`), { cache: 'no-store' });
-          const cfg = resCfg.ok ? await resCfg.json() : null;
+          const cfg = (resCfg && resCfg.ok) ? await resCfg.json() : null;
           if (cfg && typeof cfg === 'object') {
             if (Number.isFinite(Number(cfg.toleranciaIngresoMin))) configGlobalPanel.toleranciaIngresoMin = Number(cfg.toleranciaIngresoMin);
             if (Number.isFinite(Number(cfg.toleranciaEgresoMin))) configGlobalPanel.toleranciaEgresoMin = Number(cfg.toleranciaEgresoMin);
@@ -527,7 +544,7 @@
               item.foto || item.urlFoto || item.fotoBase64 || ''
             ];
             fichadasArray.push(arrayItem);
-            firebaseKeysMap[JSON.stringify(arrayItem)] = key;
+            firebaseKeysMap[claveFichada(arrayItem)] = key;
           });
         }
 
@@ -781,7 +798,7 @@
              </button>`
           : `<span class="text-xs text-slate-500">Sin Foto</span>`;
 
-        const firebaseKey = firebaseKeysMap[JSON.stringify(fila)];
+        const firebaseKey = firebaseKeysMap[claveFichada(fila)];
         // Panel de SOLO LECTURA para supervisores: el borrado de fichadas queda
         // reservado al rol admin (ademas de estar bloqueado por las Reglas de Firebase).
         const esAdminPanel = sessionStorage.getItem('rol_supervisor') === 'admin';
