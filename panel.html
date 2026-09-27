@@ -472,6 +472,19 @@
     // serializarse con JSON.stringify por cada fila y en cada render, disparaba
     // el costo de memoria/CPU del panel. La combinación restante ya es única.
     function claveFichada(arr) { return JSON.stringify(Array.isArray(arr) ? arr.slice(0, 6) : arr); }
+
+    // Comparacion unificada de legajo (misma logica que mismoLegajoAdmin en
+    // admin.html y mismoLegajoVig en mis-horas.html): normaliza con trim y, si
+    // ambos son numericos, compara tambien por valor entero para tolerar ceros
+    // a la izquierda (ej: "0286" === "286"). Legajo SIEMPRE se maneja como string.
+    function mismoLegajo(a, b) {
+      const x = String(a == null ? '' : a).trim();
+      const y = String(b == null ? '' : b).trim();
+      if (x === '' || y === '') return false;
+      if (x === y) return true;
+      const nx = parseInt(x, 10), ny = parseInt(y, 10);
+      return Number.isFinite(nx) && Number.isFinite(ny) && nx === ny;
+    }
     let mapaConfiguracionPersonalPanel = {};
     let asignacionesTurnosPanel = [];
     // Configuración global de tolerancias (misma fuente que Admin: /configuracionGlobal).
@@ -945,7 +958,7 @@
 
       // Primero se busca un turno puntual cargado desde Admin para esa fecha.
       const turnosFecha = asignacionesTurnosPanel.filter(t =>
-        String(t.legajo || '').trim() === legajoStr && String(t.fecha || '') === fechaClave
+        mismoLegajo(t.legajo, legajoStr) && String(t.fecha || '') === fechaClave
       );
 
       let turno = null;
@@ -966,7 +979,7 @@
       }
 
       // Si no existe un turno puntual, usar el horario habitual configurado en Admin.
-      const persona = Object.values(mapaConfiguracionPersonalPanel).find(p => String(p.legajo || '').trim() === legajoStr);
+      const persona = Object.values(mapaConfiguracionPersonalPanel).find(p => mismoLegajo(p.legajo, legajoStr));
       const h = persona?.horarioHabitual || {};
       if (h.inicio || h.fin) {
         return {
@@ -1054,7 +1067,7 @@
         return alert("Los datos aún se están cargando o no hay registros disponibles.");
       }
 
-      const marcacionesVigilador = datosLocales.filter(f => String(f[1]).trim() === legajo);
+      const marcacionesVigilador = datosLocales.filter(f => mismoLegajo(f[1], legajo));
       
       if (marcacionesVigilador.length === 0) {
         alert("No se encontraron registros para el legajo especificado.");

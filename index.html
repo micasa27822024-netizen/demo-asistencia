@@ -172,6 +172,19 @@
   <script>
     const URL_FIREBASE = "https://fir-asistencia-fad12-default-rtdb.firebaseio.com";
 
+    // Comparacion unificada de legajo (misma logica que mismoLegajoAdmin en
+    // admin.html y mismoLegajoVig en mis-horas.html): normaliza con trim y, si
+    // ambos son numericos, compara tambien por valor entero para tolerar ceros
+    // a la izquierda (ej: "0286" === "286"). Legajo SIEMPRE se maneja como string.
+    function mismoLegajo(a, b) {
+      const x = String(a == null ? '' : a).trim();
+      const y = String(b == null ? '' : b).trim();
+      if (x === '' || y === '') return false;
+      if (x === y) return true;
+      const nx = parseInt(x, 10), ny = parseInt(y, 10);
+      return Number.isFinite(nx) && Number.isFinite(ny) && nx === ny;
+    }
+
     // --- ANTI-DUPLICADO DE FICHAJES (aditivo) ---
     // Ventana de tiempo dentro de la cual una misma persona no puede repetir el mismo tipo de fichada.
     const VENTANA_ANTIDUPLICADO_MS = 120000; // 2 minutos
@@ -476,7 +489,7 @@
       try {
         const res=await fetch(urlAuth(`${URL_FIREBASE}/asignacionesTurnos.json?ts=${Date.now()}`),{cache:'no-store'}); const data=await res.json();
         if(!data)return null;
-        const lista=Object.entries(data).map(([id,d])=>({...d,id})).filter(d=>String(d.legajo||'').trim()===String(legajo).trim() && String(d.fecha||'')===String(fecha));
+        const lista=Object.entries(data).map(([id,d])=>({...d,id})).filter(d=>mismoLegajo(d.legajo, legajo) && String(d.fecha||'')===String(fecha));
         lista.sort((a,b)=>String(b.actualizadoEn||'').localeCompare(String(a.actualizadoEn||'')));
         return lista[0]||null;
       }catch(e){console.warn('No se pudo obtener la asignación del turno:',e);return null;}
@@ -724,7 +737,7 @@
             encontrado = dataPersonal[legajoInput];
           } else {
             Object.values(dataPersonal).forEach(personal => {
-              if (String(personal.legajo).trim() === String(legajoInput)) {
+              if (mismoLegajo(personal.legajo, legajoInput)) {
                 encontrado = personal;
               }
             });
@@ -760,7 +773,7 @@
 
         if (dataFichadas) {
           Object.values(dataFichadas).forEach(f => {
-            if (String(f.legajo).trim() === String(legajoInput)) {
+            if (mismoLegajo(f.legajo, legajoInput)) {
               let tiempoFichada = f.fechaHoraDispositivo ? new Date(f.fechaHoraDispositivo).getTime() : 0;
               if (tiempoFichada >= timestampUltimo) {
                 timestampUltimo = tiempoFichada;
@@ -773,7 +786,7 @@
 
         let pendientes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
         pendientes.forEach(p => {
-          if (String(p.legajo).trim() === String(legajoInput)) {
+          if (mismoLegajo(p.legajo, legajoInput)) {
             let tiempoP = p.fechaHoraDispositivo ? new Date(p.fechaHoraDispositivo).getTime() : 0;
             if (tiempoP >= timestampUltimo) {
               timestampUltimo = tiempoP;
@@ -829,7 +842,7 @@
       let pendientes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
       
       pendientes.forEach(p => {
-        if (String(p.legajo).trim() === String(legajoInput)) {
+        if (mismoLegajo(p.legajo, legajoInput)) {
           let tiempoP = p.fechaHoraDispositivo ? new Date(p.fechaHoraDispositivo).getTime() : 0;
           if (tiempoP >= timestampUltimo) {
             timestampUltimo = tiempoP;
