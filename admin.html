@@ -2229,6 +2229,11 @@
       cont.innerHTML = '<span class="text-slate-400">Cargando objetivos...</span>';
       try {
         const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/objetivos.json?ts=${Date.now()}`), { cache: 'no-store' });
+        if (!res.ok) {
+          let detalle = '';
+          try { detalle = await res.text(); } catch (_) {}
+          throw new Error(`Firebase respondió ${res.status} ${res.statusText}${detalle ? ' — ' + detalle : ''}`);
+        }
         const data = await res.json();
         cont.innerHTML = '';
         if (!data) { cont.innerHTML = '<span class="text-slate-500">No hay objetivos registrados.</span>'; return; }
@@ -2243,7 +2248,7 @@
           cont.appendChild(label);
         });
       } catch(e) {
-        cont.innerHTML = '<span class="text-rose-400">No se pudieron cargar los objetivos.</span>';
+        cont.innerHTML = `<span class="text-rose-400">No se pudieron cargar los objetivos: ${escaparHtml(e.message || e.toString())}</span>`;
       }
     }
 
@@ -2265,7 +2270,12 @@
       // El PIN nunca se guarda en texto plano: si se ingresó uno nuevo se deriva hash+salt;
       // si el campo queda vacío, se conserva el PIN actual.
       const fichaActual = mapaConfiguracionPersonal[id] || {};
-      const datosActualizados = { legajo, nombre, horarioHabitual: { inicio: inicio || '', fin: fin || '' }, objetivosAsignados };
+      // 'estado' se incluye SIEMPRE explícito (no solo al dar de baja/reactivar):
+      // las Reglas de Firebase exigen que el registro resultante tenga
+      // {legajo, nombre, estado}. Si por algún motivo la ficha no lo tenía
+      // guardado todavía, omitirlo acá hace que Firebase rechace el guardado
+      // completo (edición Y asignación de objetivos, que viajan juntas).
+      const datosActualizados = { legajo, nombre, estado: fichaActual.estado || 'ACTIVO', horarioHabitual: { inicio: inicio || '', fin: fin || '' }, objetivosAsignados };
       // Las credenciales (pinHash/pinSalt) NO se guardan en /personal (nodo legible por
       // supervisores): se escriben en /credenciales/<id> (acceso solo admin/dueño por Reglas).
       let credencialNueva = null;
@@ -2283,7 +2293,11 @@
       if (inputFoto.files && inputFoto.files[0]) datosActualizados.fotoMaster = await convertirImagenBase64(inputFoto.files[0]);
       try {
         const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/personal/${id}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datosActualizados) });
-        if (!res.ok) throw new Error('Error al actualizar en Firebase');
+        if (!res.ok) {
+          let detalle = '';
+          try { detalle = await res.text(); } catch (_) {}
+          throw new Error(`Firebase respondió ${res.status} ${res.statusText}${detalle ? ' — ' + detalle : ''}`);
+        }
         if (credencialNueva) {
           await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/credenciales/${id}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(credencialNueva) });
         }
@@ -2457,7 +2471,15 @@
     async function eliminarPersonal(firebaseId) {
       if (!confirm(`¿Estás seguro de que deseas eliminar este registro?`)) return;
       try {
-        await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/personal/${firebaseId}.json`), { method: 'DELETE' });
+        const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/personal/${firebaseId}.json`), { method: 'DELETE' });
+        if (!res.ok) {
+          let detalle = '';
+          try { detalle = await res.text(); } catch (_) {}
+          throw new Error(`Firebase respondió ${res.status} ${res.statusText}${detalle ? ' — ' + detalle : ''}`);
+        }
+        // También borramos las credenciales aisladas del empleado (si existen);
+        // no bloquea el flujo si falla (puede que ya no existan).
+        try { await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/credenciales/${firebaseId}.json`), { method: 'DELETE' }); } catch (_) {}
         registrarAuditoria('PERSONAL_ELIMINADO', `personal/${firebaseId}`, { legajo: (mapaConfiguracionPersonal[firebaseId] || {}).legajo || '' });
         delete mapaConfiguracionPersonal[firebaseId];
         alert('Registro eliminado con éxito.');
@@ -3288,7 +3310,9 @@
     // --- Token del admin/supervisor para autenticar escrituras REST (reglas .write endurecidas) ---
     // Aditivo: no modifica ninguna lógica existente. Devuelve la URL con ?auth=<idToken> si hay sesión.
     window.obtenerTokenAdmin = async () => {
-      try { const u = mainAuth.currentUser; return u ? await u.getIdToken() : null; } catch (_) { return null; }
+      // forceRefresh=true: pide un token nuevo en vez de reusar uno en caché.
+      // Evita fallos silenciosos por token vencido en sesiones de admin largas.
+      try { const u = mainAuth.currentUser; return u ? await u.getIdToken(true) : null; } catch (_) { return null; }
     };
     window.urlConAuthAdmin = async (url) => {
       let token = null;
