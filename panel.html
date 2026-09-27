@@ -459,9 +459,9 @@
 
       try {
         const [res, resPersonal, resTurnos] = await Promise.all([
-          fetch(URL_FIREBASE),
-          fetch(`${URL_PERSONAL}?ts=${Date.now()}`, { cache: 'no-store' }),
-          fetch(`${URL_TURNOS}?ts=${Date.now()}`, { cache: 'no-store' })
+          fetch(await window.urlConAuthPanel(URL_FIREBASE)),
+          fetch(await window.urlConAuthPanel(`${URL_PERSONAL}?ts=${Date.now()}`), { cache: 'no-store' }),
+          fetch(await window.urlConAuthPanel(`${URL_TURNOS}?ts=${Date.now()}`), { cache: 'no-store' })
         ]);
         const resFirebase = res.ok ? await res.json() : null;
         const resPersonalData = resPersonal.ok ? await resPersonal.json() : null;
@@ -469,7 +469,7 @@
 
         // Cargar tolerancias globales (aditivo, no interrumpe si falla).
         try {
-          const resCfg = await fetch(`${URL_BASE_FIREBASE}/configuracionGlobal.json?ts=${Date.now()}`, { cache: 'no-store' });
+          const resCfg = await fetch(await window.urlConAuthPanel(`${URL_BASE_FIREBASE}/configuracionGlobal.json?ts=${Date.now()}`), { cache: 'no-store' });
           const cfg = resCfg.ok ? await resCfg.json() : null;
           if (cfg && typeof cfg === 'object') {
             if (Number.isFinite(Number(cfg.toleranciaIngresoMin))) configGlobalPanel.toleranciaIngresoMin = Number(cfg.toleranciaIngresoMin);
@@ -583,7 +583,10 @@
           : `<span class="text-xs text-slate-500">Sin Foto</span>`;
 
         const firebaseKey = firebaseKeysMap[JSON.stringify(fila)];
-        const btnBorrar = firebaseKey 
+        // Panel de SOLO LECTURA para supervisores: el borrado de fichadas queda
+        // reservado al rol admin (ademas de estar bloqueado por las Reglas de Firebase).
+        const esAdminPanel = sessionStorage.getItem('rol_supervisor') === 'admin';
+        const btnBorrar = (firebaseKey && esAdminPanel)
           ? `<button onclick="eliminarFichadaFirebase('${firebaseKey}')" class="bg-rose-600/20 hover:bg-rose-600/40 text-rose-400 border border-rose-500/30 px-2.5 py-1 rounded-lg text-xs font-semibold transition" title="Eliminar registro">
               <i class="fa-solid fa-trash-can"></i>
              </button>`
@@ -609,6 +612,12 @@
     }
 
     async function eliminarFichadaFirebase(firebaseKey) {
+      // Solo el rol admin puede borrar (defensa en profundidad; las Reglas de
+      // Firebase tambien rechazan el borrado si el rol no es admin).
+      if (sessionStorage.getItem('rol_supervisor') !== 'admin') {
+        alert('Tu rol es de solo lectura. El borrado de fichadas está reservado al administrador.');
+        return;
+      }
       if (!confirm("¿Estás seguro de que deseas eliminar este registro de fichada?")) return;
 
       try {

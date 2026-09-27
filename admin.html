@@ -593,6 +593,37 @@
           <span id="cfgEstadoGuardado" class="text-xs"></span>
         </div>
       </div>
+
+      <!-- MODO DE DISPOSITIVO (individual vs compartido) -->
+      <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl max-w-2xl">
+        <div class="flex items-center gap-3 mb-1">
+          <i class="fa-solid fa-mobile-screen-button text-emerald-400 text-lg"></i>
+          <h3 class="font-bold text-white text-base">Modo de dispositivo de fichaje</h3>
+        </div>
+        <p class="text-xs text-slate-400 mb-5">Define cómo se comporta la sesión en la pantalla de fichaje de los empleados. Se aplica a todos los dispositivos.</p>
+        <div class="space-y-3">
+          <label class="flex items-start gap-3 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 cursor-pointer hover:border-emerald-500 transition">
+            <input type="radio" name="modoDispositivo" id="modoCompartido" value="compartido" class="mt-1 accent-emerald-500">
+            <span>
+              <span class="block text-sm font-semibold text-white">Compartido (recomendado para puestos fijos)</span>
+              <span class="block text-[11px] text-slate-400 mt-0.5">La sesión se cierra automáticamente tras cada fichada y por inactividad (~2 min). Cada empleado debe ingresar su legajo y PIN. Ideal para una tablet/celular compartido en la guárdia.</span>
+            </span>
+          </label>
+          <label class="flex items-start gap-3 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 cursor-pointer hover:border-emerald-500 transition">
+            <input type="radio" name="modoDispositivo" id="modoIndividual" value="individual" class="mt-1 accent-emerald-500">
+            <span>
+              <span class="block text-sm font-semibold text-white">Individual (celular personal del vigilador)</span>
+              <span class="block text-[11px] text-slate-400 mt-0.5">La sesión se mantiene abierta tras fichar (no se cierra sola). Útil cuando cada empleado usa su propio teléfono. Menos seguro si el dispositivo se comparte o se pierde.</span>
+            </span>
+          </label>
+        </div>
+        <div class="flex items-center gap-3 mt-5">
+          <button type="button" onclick="guardarModoDispositivo()" id="btnGuardarModo" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center gap-2">
+            <i class="fa-solid fa-floppy-disk"></i> Guardar modo
+          </button>
+          <span id="cfgEstadoModo" class="text-xs"></span>
+        </div>
+      </div>
     </div>
 
   </div>
@@ -903,7 +934,7 @@
           fechaHoraDispositivo: new Date().toISOString(),
           timestampServidor: { ".sv": "timestamp" }
         };
-        await fetch(`${URL_FIREBASE}/auditoria.json`, {
+        await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/auditoria.json`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(evento)
@@ -941,7 +972,7 @@
     let alertasFichadasConocidas = new Set();
     let alertasFichadasInicializadas = false;
     // Configuración global de reglas laborales y radio de fichaje (persistida en Firebase /configuracionGlobal).
-    let configGlobalAdmin = { toleranciaIngresoMin: 15, toleranciaEgresoMin: 30, radioFichajeMetros: 100 };
+    let configGlobalAdmin = { toleranciaIngresoMin: 15, toleranciaEgresoMin: 30, radioFichajeMetros: 100, modoDispositivo: 'compartido' };
 
     function iniciarSonidoSirena() {
       if (audioCtxPanico) return; 
@@ -996,7 +1027,7 @@
       
       intervaloPanicoPoll = setInterval(async () => {
         try {
-          const res = await fetch(`${URL_FIREBASE}/panicos.json`);
+          const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/panicos.json`));
           const panicosObj = await res.json();
           
           if (!panicosObj) return;
@@ -1066,7 +1097,7 @@
 
     async function cargarAlertasFichadas(esCargaInicial = false) {
       try {
-        const res = await fetch(`${URL_FIREBASE}/alertasFichadas.json?ts=${Date.now()}`, { cache: 'no-store' });
+        const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/alertasFichadas.json?ts=${Date.now()}`), { cache: 'no-store' });
         if (!res.ok) throw new Error('No se pudieron consultar las alertas.');
         const data = await res.json();
         const lista = [];
@@ -1355,16 +1386,22 @@
       if (i) i.value = configGlobalAdmin.toleranciaIngresoMin;
       if (e) e.value = configGlobalAdmin.toleranciaEgresoMin;
       if (r) r.value = configGlobalAdmin.radioFichajeMetros;
+      const modo = (configGlobalAdmin.modoDispositivo === 'individual') ? 'individual' : 'compartido';
+      const rc = document.getElementById('modoCompartido');
+      const ri = document.getElementById('modoIndividual');
+      if (rc) rc.checked = (modo === 'compartido');
+      if (ri) ri.checked = (modo === 'individual');
     }
 
     async function cargarConfiguracionGlobal() {
       try {
-        const res = await fetch(`${URL_FIREBASE}/configuracionGlobal.json?ts=${Date.now()}`, { cache: 'no-store' });
+        const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/configuracionGlobal.json?ts=${Date.now()}`), { cache: 'no-store' });
         const data = await res.json();
         if (data && typeof data === 'object') {
           if (Number.isFinite(Number(data.toleranciaIngresoMin))) configGlobalAdmin.toleranciaIngresoMin = Number(data.toleranciaIngresoMin);
           if (Number.isFinite(Number(data.toleranciaEgresoMin))) configGlobalAdmin.toleranciaEgresoMin = Number(data.toleranciaEgresoMin);
           if (Number.isFinite(Number(data.radioFichajeMetros)) && Number(data.radioFichajeMetros) > 0) configGlobalAdmin.radioFichajeMetros = Number(data.radioFichajeMetros);
+          configGlobalAdmin.modoDispositivo = (String(data.modoDispositivo || '').trim() === 'individual') ? 'individual' : 'compartido';
         }
       } catch (err) {
         console.warn('No se pudo cargar la configuración global, se usan valores por defecto.', err);
@@ -1377,7 +1414,7 @@
       const tolIng = Math.max(0, Math.min(120, parseInt(document.getElementById('cfgToleranciaIngreso').value, 10) || 0));
       const tolEgr = Math.max(0, Math.min(120, parseInt(document.getElementById('cfgToleranciaEgreso').value, 10) || 0));
       const radio = Math.max(10, Math.min(5000, parseInt(document.getElementById('cfgRadioFichaje').value, 10) || 100));
-      const payload = { toleranciaIngresoMin: tolIng, toleranciaEgresoMin: tolEgr, radioFichajeMetros: radio, actualizado: new Date().toISOString() };
+      const payload = { toleranciaIngresoMin: tolIng, toleranciaEgresoMin: tolEgr, radioFichajeMetros: radio, modoDispositivo: (configGlobalAdmin.modoDispositivo === 'individual' ? 'individual' : 'compartido'), actualizado: new Date().toISOString() };
       if (estado) { estado.className = 'text-xs text-slate-400'; estado.innerText = 'Guardando...'; }
       try {
         const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/configuracionGlobal.json`), {
@@ -1394,6 +1431,34 @@
         if (estado) { estado.className = 'text-xs text-rose-400 font-semibold'; estado.innerText = '❌ No se pudo guardar. Reintentá.'; }
       }
     }
+
+    // Guarda SOLO el modo de dispositivo (individual/compartido) sin pisar el
+    // resto de la configuración global (PATCH). Lo lee la pantalla de fichaje
+    // en /configuracionGlobal/modoDispositivo.
+    async function guardarModoDispositivo() {
+      const estado = document.getElementById('cfgEstadoModo');
+      const sel = document.querySelector('input[name="modoDispositivo"]:checked');
+      const modo = (sel && sel.value === 'individual') ? 'individual' : 'compartido';
+      if (estado) { estado.className = 'text-xs text-slate-400'; estado.innerText = 'Guardando...'; }
+      try {
+        const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/configuracionGlobal.json`), {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ modoDispositivo: modo, modoDispositivoActualizado: new Date().toISOString() })
+        });
+        if (!res.ok) throw new Error('Respuesta no OK');
+        configGlobalAdmin.modoDispositivo = modo;
+        if (estado) {
+          estado.className = 'text-xs text-emerald-400 font-semibold';
+          estado.innerText = (modo === 'individual')
+            ? '✓ Modo INDIVIDUAL guardado (la sesión se mantiene).'
+            : '✓ Modo COMPARTIDO guardado (cierra sesión tras fichar).';
+        }
+      } catch (err) {
+        console.error('Error al guardar el modo de dispositivo:', err);
+        if (estado) { estado.className = 'text-xs text-rose-400 font-semibold'; estado.innerText = '❌ No se pudo guardar. Reintentá.'; }
+      }
+    }
+    window.guardarModoDispositivo = guardarModoDispositivo;
 
     // Clasifica una fichada según el horario programado y las tolerancias configuradas.
     // Devuelve null si no hay datos suficientes para evaluar.
@@ -1528,7 +1593,7 @@
         await cargarConfiguracionGlobal();
 
         // 1. Cargar Personal primero
-        const resPersonal = await fetch(`${URL_FIREBASE}/personal.json`);
+        const resPersonal = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/personal.json`));
         const dataPersonal = await resPersonal.json();
         datosPersonal = [];
         let mapaFotosMaster = {};
@@ -1539,7 +1604,7 @@
             if (d) {
               const legajoStr = d.legajo ? String(d.legajo).trim() : '';
               mapaConfiguracionPersonal[id] = d;
-              datosPersonal.push([legajoStr, d.nombre || '', 'Personal', ((d.pinHash || d.pinSalt) ? '••••' : (d.pin || '')), d.estado || 'ACTIVO', id, d.fotoMaster || '']);
+              datosPersonal.push([legajoStr, d.nombre || '', 'Personal', ((d.tienePin || d.pinHash || d.pinSalt) ? '••••' : (d.pin || '')), d.estado || 'ACTIVO', id, d.fotoMaster || '']);
               if (legajoStr && d.fotoMaster) {
                 mapaFotosMaster[legajoStr] = d.fotoMaster;
               }
@@ -1551,7 +1616,7 @@
         // 1b. Cargar TODOS los cambios de turno (para derivar el horario programado
         //     en fichadas antiguas que no lo tienen guardado, igual que el Panel).
         try {
-          const resTurnosGlobal = await fetch(`${URL_FIREBASE}/asignacionesTurnos.json?ts=${Date.now()}`, { cache: 'no-store' });
+          const resTurnosGlobal = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/asignacionesTurnos.json?ts=${Date.now()}`), { cache: 'no-store' });
           const dataTurnosGlobal = await resTurnosGlobal.json();
           asignacionesTurnosGlobalAdmin = dataTurnosGlobal ? Object.entries(dataTurnosGlobal).map(([id, d]) => ({ ...d, id })) : [];
         } catch (err) {
@@ -1560,7 +1625,7 @@
         }
 
         // 2. Cargar Marcaciones
-        const resMarcaciones = await fetch(`${URL_FIREBASE}/fichadas.json`);
+        const resMarcaciones = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/fichadas.json`));
         const dataMarcaciones = await resMarcaciones.json();
         datosMarcaciones = [];
         if (dataMarcaciones) {
@@ -1599,7 +1664,7 @@
         notificarAlertasCumplimiento(datosMarcaciones);
 
         // 3. Cargar Novedades
-        const resNovedades = await fetch(`${URL_FIREBASE}/novedades.json`);
+        const resNovedades = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/novedades.json`));
         const dataNovedades = await resNovedades.json();
         datosNovedades = [];
         if (dataNovedades) {
@@ -1616,7 +1681,7 @@
         filtrarTablaNovedades();
 
         // 4. Cargar Pánicos (dentro de recargarDatosEfectivo)
-        const resPanicos = await fetch(`${URL_FIREBASE}/panicos.json`);
+        const resPanicos = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/panicos.json`));
         const dataPanicos = await resPanicos.json();
         datosPanicos = [];
         if (dataPanicos) {
@@ -1642,7 +1707,7 @@
         renderizarTablaPanicos(datosPanicos);
 
         // 5. Cargar Objetivos
-        const resObjetivos = await fetch(`${URL_FIREBASE}/objetivos.json`);
+        const resObjetivos = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/objetivos.json`));
         const dataObjetivos = await resObjetivos.json();
         datosObjetivos = [];
         if (dataObjetivos) {
@@ -2147,7 +2212,7 @@
       const cont = document.getElementById('editObjetivosAsignados');
       cont.innerHTML = '<span class="text-slate-400">Cargando objetivos...</span>';
       try {
-        const res = await fetch(`${URL_FIREBASE}/objetivos.json?ts=${Date.now()}`, { cache: 'no-store' });
+        const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/objetivos.json?ts=${Date.now()}`), { cache: 'no-store' });
         const data = await res.json();
         cont.innerHTML = '';
         if (!data) { cont.innerHTML = '<span class="text-slate-500">No hay objetivos registrados.</span>'; return; }
@@ -2185,18 +2250,27 @@
       // si el campo queda vacío, se conserva el PIN actual.
       const fichaActual = mapaConfiguracionPersonal[id] || {};
       const datosActualizados = { legajo, nombre, horarioHabitual: { inicio: inicio || '', fin: fin || '' }, objetivosAsignados };
+      // Las credenciales (pinHash/pinSalt) NO se guardan en /personal (nodo legible por
+      // supervisores): se escriben en /credenciales/<id> (acceso solo admin/dueño por Reglas).
+      let credencialNueva = null;
       if (pin) {
         const pinSaltEdit = window.generarSaltVigix();
-        datosActualizados.pinHash = await window.hashPinVigix(pin, pinSaltEdit);
-        datosActualizados.pinSalt = pinSaltEdit;
-        datosActualizados.pin = null; // borrar texto plano si hubiera quedado
-      } else if (fichaActual.pinHash) {
-        datosActualizados.pin = null; // ya está protegido; garantizar que no quede texto plano
+        credencialNueva = { pinHash: await window.hashPinVigix(pin, pinSaltEdit), pinSalt: pinSaltEdit };
+        datosActualizados.tienePin = true;
+      } else {
+        datosActualizados.tienePin = !!(fichaActual.tienePin || fichaActual.pinHash);
       }
+      // Purga cualquier credencial vieja que hubiera quedado en /personal.
+      datosActualizados.pin = null;
+      datosActualizados.pinHash = null;
+      datosActualizados.pinSalt = null;
       if (inputFoto.files && inputFoto.files[0]) datosActualizados.fotoMaster = await convertirImagenBase64(inputFoto.files[0]);
       try {
         const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/personal/${id}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datosActualizados) });
         if (!res.ok) throw new Error('Error al actualizar en Firebase');
+        if (credencialNueva) {
+          await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/credenciales/${id}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(credencialNueva) });
+        }
         mapaConfiguracionPersonal[id] = { ...(mapaConfiguracionPersonal[id] || {}), ...datosActualizados };
         registrarAuditoria('PERSONAL_EDITADO', `personal/${id}`, { legajo, nombre });
         alert('Personal actualizado con éxito.');
@@ -2222,10 +2296,10 @@
         logEl.appendChild(p);
         logEl.scrollTop = logEl.scrollHeight;
       };
-      escribir('— Iniciando protección de PIN (hash + salt)… —', 'text-white');
+      escribir('— Iniciando aislamiento de credenciales (hash → /credenciales)… —', 'text-white');
       let resp;
       try {
-        resp = await fetch(`${URL_FIREBASE}/personal.json?ts=${Date.now()}`, { cache: 'no-store' });
+        resp = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/personal.json?ts=${Date.now()}`), { cache: 'no-store' });
       } catch (e) { escribir('❌ No se pudo leer el personal: ' + e, 'text-rose-400'); return; }
       const data = await resp.json();
       if (!data) { escribir('No hay personal para procesar.', 'text-amber-400'); return; }
@@ -2233,27 +2307,32 @@
       for (const [id, ficha] of Object.entries(data)) {
         if (!ficha) continue;
         const etiqueta = (ficha.legajo || id) + (ficha.nombre ? ` (${ficha.nombre})` : '');
-        if (ficha.pinHash && ficha.pinSalt) {
-          if (ficha.pin != null) {
-            try {
-              await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/personal/${id}/pin.json`), { method: 'DELETE' });
-              escribir(`🧹 ${etiqueta}: ya tenía hash; se eliminó el PIN en texto plano.`, 'text-emerald-400');
-            } catch (_) { errores++; }
-          } else {
-            escribir(`↷ ${etiqueta}: ya está protegido. Se omite.`, 'text-slate-500');
-          }
-          yaOk++;
-          continue;
-        }
-        const pinPlano = String(ficha.pin || ficha.clave || '').trim();
-        if (!pinPlano) { escribir(`⚠️ ${etiqueta}: sin PIN guardado; no se puede derivar hash. Se omite.`, 'text-amber-400'); sinPin++; continue; }
         try {
-          const salt = window.generarSaltVigix();
-          const hash = await window.hashPinVigix(pinPlano, salt);
-          await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/personal/${id}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pinHash: hash, pinSalt: salt, pin: null }) });
-          escribir(`✅ ${etiqueta}: PIN protegido (hash+salt) y texto plano eliminado.`, 'text-emerald-400');
+          let credencial = null;
+          if (ficha.pinHash && ficha.pinSalt) {
+            // Ya estaba hasheado, pero dentro de /personal (legible por supervisores):
+            // se MUEVE el hash a /credenciales/<id> y se purga de /personal.
+            credencial = { pinHash: ficha.pinHash, pinSalt: ficha.pinSalt };
+          } else {
+            // Estaba en texto plano: se deriva el hash y se guarda en /credenciales.
+            const pinPlano = String(ficha.pin || ficha.clave || '').trim();
+            if (!pinPlano) {
+              // Sin credencial que mover; solo garantizamos que no quede texto plano.
+              if (ficha.pin != null || ficha.clave != null) {
+                await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/personal/${id}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: null, clave: null }) });
+              }
+              escribir(`⚠️ ${etiqueta}: sin PIN guardado; no hay credencial que aislar. Se omite.`, 'text-amber-400'); sinPin++; continue;
+            }
+            const salt = window.generarSaltVigix();
+            credencial = { pinHash: await window.hashPinVigix(pinPlano, salt), pinSalt: salt };
+          }
+          // 1) Guardar la credencial en el nodo aislado (solo admin/dueño por Reglas).
+          await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/credenciales/${id}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(credencial) });
+          // 2) Purgar credenciales de /personal y marcar que tiene PIN.
+          await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/personal/${id}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tienePin: true, pin: null, pinHash: null, pinSalt: null, clave: null }) });
+          escribir(`✅ ${etiqueta}: credencial aislada en /credenciales y purgada de /personal.`, 'text-emerald-400');
           protegidos++;
-        } catch (e) { escribir(`❌ ${etiqueta}: error al proteger (${e}).`, 'text-rose-400'); errores++; }
+        } catch (e) { escribir(`❌ ${etiqueta}: error al aislar la credencial (${e}).`, 'text-rose-400'); errores++; }
       }
       escribir(`— Protección finalizada: ${protegidos} protegido(s), ${yaOk} ya OK, ${sinPin} sin PIN, ${errores} con error. —`, 'text-white');
       alert(`Protección de PIN finalizada.\nProtegidos: ${protegidos}\nYa estaban: ${yaOk}\nSin PIN: ${sinPin}\nErrores: ${errores}`);
@@ -2299,7 +2378,7 @@
       for (const nodo of nodos) {
         let data;
         try {
-          const r = await fetch(`${URL_FIREBASE}/${nodo}.json?ts=${Date.now()}`, { cache: 'no-store' });
+          const r = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/${nodo}.json?ts=${Date.now()}`), { cache: 'no-store' });
           data = await r.json();
         } catch (e) { escribir(`❌ No se pudo leer /${nodo}: ${e}`, 'text-rose-400'); errores++; continue; }
         if (!data) { escribir(`↷ /${nodo}: sin registros.`, 'text-slate-500'); continue; }
@@ -2389,7 +2468,7 @@
       const sel = document.getElementById('turnoObjetivo');
       sel.innerHTML = '<option value="">Cargando objetivos...</option>';
       try {
-        const res = await fetch(`${URL_FIREBASE}/objetivos.json?ts=${Date.now()}`, { cache: 'no-store' });
+        const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/objetivos.json?ts=${Date.now()}`), { cache: 'no-store' });
         const data = await res.json();
         sel.innerHTML = '<option value="">Seleccione objetivo</option>';
         const lista = data ? Object.entries(data).filter(([id,o]) => o && (o.nombre || o.codigo)) : [];
@@ -2404,7 +2483,7 @@
       const cuerpo = document.getElementById('cuerpoTurnosPersonal');
       cuerpo.innerHTML = '<tr><td colspan="5" class="p-6 text-center text-slate-500">Cargando turnos...</td></tr>';
       try {
-        const res = await fetch(`${URL_FIREBASE}/asignacionesTurnos.json?ts=${Date.now()}`, { cache: 'no-store' });
+        const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/asignacionesTurnos.json?ts=${Date.now()}`), { cache: 'no-store' });
         const data = await res.json();
         asignacionesTurnosAdmin = data ? Object.entries(data).map(([id,d]) => ({...d, id})).filter(d => mismoLegajoAdmin(d.legajo, mapaConfiguracionPersonal[personalConfigurandoId]?.legajo)) : [];
         asignacionesTurnosAdmin.sort((a,b) => String(a.fecha || '').localeCompare(String(b.fecha || '')));
@@ -3242,11 +3321,17 @@
           fechaAlta: new Date().toISOString(),
           // --- Campos adicionales para compatibilidad con el panel actual ---
           // (necesarios para que la tabla y "Configurar" sigan funcionando)
-          pinHash: pinHashNuevo,
-          pinSalt: pinSaltNuevo,
+          // El hash/salt del PIN NO va en /personal (lo leen los supervisores):
+          // se marca solo que tiene PIN y las credenciales van en /credenciales/<uid>.
+          tienePin: true,
           fotoMaster: fotoMaster || null,
           horarioHabitual: { inicio: '', fin: '' },
           objetivosAsignados: []
+        });
+        // Credenciales en nodo aislado (acceso solo admin/dueño por Reglas).
+        await set(ref(mainDb, `credenciales/${uid}`), {
+          pinHash: pinHashNuevo,
+          pinSalt: pinSaltNuevo
         });
 
         // d. Cerrar de inmediato la sesión secundaria
@@ -3371,11 +3456,20 @@
           continue;
         }
 
-        // Mover la ficha a personal/{uid} conservando todos los datos
-        const nuevaFicha = { ...ficha, authUid: uid, estado: ficha.estado || 'activo' };
+        // Mover la ficha a personal/{uid} conservando los datos operativos, pero
+        // SIN las credenciales: pinHash/pinSalt/pin salen de /personal y van a
+        // /credenciales/<uid> (nodo aislado, solo admin/dueño por Reglas).
+        const credencialMig = (ficha.pinHash && ficha.pinSalt)
+          ? { pinHash: ficha.pinHash, pinSalt: ficha.pinSalt }
+          : (String(ficha.pin || '').trim()
+              ? await (async () => { const s = window.generarSaltVigix(); return { pinHash: await window.hashPinVigix(String(ficha.pin).trim(), s), pinSalt: s }; })()
+              : null);
+        const nuevaFicha = { ...ficha, authUid: uid, estado: ficha.estado || 'activo', tienePin: !!(credencialMig || ficha.tienePin) };
+        delete nuevaFicha.pin; delete nuevaFicha.pinHash; delete nuevaFicha.pinSalt; delete nuevaFicha.clave;
 
         try {
           await set(ref(mainDb, `personal/${uid}`), nuevaFicha);
+          if (credencialMig) { await set(ref(mainDb, `credenciales/${uid}`), credencialMig); }
           // Verificar que quedó escrita antes de borrar la vieja
           const verif = await get(ref(mainDb, `personal/${uid}`));
           if (!verif.exists()) throw new Error('no se pudo verificar la escritura');

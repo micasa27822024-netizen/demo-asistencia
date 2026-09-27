@@ -101,7 +101,7 @@
       <form id="formLoginVigilador" onsubmit="event.preventDefault(); buscarMisHoras();" class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div class="relative">
           <i class="fa-solid fa-id-badge absolute left-3 top-3 text-slate-400 text-sm"></i>
-          <input type="text" id="legajoInput" placeholder="Número de Legajo..." onblur="previsualizarLegajoVigilador()" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+          <input type="text" id="legajoInput" placeholder="Número de Legajo..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
         </div>
         <div class="relative">
           <i class="fa-solid fa-key absolute left-3 top-3 text-slate-400 text-sm"></i>
@@ -247,6 +247,46 @@
     let mapaConfiguracionPersonalVigilador = {};
     let asignacionesTurnosVigilador = [];
 
+    // ── Sesion autenticada (login-first) ─────────────────────────────────
+    // El acceso a "Mis Horas" mantiene la sesion de Firebase Auth y usa su
+    // idToken para leer SOLO los datos propios (?auth=). Sin sesion no se
+    // hace ningun fetch de personal/fichadas.
+    let idTokenVig = null;
+    let legajoSesionVig = null;
+
+    function urlAuth(url) {
+      if (!idTokenVig) return url;
+      return url + (url.includes('?') ? '&' : '?') + 'auth=' + encodeURIComponent(idTokenVig);
+    }
+
+    // Refresca el idToken contra la sesion viva de Firebase Auth (el SDK lo
+    // renueva si esta vencido) y luego arma la URL con ?auth. Se usa en las
+    // ESCRITURAS criticas (panico / novedades) para que el token cacheado no
+    // caduque en turnos largos y la alerta no sea rechazada por las reglas.
+    async function urlAuthFresca(url) {
+      try {
+        if (typeof window.obtenerTokenVigilador === 'function') {
+          const t = await window.obtenerTokenVigilador();
+          if (t) idTokenVig = t;
+        }
+      } catch (_) {}
+      return urlAuth(url);
+    }
+
+    // Lee SOLO la ficha propia (query scoped por legajo, texto y numero) en
+    // vez de descargar todo /personal. Requiere .indexOn:["legajo"] en reglas.
+    async function fetchPersonalScoped(legajo) {
+      const base = `${URL_FIREBASE}/personal.json?orderBy=${encodeURIComponent('"legajo"')}`;
+      let r = await fetch(urlAuth(base + '&equalTo=' + encodeURIComponent('"' + legajo + '"') + '&ts=' + Date.now()), { cache: 'no-store' }).then(x => x.json()).catch(() => null);
+      if (r && Object.keys(r).length) return r;
+      const n = Number(legajo);
+      if (Number.isFinite(n)) {
+        const r2 = await fetch(urlAuth(base + '&equalTo=' + n + '&ts=' + Date.now()), { cache: 'no-store' }).then(x => x.json()).catch(() => null);
+        if (r2 && Object.keys(r2).length) return r2;
+      }
+      return r || null;
+    }
+
     // Variables para control del Botón de Pánico sostenido
     let temporizadorPanico = null;
     let intervaloProgresoPanico = null;
@@ -302,14 +342,16 @@
     // completo para no perder registros (compatibilidad).
     function fetchFichadasLegajo(legajo) {
       const legajoStr = String(legajo || '').trim();
-      const urlCompleta = `${URL_FIREBASE}/fichadas.json?ts=${Date.now()}`;
-      const urlScoped = `${URL_FIREBASE}/fichadas.json?orderBy=%22legajo%22&equalTo=%22${encodeURIComponent(legajoStr)}%22&ts=${Date.now()}`;
+      const urlScoped = urlAuth(`${URL_FIREBASE}/fichadas.json?orderBy=%22legajo%22&equalTo=%22${encodeURIComponent(legajoStr)}%22&ts=${Date.now()}`);
+      const urlScopedNum = Number.isFinite(Number(legajoStr))
+        ? urlAuth(`${URL_FIREBASE}/fichadas.json?orderBy=%22legajo%22&equalTo=${Number(legajoStr)}&ts=${Date.now()}`)
+        : null;
       return fetch(urlScoped, { cache: 'no-store' })
         .then(res => res.ok ? res.json() : Promise.reject(new Error('scoped no ok')))
         .then(data => (data && Object.keys(data).length)
           ? data
-          : fetch(urlCompleta, { cache: 'no-store' }).then(r => r.json()))
-        .catch(() => fetch(urlCompleta, { cache: 'no-store' }).then(r => r.json()));
+          : (urlScopedNum ? fetch(urlScopedNum, { cache: 'no-store' }).then(r => r.json()).catch(() => data) : data))
+        .catch(() => (urlScopedNum ? fetch(urlScopedNum, { cache: 'no-store' }).then(r => r.json()).catch(() => null) : null));
     }
 
     function parseFechaSegura(fechaStr) {
@@ -461,22 +503,20 @@
     }
 
     window.onload = function() {
-      const legajoGuardado = sessionStorage.getItem('vigilador_legajo');
-      const nombreGuardado = sessionStorage.getItem('vigilador_nombre');
-      if (legajoGuardado) {
-        document.getElementById('legajoInput').value = legajoGuardado;
-        document.getElementById('formLoginVigilador').classList.add('hidden');
-        document.getElementById('infoSesionActiva').classList.remove('hidden');
-        document.getElementById('lblLegajoActivo').innerText = legajoGuardado;
-        document.getElementById('lblNombreActivo').innerText = nombreGuardado || `Legajo ${legajoGuardado}`;
-        document.getElementById('btnCerrarSesion').classList.remove('hidden');
-        document.getElementById('seccionPanico').classList.remove('hidden');
-        document.getElementById('seccionNovedades').classList.remove('hidden'); 
-        
-        ejecutarConsulta(legajoGuardado);
-        activarEscuchasInactividad();
-        reiniciarTemporizador();
-      }
+      // LOGIN-FIRST: NO auto-restauramos ninguna sesion previa. Sin token de
+      // Firebase Auth valido no se puede leer nada, asi que siempre arrancamos
+      // en la pantalla de login. Limpiamos cualquier rastro de sesion anterior.
+      sessionStorage.removeItem('vigilador_legajo');
+      sessionStorage.removeItem('vigilador_nombre');
+      sessionStorage.removeItem('vigilador_token');
+      idTokenVig = null;
+      legajoSesionVig = null;
+
+      const prev = document.getElementById('previewLegajoVigilador');
+      if (prev) { prev.classList.add('hidden'); prev.innerHTML = ''; }
+      document.getElementById('formLoginVigilador').classList.remove('hidden');
+      document.getElementById('infoSesionActiva').classList.add('hidden');
+      document.getElementById('btnCerrarSesion').classList.add('hidden');
 
       inicializarBotonPanicoSostenido();
       // Al abrir la app: mostrar avisos de alertas pendientes y reintentar la
@@ -501,63 +541,31 @@
       return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')} hs`;
     }
 
-    // Previsualiza nombre + última fichada + próxima acción esperada al ingresar el legajo (solo informativo).
-    function previsualizarLegajoVigilador() {
-      const legajoIngresado = String(document.getElementById('legajoInput').value || '').trim();
+    // Muestra (SOLO tras iniciar sesion) el resumen del legajo: nombre +
+    // ultima fichada + proxima accion esperada. Usa exclusivamente los datos
+    // ya cargados de la sesion; NO hace ninguna lectura previa al login.
+    function renderPreviewVigilador(nombreEmpleado, misFichadas) {
       const cont = document.getElementById('previewLegajoVigilador');
       if (!cont) return;
-      if (!legajoIngresado) { cont.classList.add('hidden'); cont.innerHTML = ''; return; }
-      Promise.all([
-        fetch(`${URL_FIREBASE}/personal.json?ts=${Date.now()}`, { cache: 'no-store' }).then(res => res.json()),
-        fetchFichadasLegajo(legajoIngresado)
-      ])
-      .then(([personalData, fichadasData]) => {
-        let nombreEmpleado = null;
-        if (personalData) {
-          Object.values(personalData).forEach(p => {
-            const pLegajo = String(p.legajo || '').trim();
-            if (pLegajo === legajoIngresado || parseInt(pLegajo, 10) === parseInt(legajoIngresado, 10)) {
-              if (p.nombre) nombreEmpleado = p.nombre;
-            }
-          });
-        }
-        if (!nombreEmpleado) {
-          cont.classList.remove('hidden');
-          cont.innerHTML = '<span class="text-rose-400"><i class="fa-solid fa-triangle-exclamation"></i> Legajo no encontrado.</span>';
-          return;
-        }
-        let fichadasLegajo = [];
-        if (fichadasData) {
-          Object.values(fichadasData).forEach(f => {
-            const fLegajo = String(f.legajo || '').trim();
-            if (fLegajo === legajoIngresado || parseInt(fLegajo, 10) === parseInt(legajoIngresado, 10)) {
-              fichadasLegajo.push({
-                fecha: f.fechaHoraDispositivo || f.fecha,
-                tipo: String(f.tipo || '').toUpperCase()
-              });
-            }
-          });
-        }
-        fichadasLegajo.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
-        const ultima = fichadasLegajo[fichadasLegajo.length - 1] || null;
-        let ultimaTxt = 'Sin fichadas registradas';
-        let proximaTxt = 'ENTRADA';
-        if (ultima) {
-          const fdt = new Date(ultima.fecha);
-          const fechaFmt = isNaN(fdt.getTime()) ? String(ultima.fecha) : fdt.toLocaleString('es-AR');
-          ultimaTxt = `${ultima.tipo || 'FICHADA'} — ${fechaFmt}`;
-          proximaTxt = (ultima.tipo === 'ENTRADA') ? 'SALIDA' : 'ENTRADA';
-        }
-        cont.classList.remove('hidden');
-        cont.innerHTML =
-          `<span><i class="fa-solid fa-user text-emerald-400"></i> <strong class="text-white">${escapeHtml(nombreEmpleado)}</strong></span>` +
-          `<span><i class="fa-solid fa-clock-rotate-left text-emerald-400"></i> Última: ${escapeHtml(ultimaTxt)}</span>` +
-          `<span><i class="fa-solid fa-arrow-right text-emerald-400"></i> Próxima acción esperada: <strong class="text-white">${escapeHtml(proximaTxt)}</strong></span>`;
-      })
-      .catch(() => { /* previsualización silenciosa: no bloquea el flujo */ });
+      const lista = Array.isArray(misFichadas) ? [...misFichadas] : [];
+      lista.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+      const ultima = lista[lista.length - 1] || null;
+      let ultimaTxt = 'Sin fichadas registradas';
+      let proximaTxt = 'ENTRADA';
+      if (ultima) {
+        const fdt = new Date(ultima.fecha);
+        const fechaFmt = isNaN(fdt.getTime()) ? String(ultima.fecha) : fdt.toLocaleString('es-AR');
+        ultimaTxt = `${(ultima.tipo || 'FICHADA')} — ${fechaFmt}`;
+        proximaTxt = (String(ultima.tipo || '').toUpperCase() === 'ENTRADA') ? 'SALIDA' : 'ENTRADA';
+      }
+      cont.classList.remove('hidden');
+      cont.innerHTML =
+        `<span><i class="fa-solid fa-user text-emerald-400"></i> <strong class="text-white">${escapeHtml(nombreEmpleado)}</strong></span>` +
+        `<span><i class="fa-solid fa-clock-rotate-left text-emerald-400"></i> Última: ${escapeHtml(ultimaTxt)}</span>` +
+        `<span><i class="fa-solid fa-arrow-right text-emerald-400"></i> Próxima acción esperada: <strong class="text-white">${escapeHtml(proximaTxt)}</strong></span>`;
     }
 
-    function buscarMisHoras() {
+    async function buscarMisHoras() {
       const legajoIngresado = document.getElementById('legajoInput').value.trim();
       const pinIngresado = document.getElementById('pinInput').value.trim();
 
@@ -565,59 +573,45 @@
         return alert("Por favor ingresa tu número de legajo y tu PIN de seguridad.");
       }
 
-      Promise.all([
-        fetch(`${URL_FIREBASE}/personal.json?ts=${Date.now()}`, { cache: 'no-store' }).then(res => res.json()),
-        fetchFichadasLegajo(legajoIngresado),
-        fetch(`${URL_FIREBASE}/asignacionesTurnos.json?ts=${Date.now()}`, { cache: 'no-store' }).then(res => res.json())
-      ])
-      .then(async ([personalData, fichadasData, turnosData]) => {
+      // 1) LOGIN REAL contra Firebase Auth (sesion persistente). Recien con un
+      //    token valido se realiza CUALQUIER lectura; sin login no se baja nada.
+      let loginOk = false;
+      if (typeof window.loginVigilador === 'function') {
+        try {
+          const res = await window.loginVigilador(legajoIngresado, pinIngresado);
+          if (res && res.ok && res.idToken) {
+            idTokenVig = res.idToken;
+            legajoSesionVig = legajoIngresado;
+            loginOk = true;
+          }
+        } catch (_) {}
+      }
+      if (!loginOk) {
+        alert('❌ Legajo o PIN incorrecto. No podés acceder a tus horas sin las credenciales reales de tu legajo.');
+        return;
+      }
+
+      try {
+        // 2) Lecturas SCOPED + ?auth: SOLO la ficha y las fichadas propias.
+        const [personalData, fichadasData, turnosData] = await Promise.all([
+          fetchPersonalScoped(legajoIngresado),
+          fetchFichadasLegajo(legajoIngresado),
+          fetch(urlAuth(`${URL_FIREBASE}/asignacionesTurnos.json?ts=${Date.now()}`), { cache: 'no-store' }).then(res => res.json()).catch(() => null)
+        ]);
+
         mapaConfiguracionPersonalVigilador = personalData || {};
         asignacionesTurnosVigilador = turnosData
           ? Object.entries(turnosData).map(([id, d]) => ({ ...d, id }))
           : [];
-        let empleadoEncontrado = null;
-        let legajoExisteEnPersonal = false;
-        let pinCorrecto = false;
-        let nombreEmpleado = `Legajo ${legajoIngresado}`;
 
+        let nombreEmpleado = `Legajo ${legajoIngresado}`;
         if (personalData) {
           Object.values(personalData).forEach(p => {
             const pLegajo = String(p.legajo || "").trim();
             if (pLegajo === legajoIngresado || parseInt(pLegajo, 10) === parseInt(legajoIngresado, 10)) {
-              legajoExisteEnPersonal = true;
-              empleadoEncontrado = p;
               if (p.nombre) nombreEmpleado = p.nombre;
             }
           });
-        }
-
-        // Verificación del PIN contra Firebase Auth (servidor). Si no hay conexión,
-        // se valida localmente: contra el hash con salt de la ficha, o —para fichas
-        // viejas aún sin proteger— contra el PIN en texto plano.
-        let pinVerificadoServidor = false;
-        if (typeof window.verificarPinVigilador === 'function') {
-          try {
-            const ver = await window.verificarPinVigilador(legajoIngresado, pinIngresado);
-            if (ver && ver.ok) pinVerificadoServidor = true;
-          } catch (_) {}
-        }
-        if (!pinVerificadoServidor && empleadoEncontrado) {
-          if (empleadoEncontrado.pinHash && empleadoEncontrado.pinSalt && typeof window.verificarPinHashVigix === 'function') {
-            pinCorrecto = await window.verificarPinHashVigix(pinIngresado, empleadoEncontrado);
-          } else {
-            const pPin = String(empleadoEncontrado.pin || empleadoEncontrado.clave || "").trim();
-            pinCorrecto = (!!pPin && pPin === pinIngresado);
-          }
-        }
-
-        // VALIDACIÓN REAL DE ACCESO: el legajo debe existir y el PIN debe coincidir.
-        if (!legajoExisteEnPersonal) {
-          alert('❌ El legajo ingresado no existe. Verificá tu número de legajo.');
-          return;
-        }
-        if (!pinVerificadoServidor && !pinCorrecto) {
-          alert('❌ PIN incorrecto. No podés acceder a tus horas sin el PIN real de tu legajo.');
-          return;
         }
 
         let misFichadas = [];
@@ -654,24 +648,27 @@
         document.getElementById('seccionPanico').classList.remove('hidden');
         document.getElementById('seccionNovedades').classList.remove('hidden'); 
 
+        // Recien AHORA (ya con sesion iniciada) mostramos el resumen del legajo:
+        // nombre + ultima fichada + proxima accion esperada.
+        renderPreviewVigilador(nombreEmpleado, misFichadas);
+
         poblarSelectMeses(datosVigiladorGlobal);
         procesarYRenderizar(datosVigiladorGlobal);
         activarEscuchasInactividad();
         reiniciarTemporizador();
         actualizarAvisoPanicosPendientes();
         reenviarPanicosPendientes();
-      })
-      .catch(err => {
+      } catch (err) {
         console.error(err);
         alert("Ocurrió un error al consultar Firebase.");
-      });
+      }
     }
 
     function ejecutarConsulta(legajo) {
       Promise.all([
         fetchFichadasLegajo(legajo),
-        fetch(`${URL_FIREBASE}/personal.json?ts=${Date.now()}`, { cache: 'no-store' }).then(res => res.json()),
-        fetch(`${URL_FIREBASE}/asignacionesTurnos.json?ts=${Date.now()}`, { cache: 'no-store' }).then(res => res.json())
+        fetchPersonalScoped(legajo),
+        fetch(urlAuth(`${URL_FIREBASE}/asignacionesTurnos.json?ts=${Date.now()}`), { cache: 'no-store' }).then(res => res.json()).catch(() => null)
       ])
         .then(([fichadasData, personalData, turnosData]) => {
           mapaConfiguracionPersonalVigilador = personalData || {};
@@ -899,7 +896,7 @@
       }
 
       navigator.geolocation.getCurrentPosition(
-        function(position) {
+        async function(position) {
           const lat = position.coords.latitude;
           const lon = position.coords.longitude;
           const fechaActual = new Date().toISOString();
@@ -938,7 +935,9 @@
             return;
           }
 
-          fetch(`${URL_FIREBASE}/panicos.json`, {
+          // Token fresco antes de disparar la alerta (evita rechazo por token vencido).
+          const urlPanico = await urlAuthFresca(`${URL_FIREBASE}/panicos.json`);
+          fetch(urlPanico, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payloadPanico)
@@ -995,7 +994,7 @@
         const sobrevivientes = [];
         for (const payload of pendientes) {
           try {
-            const res = await fetch(`${URL_FIREBASE}/panicos.json`, {
+            const res = await fetch(await urlAuthFresca(`${URL_FIREBASE}/panicos.json`), {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(payload)
@@ -1099,7 +1098,7 @@
       );
     }
 
-    function enviarDatosFirebase(legajo, nombre, objetivo, tipoIncidencia, descripcion, lat, lon, fotoBase64) {
+    async function enviarDatosFirebase(legajo, nombre, objetivo, tipoIncidencia, descripcion, lat, lon, fotoBase64) {
       if (novedadEnEnvio) return; // ya hay una novedad en curso: no duplicar
       const idEvento = generarIdEvento();
       if (eventosEnviados.has(idEvento)) return;
@@ -1128,7 +1127,9 @@
       eventosEnviados.add(idEvento);
       novedadEnEnvio = true;
 
-      fetch(`${URL_FIREBASE}/novedades.json`, {
+      // Token fresco antes de enviar la novedad (evita rechazo por token vencido).
+      const urlNovedad = await urlAuthFresca(`${URL_FIREBASE}/novedades.json`);
+      fetch(urlNovedad, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -1153,7 +1154,15 @@
       sessionStorage.removeItem('vigilador_nombre');
       sessionStorage.removeItem('vigilador_token');
       datosVigiladorGlobal = [];
-      
+
+      // Cerrar la sesion de Firebase Auth y descartar el token: sin token no se
+      // puede volver a leer nada hasta iniciar sesion otra vez.
+      idTokenVig = null;
+      legajoSesionVig = null;
+      if (typeof window.logoutVigilador === 'function') {
+        try { window.logoutVigilador(); } catch (_) {}
+      }
+
       document.getElementById('formLoginVigilador').classList.remove('hidden');
       document.getElementById('infoSesionActiva').classList.add('hidden');
       document.getElementById('btnCerrarSesion').classList.add('hidden');
@@ -1162,7 +1171,10 @@
       document.getElementById('resumenHoras').classList.add('hidden');
       document.getElementById('seccionNovedades').classList.add('hidden'); 
       document.getElementById('contenedorTabla').classList.add('hidden');
-      
+
+      const prev = document.getElementById('previewLegajoVigilador');
+      if (prev) { prev.classList.add('hidden'); prev.innerHTML = ''; }
+
       document.getElementById('legajoInput').value = '';
       document.getElementById('pinInput').value = '';
       document.getElementById('filtroMes').innerHTML = `<option value="todos">Todos los meses</option>`;
@@ -1176,7 +1188,7 @@
   <!-- ============================================================================= -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getAuth, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBYsTCQWwnqEaBzsC5P-9cTM6uBKCnKAmo",
@@ -1213,6 +1225,56 @@
       }
     }
     window.verificarPinVigilador = verificarPinVigilador;
+
+    /**
+     * Inicia sesion REAL del vigilador (legajo + PIN) manteniendo la sesion en
+     * Firebase Auth y devolviendo su idToken para autorizar las lecturas
+     * (?auth=). A diferencia de verificarPinVigilador, NO cierra la sesion:
+     * la mantiene viva durante la consulta de horas.
+     * Persistencia de sesion (no sobrevive al cierre de pestana).
+     * @returns {Promise<{ok:boolean, idToken?:string, uid?:string, razon?:string}>}
+     */
+    async function loginVigilador(legajo, pin) {
+      const legajoLimpio = String(legajo || '').trim();
+      const pinLimpio    = String(pin || '').trim();
+      if (!legajoLimpio || !pinLimpio) return { ok: false, razon: 'faltan_datos' };
+
+      const email    = `${legajoLimpio}@demo.asistencia`;
+      const password = pinLimpio.padStart(6, '0');
+      try {
+        try { await setPersistence(vigAuth, browserSessionPersistence); } catch (_) {}
+        const cred = await signInWithEmailAndPassword(vigAuth, email, password);
+        const idToken = await cred.user.getIdToken();
+        return { ok: true, idToken, uid: cred.user.uid };
+      } catch (e) {
+        return { ok: false, razon: (e && e.code) || 'error' };
+      }
+    }
+    window.loginVigilador = loginVigilador;
+
+    /** Cierra la sesion de Firebase Auth del vigilador. */
+    async function logoutVigilador() {
+      try { await signOut(vigAuth); } catch (_) {}
+    }
+    window.logoutVigilador = logoutVigilador;
+
+    /**
+     * Devuelve un idToken VIGENTE del vigilador logueado. El SDK refresca el
+     * token automaticamente si esta vencido o proximo a vencer; con forzar=true
+     * se pide uno nuevo si o si. Critico para el boton de panico en turnos
+     * largos (el token cacheado al loguear caduca ~1h).
+     * @returns {Promise<string|null>}
+     */
+    async function obtenerTokenVigilador(forzar) {
+      try {
+        if (vigAuth.currentUser) {
+          const t = await vigAuth.currentUser.getIdToken(!!forzar);
+          return t || null;
+        }
+      } catch (_) {}
+      return null;
+    }
+    window.obtenerTokenVigilador = obtenerTokenVigilador;
   </script>
 </body>
 </html>

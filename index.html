@@ -78,23 +78,53 @@
     </div>
   </header>
 
-  <!-- CONTENEDOR PRINCIPAL DE FICHAJE -->
-  <main class="flex-grow flex items-center justify-center p-4">
+  <!-- ============ PANTALLA 1: BIENVENIDA / LOGIN ============ -->
+  <main id="pantallaLogin" class="flex-grow flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 p-6 space-y-5 text-center">
+      <div>
+        <h1 class="text-2xl font-bold text-white tracking-wide">Bienvenido a Demo Asistencia</h1>
+        <p class="text-sm text-slate-400 mt-1">Logueate para fichar</p>
+      </div>
+      <div class="flex justify-center">
+        <span id="estadoRedLogin" class="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-500/30">🟢 Online</span>
+      </div>
+      <form id="formLogin" class="space-y-4 text-left" autocomplete="off">
+        <div>
+          <label class="block text-xs uppercase text-slate-400 mb-1">N° Legajo</label>
+          <input type="text" id="loginLegajo" inputmode="numeric" placeholder="Ingrese su legajo (ej: 0286)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500">
+        </div>
+        <div>
+          <label class="block text-xs uppercase text-slate-400 mb-1">PIN / Clave de Personal</label>
+          <input type="password" id="loginPin" maxlength="6" placeholder="****" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500">
+        </div>
+        <button type="submit" id="btnIngresar" class="w-full bg-emerald-600 hover:bg-emerald-500 font-bold py-3 rounded-xl transition">Ingresar</button>
+        <p id="login-status" class="text-xs mt-1 text-center hidden"></p>
+      </form>
+    </div>
+  </main>
+
+  <!-- ============ PANTALLA 2: FICHAJE (solo tras loguear) ============ -->
+  <main id="panelFichaje" class="flex-grow flex items-center justify-center p-4 hidden">
     <div class="w-full max-w-md bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 p-6 space-y-4">
       <div class="flex justify-between items-center">
         <h2 class="text-xl font-bold text-white tracking-wide uppercase">Registro de Asistencia</h2>
         <span id="estadoRed" class="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-500/30">🟢 Online</span>
       </div>
 
-      <!-- LEGAJO Y VALIDACIÓN -->
+      <div class="flex justify-between items-center bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2">
+        <div class="text-left">
+          <p class="text-[10px] uppercase text-slate-500 leading-tight">Sesión activa</p>
+          <p id="lblSesionNombre" class="text-sm font-semibold text-emerald-300 leading-tight">—</p>
+        </div>
+        <button type="button" id="btnCerrarSesionVig" onclick="cerrarSesionVigilador()" class="text-[11px] bg-slate-700 hover:bg-slate-600 text-slate-200 px-2 py-1 rounded">
+          <i class="fa-solid fa-right-from-bracket"></i> Salir
+        </button>
+      </div>
+
+      <!-- LEGAJO (ya autenticado, solo lectura) -->
       <div>
         <label class="block text-xs uppercase text-slate-400 mb-1">N° Legajo</label>
-        <div class="relative">
-          <input type="text" id="legajo" onblur="validarLegajo()" placeholder="Ingrese su legajo (ej: 0286)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500">
-          <button type="button" onclick="validarLegajo()" class="absolute right-2 top-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs px-2 py-1 rounded">
-            <i class="fa-solid fa-magnifying-glass"></i>
-          </button>
-        </div>
+        <input type="text" id="legajo" readonly class="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-slate-300 cursor-not-allowed">
         <p id="legajo-status" class="text-xs mt-1 hidden"></p>
         <p id="ultimo-estado-badge" class="text-xs mt-1.5 font-semibold hidden"></p>
       </div>
@@ -102,13 +132,7 @@
       <!-- NOMBRE -->
       <div>
         <label class="block text-xs uppercase text-slate-400 mb-1">Nombre Completo</label>
-        <input type="text" id="nombre" readonly placeholder="Se autocompletará con su legajo" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-slate-400 cursor-not-allowed">
-      </div>
-
-      <!-- PIN DE SEGURIDAD -->
-      <div>
-        <label class="block text-xs uppercase text-slate-400 mb-1">PIN / Clave de Personal</label>
-        <input type="password" id="pin" maxlength="6" placeholder="****" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500">
+        <input type="text" id="nombre" readonly placeholder="—" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-slate-400 cursor-not-allowed">
       </div>
 
       <!-- OBJETIVO / PUESTO -->
@@ -156,7 +180,7 @@
     async function existeFichadaReciente(legajo, tipo) {
       try {
         const url = `${URL_FIREBASE}/fichadas.json?orderBy=%22legajo%22&equalTo=%22${encodeURIComponent(String(legajo))}%22`;
-        const res = await fetch(url, { cache: 'no-store' });
+        const res = await fetch(urlAuth(url), { cache: 'no-store' });
         if (!res.ok) return false;
         const data = await res.json();
         if (!data) return false;
@@ -193,11 +217,125 @@
     let turnoProgramadoGlobal = null;
     let objetivoAutorizadoIdsGlobal = [];
 
+    // ===================================================================
+    //  SESION AUTENTICADA DEL VIGILADOR (login-first)
+    //  El vigilador inicia sesion con legajo + PIN contra Firebase Auth y
+    //  la sesion se MANTIENE (no signOut inmediato). Con ese idToken se
+    //  leen SOLO sus propios datos (query scoped) en vez de bajar toda la
+    //  base de PII. Sin sesion no se muestra el panel ni se hace ningun
+    //  fetch de personal/fichadas.
+    // ===================================================================
+    let idTokenVig = null;                 // idToken de la sesion Auth activa
+    let legajoSesion = null;               // legajo logueado
+    let modoDispositivo = 'compartido';    // 'individual' mantiene sesion; 'compartido' cierra tras fichar
+    let timerInactividad = null;
+    const MS_INACTIVIDAD = 2 * 60 * 1000;  // auto-logout por inactividad (~2 min) en modo compartido
+
+    // Agrega ?auth=<idToken> a una URL de la RTDB si hay sesion activa.
+    function urlAuth(url) {
+      if (!idTokenVig) return url;
+      return url + (url.includes('?') ? '&' : '?') + 'auth=' + encodeURIComponent(idTokenVig);
+    }
+
+    // Lee SOLO los registros propios (query scoped por legajo, string y numero)
+    // para no descargar toda la coleccion. Requiere en las Reglas de Seguridad
+    // el indice .indexOn: ["legajo"] sobre /personal y /fichadas.
+    async function fetchScoped(path, legajo) {
+      const base = `${URL_FIREBASE}/${path}.json?orderBy=${encodeURIComponent('"legajo"')}`;
+      let r = await fetch(urlAuth(base + '&equalTo=' + encodeURIComponent('"' + legajo + '"')), { cache: 'no-store' }).then(x => x.json()).catch(() => null);
+      if (r && Object.keys(r).length) return r;
+      const n = Number(legajo);
+      if (Number.isFinite(n)) {
+        const r2 = await fetch(urlAuth(base + '&equalTo=' + n), { cache: 'no-store' }).then(x => x.json()).catch(() => null);
+        if (r2 && Object.keys(r2).length) return r2;
+      }
+      return r || null;
+    }
+
+    function reiniciarInactividad() {
+      if (modoDispositivo !== 'compartido') { if (timerInactividad) { clearTimeout(timerInactividad); timerInactividad = null; } return; }
+      if (!legajoSesion) return;
+      if (timerInactividad) clearTimeout(timerInactividad);
+      timerInactividad = setTimeout(() => {
+        alert('Sesion cerrada por inactividad. Volve a ingresar tu legajo y PIN.');
+        cerrarSesionVigilador();
+      }, MS_INACTIVIDAD);
+    }
+    ['click', 'keydown', 'touchstart'].forEach(ev =>
+      document.addEventListener(ev, () => { if (legajoSesion) reiniciarInactividad(); }, { passive: true })
+    );
+
+    async function cargarModoDispositivo() {
+      try {
+        const res = await fetch(urlAuth(`${URL_FIREBASE}/configuracionGlobal/modoDispositivo.json?ts=${Date.now()}`), { cache: 'no-store' });
+        const m = await res.json();
+        modoDispositivo = (String(m || '').trim() === 'individual') ? 'individual' : 'compartido';
+      } catch (_) { modoDispositivo = 'compartido'; }
+    }
+
+    async function iniciarSesionVigilador(e) {
+      if (e && e.preventDefault) e.preventDefault();
+      const legajo = document.getElementById('loginLegajo').value.trim();
+      const pin = document.getElementById('loginPin').value.trim();
+      const st = document.getElementById('login-status');
+      const btn = document.getElementById('btnIngresar');
+      if (!legajo || !pin) { st.className = 'text-xs mt-1 text-center text-rose-400 block'; st.innerText = 'Ingresá tu legajo y PIN.'; return; }
+      if (!navigator.onLine) { st.className = 'text-xs mt-1 text-center text-rose-400 block'; st.innerText = 'Sin conexión: no se puede iniciar sesión de forma segura.'; return; }
+      st.className = 'text-xs mt-1 text-center text-amber-400 block'; st.innerText = 'Verificando...';
+      if (btn) btn.disabled = true;
+      try {
+        const r = (typeof window.loginVigilador === 'function') ? await window.loginVigilador(legajo, pin) : { ok: false, razon: 'sin_auth' };
+        if (!r || !r.ok) {
+          const cod = r && r.razon;
+          st.className = 'text-xs mt-1 text-center text-rose-400 block';
+          st.innerText = (cod === 'auth/too-many-requests')
+            ? 'Demasiados intentos. Esperá unos minutos.'
+            : 'Legajo o PIN incorrectos.';
+          if (btn) btn.disabled = false;
+          return;
+        }
+        idTokenVig = r.idToken;
+        legajoSesion = String(legajo).trim();
+        document.getElementById('loginPin').value = '';
+        document.getElementById('pantallaLogin').classList.add('hidden');
+        document.getElementById('panelFichaje').classList.remove('hidden');
+        document.getElementById('legajo').value = legajoSesion;
+        st.className = 'text-xs mt-1 text-center hidden'; st.innerText = '';
+        // Recursos del panel: recien ahora, ya autenticado.
+        iniciarCamaraSegura();
+        cargarModelosIA();
+        cargarObjetivos();
+        await cargarModoDispositivo();
+        await validarLegajo();   // lee SOLO el registro propio, con token
+        reiniciarInactividad();
+      } catch (err) {
+        st.className = 'text-xs mt-1 text-center text-rose-400 block';
+        st.innerText = 'Error al iniciar sesión.';
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    async function cerrarSesionVigilador() {
+      try { if (typeof window.logoutVigilador === 'function') await window.logoutVigilador(); } catch (_) {}
+      idTokenVig = null; legajoSesion = null;
+      if (timerInactividad) { clearTimeout(timerInactividad); timerInactividad = null; }
+      personalActualGlobal = null; turnoProgramadoGlobal = null; fotoMasterGuardada = null;
+      vigiladorInactivoGlobal = false; ultimoTipoFichadaGlobal = '';
+      const panel = document.getElementById('panelFichaje'); if (panel) panel.classList.add('hidden');
+      const login = document.getElementById('pantallaLogin'); if (login) login.classList.remove('hidden');
+      const st = document.getElementById('login-status'); if (st) { st.className = 'text-xs mt-1 text-center hidden'; st.innerText = ''; }
+      const btn = document.getElementById('btnIngresar'); if (btn) btn.disabled = false;
+      const ll = document.getElementById('loginLegajo'); if (ll) ll.value = '';
+      const lp = document.getElementById('loginPin'); if (lp) lp.value = '';
+      const nom = document.getElementById('lblSesionNombre'); if (nom) nom.innerText = '—';
+    }
+    window.iniciarSesionVigilador = iniciarSesionVigilador;
+    window.cerrarSesionVigilador = cerrarSesionVigilador;
+
     window.onload = async function() {
-      iniciarCamaraSegura();
-      cargarObjetivos();
       actualizarEstadoRed();
-      cargarModelosIA();
+      const f = document.getElementById('formLogin');
+      if (f) f.addEventListener('submit', iniciarSesionVigilador);
 
       if (navigator.onLine) {
         sincronizarFichadasPendientes();
@@ -294,7 +432,7 @@
     function cargarObjetivos() {
       // Radio por defecto configurable desde el panel Admin.
       if (navigator.onLine) {
-        fetch(`${URL_FIREBASE}/configuracionGlobal.json?ts=${Date.now()}`, { cache: 'no-store' })
+        fetch(urlAuth(`${URL_FIREBASE}/configuracionGlobal.json?ts=${Date.now()}`), { cache: 'no-store' })
           .then(res => res.json())
           .then(cfg => {
             const r = Number(cfg && cfg.radioFichajeMetros);
@@ -304,7 +442,7 @@
       const objetivosGuardados = JSON.parse(localStorage.getItem('demo_lista_objetivos') || '[]');
       if (objetivosGuardados.length > 0) objetivosDetalleGlobal = objetivosGuardados.map(item => typeof item === 'string' ? { nombre: item } : item);
       if (navigator.onLine) {
-        fetch(`${URL_FIREBASE}/objetivos.json?ts=${Date.now()}`, { cache: 'no-store' })
+        fetch(urlAuth(`${URL_FIREBASE}/objetivos.json?ts=${Date.now()}`), { cache: 'no-store' })
           .then(res => res.json())
           .then(data => {
             if (!data) return;
@@ -336,7 +474,7 @@
     async function obtenerTurnoProgramadoParaFecha(legajo, fecha) {
       if (!navigator.onLine) return null;
       try {
-        const res=await fetch(`${URL_FIREBASE}/asignacionesTurnos.json?ts=${Date.now()}`,{cache:'no-store'}); const data=await res.json();
+        const res=await fetch(urlAuth(`${URL_FIREBASE}/asignacionesTurnos.json?ts=${Date.now()}`),{cache:'no-store'}); const data=await res.json();
         if(!data)return null;
         const lista=Object.entries(data).map(([id,d])=>({...d,id})).filter(d=>String(d.legajo||'').trim()===String(legajo).trim() && String(d.fecha||'')===String(fecha));
         lista.sort((a,b)=>String(b.actualizadoEn||'').localeCompare(String(a.actualizadoEn||'')));
@@ -413,7 +551,7 @@
       if (!navigator.onLine) return detalle;
 
       try {
-        const res = await fetch(`${URL_FIREBASE}/objetivos.json?ts=${Date.now()}`, { cache: 'no-store' });
+        const res = await fetch(urlAuth(`${URL_FIREBASE}/objetivos.json?ts=${Date.now()}`), { cache: 'no-store' });
         if (!res.ok) throw new Error(`Firebase respondió ${res.status}`);
         const data = await res.json();
         const buscado = String(nombreObjetivo || '').trim().toLowerCase();
@@ -515,7 +653,7 @@
       }
 
       try {
-        const res = await fetch(`${URL_FIREBASE}/alertasFichadas.json`, {
+        const res = await fetch(urlAuth(`${URL_FIREBASE}/alertasFichadas.json`), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(alerta)
@@ -535,7 +673,7 @@
       if (!pendientes.length) return;
 
       const alerta = pendientes[0];
-      fetch(`${URL_FIREBASE}/alertasFichadas.json`, {
+      fetch(urlAuth(`${URL_FIREBASE}/alertasFichadas.json`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(alerta)
@@ -554,7 +692,7 @@
     }
 
     function validarLegajo() {
-      const legajoInput = document.getElementById('legajo').value.trim();
+      const legajoInput = (legajoSesion || document.getElementById('legajo').value).trim();
       const statusLbl = document.getElementById('legajo-status');
       const badgeEstado = document.getElementById('ultimo-estado-badge');
       fotoMasterGuardada = null;
@@ -576,8 +714,8 @@
       statusLbl.innerText = "Buscando legajo y foto oficial...";
 
       Promise.all([
-        fetch(`${URL_FIREBASE}/personal.json`).then(res => res.json()).catch(() => null),
-        fetch(`${URL_FIREBASE}/fichadas.json`).then(res => res.json()).catch(() => null)
+        fetchScoped('personal', legajoInput),
+        fetchScoped('fichadas', legajoInput)
       ])
       .then(([dataPersonal, dataFichadas]) => {
         let encontrado = null;
@@ -597,6 +735,7 @@
           const estadoVigilador = String(encontrado.estado || 'ACTIVO').trim().toUpperCase();
           vigiladorInactivoGlobal = (estadoVigilador !== 'ACTIVO');
           document.getElementById('nombre').value = encontrado.nombre || "";
+          const lblNom = document.getElementById('lblSesionNombre'); if (lblNom) lblNom.innerText = encontrado.nombre || legajoInput;
           fotoMasterGuardada = encontrado.fotoMaster || null;
           if (vigiladorInactivoGlobal) {
             statusLbl.className = "text-xs mt-1 text-rose-400 block";
@@ -928,12 +1067,19 @@
     async function procesarEnvio(tipoRecibido) {
       const tipo = String(tipoRecibido).trim().toUpperCase();
       const legajo = document.getElementById('legajo').value.trim();
-      const pin = document.getElementById('pin').value.trim();
       const nombre = document.getElementById('nombre').value.trim();
       const objetivo = document.getElementById('objetivo').value;
 
-      if (!legajo || !pin || !objetivo) {
-        alert("Por favor complete su N° de Legajo, PIN de Seguridad y seleccione un Objetivo.");
+      // Guarda de sesion: la identidad ya se valido en el login (Firebase Auth).
+      // Si por algun motivo se perdio el token, se obliga a re-loguear.
+      if (!idTokenVig || !legajoSesion) {
+        alert('Tu sesión expiró. Volvé a ingresar tu legajo y PIN.');
+        cerrarSesionVigilador();
+        return;
+      }
+
+      if (!legajo || !objetivo) {
+        alert("Por favor seleccione un Objetivo.");
         return;
       }
 
@@ -946,32 +1092,9 @@
       if (vigiladorInactivoGlobal) {
         alert('⛔ FICHADA BLOQUEADA. Tu legajo figura como INACTIVO / dado de baja. Contactá al administrador.'); return;
       }
-      // VALIDACIÓN DE PIN: primero contra Firebase Auth (servidor). Si no se puede
-      // confirmar online, se valida localmente contra el hash con salt de la ficha
-      // (o, para fichas viejas aún sin proteger, contra el PIN en texto plano).
-      const pinRealVigilador = String(personalActualGlobal.pin || personalActualGlobal.clave || '').trim();
-      const tieneHashLocal = !!(personalActualGlobal.pinHash && personalActualGlobal.pinSalt);
-      let pinVerificadoServidor = false;
-      if (typeof window.verificarPinVigilador === 'function') {
-        try {
-          const ver = await window.verificarPinVigilador(legajo, pin);
-          if (ver && ver.ok) pinVerificadoServidor = true;
-        } catch (_) {}
-      }
-      if (!pinVerificadoServidor) {
-        if (!tieneHashLocal && !pinRealVigilador) {
-          alert('❌ Este legajo no tiene un PIN configurado. Contactá al administrador.'); return;
-        }
-        let pinLocalOk = false;
-        if (tieneHashLocal && typeof window.verificarPinHashVigix === 'function') {
-          pinLocalOk = await window.verificarPinHashVigix(pin, personalActualGlobal);
-        } else if (pinRealVigilador) {
-          pinLocalOk = (String(pin).trim() === pinRealVigilador);
-        }
-        if (!pinLocalOk) {
-          alert('❌ PIN incorrecto. No podés fichar sin el PIN real de tu legajo.'); return;
-        }
-      }
+      // El PIN ya fue validado contra Firebase Auth al iniciar sesión; no se
+      // vuelve a pedir en cada fichada. La sesión autenticada (idToken) es la
+      // prueba de identidad para leer/escribir en la base.
       if (!objetivoIdSeleccionado || !objetivoAutorizadoIdsGlobal.includes(String(objetivoIdSeleccionado))) {
         alert('❌ FICHADA BLOQUEADA. Ese objetivo no está autorizado para este vigilador.'); return;
       }
@@ -1055,7 +1178,7 @@
               `Precisión GPS: ${Number.isFinite(precisionGPS) ? Math.round(precisionGPS) + ' m' : 'no disponible'}.`;
 
             ejecutarPeticionFichada(
-              tipo, lat, lng, legajo, pin, nombre, objetivo,
+              tipo, lat, lng, legajo, '', nombre, objetivo,
               validacionUbicacion, precisionGPS
             );
           }).catch(err => {
@@ -1065,7 +1188,7 @@
           return;
 
           ejecutarPeticionFichada(
-            tipo, lat, lng, legajo, pin, nombre, objetivo,
+            tipo, lat, lng, legajo, '', nombre, objetivo,
             validacionUbicacion, precisionGPS
           );
         },
@@ -1158,7 +1281,7 @@
         divResultado.className = "p-3 rounded-xl text-xs text-center bg-slate-700 text-white";
         divResultado.innerText = "Registrando fichada...";
 
-        fetch(`${URL_FIREBASE}/fichadas.json`, {
+        fetch(urlAuth(`${URL_FIREBASE}/fichadas.json`), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(Object.assign({}, datos, { timestamp: { ".sv": "timestamp" } }))
@@ -1174,7 +1297,7 @@
           
           ultimoTipoFichadaGlobal = tipo;
           limpiarFormularioExitoso();
-        } else {
+          finalizarSesionTrasFichada();
           throw new Error("No se pudo confirmar el guardado en Firebase.");
         }
       })
@@ -1214,12 +1337,21 @@
       divResultado.innerText = `⚠️ Registrada Offline. Al no haber conexión para verificar tu identidad, esta fichada requerirá REVISIÓN MANUAL por RRHH.`;
 
       limpiarFormularioExitoso();
+      finalizarSesionTrasFichada();
+    }
+
+    // Tras una fichada exitosa: en modo COMPARTIDO se cierra la sesion (para
+    // que el proximo empleado deba loguearse); en modo INDIVIDUAL se mantiene
+    // la sesion y solo se reinicia el temporizador de inactividad.
+    function finalizarSesionTrasFichada() {
+      if (modoDispositivo === 'compartido') {
+        setTimeout(() => { cerrarSesionVigilador(); }, 1800);
+      } else {
+        reiniciarInactividad();
+      }
     }
 
     function limpiarFormularioExitoso() {
-      document.getElementById('pin').value = "";
-      document.getElementById('legajo').value = "";
-      document.getElementById('nombre').value = "";
       document.getElementById('legajo-status').className = "text-xs mt-1 hidden";
       document.getElementById('legajo-status').innerText = "";
       document.getElementById('ultimo-estado-badge').classList.add('hidden');
@@ -1252,7 +1384,7 @@
       let datos = pendientes.shift(); 
       localStorage.setItem('fichadas_pendientes', JSON.stringify(pendientes));
 
-      fetch(`${URL_FIREBASE}/fichadas.json`, {
+      fetch(urlAuth(`${URL_FIREBASE}/fichadas.json`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(Object.assign({}, datos, { timestamp: { ".sv": "timestamp" }, sincronizadoDesdeOffline: true }))
@@ -1282,7 +1414,7 @@
   <!-- ============================================================================= -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getAuth, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBYsTCQWwnqEaBzsC5P-9cTM6uBKCnKAmo",
@@ -1297,32 +1429,49 @@
     // Instancia dedicada para NO interferir con ninguna otra sesión de la app.
     const vigApp  = initializeApp(firebaseConfig, "VigAuthApp");
     const vigAuth = getAuth(vigApp);
+    // La sesión sólo vive mientras la pestaña esté abierta (dispositivo
+    // compartido). Al cerrar la pestaña, Firebase no restaura la sesión.
+    try { setPersistence(vigAuth, browserSessionPersistence); } catch (_) {}
 
     /**
-     * Verifica legajo + PIN del vigilador contra Firebase Auth.
+     * Inicia y MANTIENE la sesión del vigilador contra Firebase Auth.
      * El empleado se autentica con el correo sintético legajo@demo.asistencia
      * y el PIN completado a 6 dígitos con ceros a la izquierda (igual que en el alta).
-     * Cierra la sesión inmediatamente: solo sirve para confirmar el PIN.
-     * @returns {Promise<{ok:boolean, razon?:string}>}
+     * Devuelve el idToken para leer/escribir SOLO sus propios datos (?auth=).
+     * @returns {Promise<{ok:boolean, idToken?:string, uid?:string, razon?:string}>}
      */
-    async function verificarPinVigilador(legajo, pin) {
+    async function loginVigilador(legajo, pin) {
       const legajoLimpio = String(legajo || '').trim();
       const pinLimpio    = String(pin || '').trim();
       if (!legajoLimpio || !pinLimpio) return { ok: false, razon: 'faltan_datos' };
-
       const email    = `${legajoLimpio}@demo.asistencia`;
       const password = pinLimpio.padStart(6, '0');
       try {
-        await signInWithEmailAndPassword(vigAuth, email, password);
-        try { await signOut(vigAuth); } catch (_) {}
-        return { ok: true };
+        const cred = await signInWithEmailAndPassword(vigAuth, email, password);
+        const idToken = await cred.user.getIdToken();
+        return { ok: true, idToken, uid: cred.user.uid };
       } catch (e) {
-        // Cualquier fallo (PIN erróneo, sin cuenta, sin conexión) devuelve ok:false;
-        // el respaldo local decide (y también rechaza un PIN incorrecto).
         return { ok: false, razon: (e && e.code) || 'error' };
       }
     }
-    window.verificarPinVigilador = verificarPinVigilador;
+
+    // Cierra la sesión activa del vigilador (dispositivo compartido / logout).
+    async function logoutVigilador() {
+      try { await signOut(vigAuth); } catch (_) {}
+    }
+
+    // Devuelve un idToken fresco de la sesión activa (o null). Útil para
+    // renovar el token antes de operaciones tras varios minutos de uso.
+    async function refrescarTokenVigilador() {
+      try {
+        if (vigAuth.currentUser) return await vigAuth.currentUser.getIdToken(true);
+      } catch (_) {}
+      return null;
+    }
+
+    window.loginVigilador = loginVigilador;
+    window.logoutVigilador = logoutVigilador;
+    window.refrescarTokenVigilador = refrescarTokenVigilador;
   </script>
 </body>
 </html>
