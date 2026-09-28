@@ -1217,7 +1217,12 @@
             ejecutarPeticionFichada(
               tipo, lat, lng, legajo, '', nombre, objetivo,
               validacionUbicacion, precisionGPS
-            );
+            ).catch(err => {
+              // Blindaje: cualquier error inesperado dentro del guardado NO debe
+              // dejar la fichada congelada en "Ubicacion verificada" sin avanzar.
+              console.error('Error al registrar la fichada:', err);
+              mostrarErrorUbicacion('❌ No se pudo registrar la fichada. Reintenta; si persiste, avisa al administrador.');
+            });
           }).catch(err => {
             console.error('Error validando geocerca:', err);
             mostrarErrorUbicacion('❌ No se pudo verificar la distancia al objetivo. La fichada fue bloqueada.');
@@ -1307,7 +1312,7 @@
       if (!navigator.onLine) {
         // Offline: no se puede validar contra el servidor en este momento. Se sella con
         // la hora local disponible; al sincronizar, el servidor pone el sello oficial (.sv).
-        aplicarHoraServidor(datos, false);
+        if (typeof window.aplicarHoraServidor === 'function') window.aplicarHoraServidor(datos, false);
         guardarFichadaOffline(datos, tipo, legajo);
         return;
       }
@@ -1328,7 +1333,7 @@
       // VALIDACION DE HORA POR SERVIDOR: con el token recien renovado ya tenemos la
       // hora oficial. Sellamos la fichada con esa hora y detectamos si el reloj del
       // telefono esta manipulado (queda marcada para revision del admin).
-      aplicarHoraServidor(datos, !!tokenFresco);
+      if (typeof window.aplicarHoraServidor === 'function') window.aplicarHoraServidor(datos, !!tokenFresco);
 
       divResultado.className = "p-3 rounded-xl text-xs text-center bg-slate-700 text-white";
       divResultado.innerText = "Verificando duplicados...";
@@ -1701,6 +1706,10 @@
     window.loginVigilador = loginVigilador;
     window.logoutVigilador = logoutVigilador;
     window.refrescarTokenVigilador = refrescarTokenVigilador;
+    // Sellado de hora oficial: lo llama el script clasico (ejecutarPeticionFichada).
+    // Debe exponerse a window; de lo contrario queda fuera de alcance (module scope)
+    // y su llamada lanza ReferenceError, congelando la fichada tras "Ubicacion verificada".
+    window.aplicarHoraServidor = aplicarHoraServidor;
   </script>
 </body>
 </html>
