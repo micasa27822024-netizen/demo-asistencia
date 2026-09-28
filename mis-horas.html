@@ -1112,7 +1112,22 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       })
-      .then(res => res.json())
+      .then(async (res) => {
+        // VALIDACION DE res.ok (Punto 3): Firebase puede devolver un cuerpo JSON
+        // incluso ante un ERROR HTTP (401 token vencido, 403 reglas, 500). Sin
+        // este control, un rechazo del servidor mostraba "enviada correctamente"
+        // aunque la novedad NO se hubiera guardado. Ahora un POST exitoso debe:
+        //   (a) tener res.ok (2xx), y (b) devolver la clave creada (data.name).
+        // Cualquier otro caso se trata como FALLO y cae en el catch (que ademas
+        // libera el idEvento para permitir reintento manual).
+        let data = null;
+        try { data = await res.json(); } catch (_) {}
+        if (!res.ok || !data || data.error || !data.name) {
+          const msg = (data && data.error) ? data.error : ('HTTP ' + res.status);
+          throw new Error('el servidor rechazo la novedad (' + msg + ')');
+        }
+        return data;
+      })
       .then(() => {
         novedadEnEnvio = false;
         alert("✅ Novedad enviada correctamente a la central.");
@@ -1121,8 +1136,8 @@
       })
       .catch(error => {
         novedadEnEnvio = false;
-        eventosEnviados.delete(idEvento); // permitir reintento manual si falló
-        alert("Error de conexión al enviar novedad: " + error.toString());
+        eventosEnviados.delete(idEvento); // permitir reintento manual si fallo
+        alert("⚠️ No se pudo enviar la novedad (no quedó registrada): " + error.toString());
       });
     }
 
