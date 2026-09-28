@@ -603,6 +603,11 @@
             <input type="number" id="cfgRadioFichaje" min="10" max="5000" value="100" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
             <p class="text-[11px] text-slate-500 mt-1">Distancia máxima al objetivo para poder fichar. Por defecto 100 m.</p>
           </div>
+          <div>
+            <label class="block text-xs uppercase text-slate-400 mb-1">Precisión GPS mínima (m)</label>
+            <input type="number" id="cfgPrecisionMaxima" min="0" max="2000" value="0" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+            <p class="text-[11px] text-slate-500 mt-1">Umbral de precisión GPS que valida el servidor (Worker). Si la señal reportada por el dispositivo es peor que este valor, la fichada se BLOQUEA. 0 = desactivado (no bloquea por precisión).</p>
+          </div>
         </div>
         <!-- SEGURIDAD BIOMÉTRICA (modo estricto / fail-closed) -->
         <div class="mt-5 border-t border-slate-700 pt-5">
@@ -951,28 +956,21 @@
     // Usa el sello de tiempo del servidor y nunca interrumpe la operación principal si falla.
     async function registrarAuditoria(accion, entidad, detalle) {
       try {
-        // Usuario REAL de la sesión (no un valor fijo): se toma de la sesión
-        // establecida en el login (uid/rol/email de Firebase Auth).
-        const uidSesion   = sessionStorage.getItem('uid_admin') || '';
-        const rolSesion   = sessionStorage.getItem('rol_admin') || '';
-        const emailSesion = sessionStorage.getItem('email_admin') || '';
-        const evento = {
-          accion: String(accion || ''),
-          entidad: String(entidad || ''),
-          detalle: detalle || {},
-          usuario: emailSesion || uidSesion || 'desconocido',
-          usuarioUid: uidSesion || null,
-          usuarioRol: rolSesion || null,
-          origen: 'panel-admin',
-          fechaHoraDispositivo: new Date().toISOString(),
-          timestampServidor: { ".sv": "timestamp" }
-        };
-        const resAud = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/auditoria.json`), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(evento)
+        // MIGRADO A SERVER-SIDE: el Worker autoritativo valida el idToken + rol
+        // admin y escribe en /auditoria con la service account. Ya no se hace
+        // POST directo a Firebase (las reglas endurecidas lo impiden).
+        // Se divide 'entidad' (puede venir como "coleccion/id") en entidad + id.
+        const entidadStr = String(entidad || 'manual');
+        const idx = entidadStr.indexOf('/');
+        const entidadNombre = idx >= 0 ? entidadStr.slice(0, idx) : entidadStr;
+        const entidadId = idx >= 0 ? entidadStr.slice(idx + 1) : '';
+        await window.llamarWorkerAdmin({
+          accion: 'auditarEvento',
+          eventoAccion: String(accion || ''),
+          entidad: entidadNombre,
+          entidadId: entidadId,
+          detalle: (detalle && typeof detalle === 'object') ? detalle : { texto: String(detalle || '') }
         });
-        if (!resAud.ok) throw new Error('Firebase rechazo el evento de auditoria (HTTP ' + resAud.status + ').');
       } catch (err) {
         console.warn('No se pudo registrar el evento de auditoría:', err);
         // Aviso visible, como maximo 1 vez por minuto, sin interrumpir la operacion en curso.
@@ -1012,7 +1010,7 @@
     let alertasFichadasConocidas = new Set();
     let alertasFichadasInicializadas = false;
     // Configuración global de reglas laborales y radio de fichaje (persistida en Firebase /configuracionGlobal).
-    let configGlobalAdmin = { toleranciaIngresoMin: 15, toleranciaEgresoMin: 30, radioFichajeMetros: 100, modoDispositivo: 'compartido', biometriaEstricta: false };
+    let configGlobalAdmin = { toleranciaIngresoMin: 15, toleranciaEgresoMin: 30, radioFichajeMetros: 100, modoDispositivo: 'compartido', biometriaEstricta: false, precisionMaximaMetros: 0 };
 
     function iniciarSonidoSirena() {
       if (audioCtxPanico) return; 
@@ -1115,13 +1113,11 @@
 
       if (panicoActivoActualId) {
         try {
-          await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/panicos/${panicoActivoActualId}.json`), {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ estado: "ATENDIDO", atendidoEn: new Date().toISOString() })
-          });
+          // MIGRADO A SERVER-SIDE: el Worker marca el panico como ATENDIDO y
+          // registra la auditoria atomicamente con la service account.
+          await window.llamarWorkerAdmin({ accion: 'atenderPanico', panicoId: panicoActivoActualId, estado: 'ATENDIDO', nota: '' });
         } catch (e) {
-          console.error("Error resolviendo pánico en Firebase:", e);
+          console.error("Error resolviendo pánico en el Worker:", e);
         }
         panicoActivoActualId = null;
         recargarDatosEfectivo();
@@ -1427,9 +1423,11 @@
       const i = document.getElementById('cfgToleranciaIngreso');
       const e = document.getElementById('cfgToleranciaEgreso');
       const r = document.getElementById('cfgRadioFichaje');
+      const pr = document.getElementById('cfgPrecisionMaxima');
       if (i) i.value = configGlobalAdmin.toleranciaIngresoMin;
       if (e) e.value = configGlobalAdmin.toleranciaEgresoMin;
       if (r) r.value = configGlobalAdmin.radioFichajeMetros;
+      if (pr) pr.value = configGlobalAdmin.precisionMaximaMetros;
       const modo = (configGlobalAdmin.modoDispositivo === 'individual') ? 'individual' : 'compartido';
       const rc = document.getElementById('modoCompartido');
       const ri = document.getElementById('modoIndividual');
@@ -1447,6 +1445,7 @@
           if (Number.isFinite(Number(data.toleranciaIngresoMin))) configGlobalAdmin.toleranciaIngresoMin = Number(data.toleranciaIngresoMin);
           if (Number.isFinite(Number(data.toleranciaEgresoMin))) configGlobalAdmin.toleranciaEgresoMin = Number(data.toleranciaEgresoMin);
           if (Number.isFinite(Number(data.radioFichajeMetros)) && Number(data.radioFichajeMetros) > 0) configGlobalAdmin.radioFichajeMetros = Number(data.radioFichajeMetros);
+          if (Number.isFinite(Number(data.precisionMaximaMetros)) && Number(data.precisionMaximaMetros) >= 0) configGlobalAdmin.precisionMaximaMetros = Number(data.precisionMaximaMetros);
           configGlobalAdmin.modoDispositivo = (String(data.modoDispositivo || '').trim() === 'individual') ? 'individual' : 'compartido';
           configGlobalAdmin.biometriaEstricta = (data.biometriaEstricta === true);
         }
@@ -1461,9 +1460,11 @@
       const tolIng = Math.max(0, Math.min(120, parseInt(document.getElementById('cfgToleranciaIngreso').value, 10) || 0));
       const tolEgr = Math.max(0, Math.min(120, parseInt(document.getElementById('cfgToleranciaEgreso').value, 10) || 0));
       const radio = Math.max(10, Math.min(5000, parseInt(document.getElementById('cfgRadioFichaje').value, 10) || 100));
+      const precEl = document.getElementById('cfgPrecisionMaxima');
+      const precisionMaxima = Math.max(0, Math.min(2000, parseInt(precEl ? precEl.value : 0, 10) || 0));
       const beEl = document.getElementById('cfgBiometriaEstricta');
       const biometriaEstricta = !!(beEl && beEl.checked);
-      const payload = { toleranciaIngresoMin: tolIng, toleranciaEgresoMin: tolEgr, radioFichajeMetros: radio, modoDispositivo: (configGlobalAdmin.modoDispositivo === 'individual' ? 'individual' : 'compartido'), biometriaEstricta: biometriaEstricta, actualizado: new Date().toISOString() };
+      const payload = { toleranciaIngresoMin: tolIng, toleranciaEgresoMin: tolEgr, radioFichajeMetros: radio, precisionMaximaMetros: precisionMaxima, modoDispositivo: (configGlobalAdmin.modoDispositivo === 'individual' ? 'individual' : 'compartido'), biometriaEstricta: biometriaEstricta, actualizado: new Date().toISOString() };
       if (estado) { estado.className = 'text-xs text-slate-400'; estado.innerText = 'Guardando...'; }
       try {
         const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/configuracionGlobal.json`), {
@@ -1473,6 +1474,7 @@
         configGlobalAdmin.toleranciaIngresoMin = tolIng;
         configGlobalAdmin.toleranciaEgresoMin = tolEgr;
         configGlobalAdmin.radioFichajeMetros = radio;
+        configGlobalAdmin.precisionMaximaMetros = precisionMaxima;
         configGlobalAdmin.biometriaEstricta = biometriaEstricta;
         if (estado) { estado.className = 'text-xs text-emerald-400 font-semibold'; estado.innerText = '✓ Configuración guardada.'; }
         filtrarTablaMarcaciones();
@@ -2029,20 +2031,9 @@
       if (!confirm("Se ANULARÁ esta marcación: queda guardada como evidencia, marcada como anulada y sin contar en los reportes. ¿Confirmás?")) return;
 
       try {
-        const quien = sessionStorage.getItem('email_admin') || sessionStorage.getItem('uid_admin') || 'admin';
-        const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/fichadas/${id}.json`), {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            anulada: true,
-            motivoAnulacion: motivo || 'Sospecha de fraude de identidad',
-            anuladaPor: quien,
-            fechaAnulacion: new Date().toISOString(),
-            timestampAnulacion: { ".sv": "timestamp" }
-          })
-        });
-        if (!res.ok) throw new Error('el servidor rechazó la anulación (HTTP ' + res.status + ').');
-        registrarAuditoria('FICHADA_ANULADA', `fichadas/${id}`, { motivo: motivo || 'Sospecha de fraude de identidad', anuladaPor: quien });
+        // MIGRADO A SERVER-SIDE: el Worker realiza la anulacion logica de la
+        // fichada (conserva evidencia) y escribe la auditoria atomicamente.
+        await window.llamarWorkerAdmin({ accion: 'anularFichada', fichadaId: id, motivo: motivo || 'Sospecha de fraude de identidad' });
         alert("Marcación anulada. Queda guardada como evidencia y no se contabiliza en los reportes.");
         cerrarModalAccionFraude();
         recargarDatosEfectivo();
@@ -2214,20 +2205,10 @@
       if (motivo === null) return; // el admin canceló
       if (!confirm("Se ANULARÁ este registro de pánico: queda guardado como evidencia y marcado como anulado. ¿Confirmás?")) return;
       try {
-        const quien = sessionStorage.getItem('email_admin') || sessionStorage.getItem('uid_admin') || 'admin';
-        const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/panicos/${id}.json`), {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            anulado: true,
-            motivoAnulacion: motivo || '',
-            anuladoPor: quien,
-            fechaAnulacion: new Date().toISOString(),
-            timestampAnulacion: { ".sv": "timestamp" }
-          })
-        });
-        if (!res.ok) throw new Error('el servidor rechazó la anulación (HTTP ' + res.status + ').');
-        registrarAuditoria('PANICO_ANULADO', `panicos/${id}`, { motivo: motivo || '', anuladoPor: quien });
+        // MIGRADO A SERVER-SIDE: el Worker realiza la anulacion logica del panico
+        // (estado ANULADO + anulado=true para compat con el filtro de la UI) y
+        // escribe la auditoria atomicamente con la service account.
+        await window.llamarWorkerAdmin({ accion: 'atenderPanico', panicoId: id, estado: 'ANULADO', nota: motivo || '' });
         alert("Registro de pánico anulado. Queda guardado como evidencia.");
         recargarDatosEfectivo();
       } catch (e) {
@@ -3474,6 +3455,30 @@
       try { token = await window.obtenerTokenAdmin(); } catch (_) {}
       if (!token) return url;
       return url + (url.includes('?') ? '&' : '?') + 'auth=' + encodeURIComponent(token);
+    };
+
+    // --- LLAMADA UNIFICADA AL WORKER PARA ACCIONES ADMIN (server-side, autoritativo) ---
+    // Envia la accion al Worker, que valida el idToken + rol admin y escribe la
+    // AUDITORIA con la service account (las reglas de Firebase ya NO permiten
+    // escritura directa desde el panel para estas operaciones). Devuelve el JSON
+    // de respuesta o lanza Error con el mensaje del Worker.
+    window.llamarWorkerAdmin = async (payload) => {
+      const base = String(URL_WORKER_AUTH || '').trim();
+      if (!base) throw new Error('El Worker de autenticacion no esta configurado (URL_WORKER_AUTH vacio).');
+      const idToken = await window.obtenerTokenAdmin();
+      if (!idToken) throw new Error('No hay sesion de administrador activa (falta idToken).');
+      const res = await fetch(base, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...payload, idToken })
+      });
+      let data = null;
+      try { data = await res.json(); } catch (_) {}
+      if (!res.ok || !data || data.error) {
+        const msg = (data && data.error) ? data.error : ('HTTP ' + res.status);
+        throw new Error(msg);
+      }
+      return data;
     };
 
     async function logoutAdminReal() { try { await signOut(mainAuth); } catch (_) {} }
