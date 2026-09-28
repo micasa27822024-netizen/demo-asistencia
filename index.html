@@ -1290,6 +1290,9 @@
       const divResultado = document.getElementById('resultado');
 
       if (!navigator.onLine) {
+        // Offline: no se puede validar contra el servidor en este momento. Se sella con
+        // la hora local disponible; al sincronizar, el servidor pone el sello oficial (.sv).
+        aplicarHoraServidor(datos, false);
         guardarFichadaOffline(datos, tipo, legajo);
         return;
       }
@@ -1298,6 +1301,11 @@
       // para no fichar con un token vencido (evita 401 y perdida de la fichada).
       const tokenFresco = await refrescarTokenVigilador();
       if (tokenFresco) idTokenVig = tokenFresco;
+
+      // VALIDACION DE HORA POR SERVIDOR: con el token recien renovado ya tenemos la
+      // hora oficial. Sellamos la fichada con esa hora y detectamos si el reloj del
+      // telefono esta manipulado (queda marcada para revision del admin).
+      aplicarHoraServidor(datos, !!tokenFresco);
 
       divResultado.className = "p-3 rounded-xl text-xs text-center bg-slate-700 text-white";
       divResultado.innerText = "Verificando duplicados...";
@@ -1502,6 +1510,7 @@
       try {
         const cred = await signInWithEmailAndPassword(vigAuth, email, password);
         const idToken = await cred.user.getIdToken();
+        sincronizarRelojDesdeToken(idToken); // fijamos la hora oficial del servidor al iniciar sesion
         return { ok: true, idToken, uid: cred.user.uid };
       } catch (e) {
         return { ok: false, razon: (e && e.code) || 'error' };
@@ -1513,11 +1522,63 @@
       try { await signOut(vigAuth); } catch (_) {}
     }
 
+    // ---- HORA OFICIAL DEL SERVIDOR (validacion de reloj de la fichada) ----
+    // No confiamos en el reloj del telefono para la hora de la fichada. Tomamos la
+    // hora del servidor desde el sello 'iat' del idToken de Google (se emite con la
+    // hora del servidor y lo renovamos justo ANTES de fichar). Con eso calculamos el
+    // desfase del reloj local, sellamos la fichada con la hora oficial estimada y, si
+    // el telefono tiene la hora cambiada mas alla de la tolerancia, marcamos la
+    // fichada para revision (alertaFraude) para que el admin la vea.
+    const UMBRAL_DESFASE_RELOJ_MS = 120000; // 2 minutos de tolerancia
+    let offsetRelojServidorMs = null;       // horaServidor - horaDispositivo (ms)
+
+    function decodificarPayloadJwt(token) {
+      try {
+        const parte = String(token).split('.')[1];
+        if (!parte) return null;
+        const base = parte.replace(/-/g, '+').replace(/_/g, '/');
+        const relleno = base + '==='.slice((base.length + 3) % 4);
+        return JSON.parse(atob(relleno));
+      } catch (_) { return null; }
+    }
+    // Recalcula el desfase del reloj local usando la hora del servidor (iat del token).
+    function sincronizarRelojDesdeToken(token) {
+      const p = decodificarPayloadJwt(token);
+      if (p && Number.isFinite(p.iat)) {
+        offsetRelojServidorMs = (p.iat * 1000) - Date.now();
+      }
+    }
+    // Hora oficial estimada (ms) = reloj local corregido por el desfase del servidor.
+    function ahoraServidorMs() {
+      return (typeof offsetRelojServidorMs === 'number') ? (Date.now() + offsetRelojServidorMs) : Date.now();
+    }
+    // Sella la fichada con la hora oficial y detecta relojes manipulados.
+    // 'validado' es true SOLO cuando pudimos obtener hora fresca del servidor
+    // (fichaje online con token recien renovado); offline no se puede validar.
+    function aplicarHoraServidor(datos, validado) {
+      const desfase = (typeof offsetRelojServidorMs === 'number') ? offsetRelojServidorMs : null;
+      datos.horaServidorFichaje = new Date(ahoraServidorMs()).toISOString();
+      datos.desfaseRelojMs = desfase;
+      datos.horaValidadaPorServidor = !!validado;
+      datos.relojDesincronizado = (!!validado) && (desfase !== null) && (Math.abs(desfase) > UMBRAL_DESFASE_RELOJ_MS);
+      if (datos.relojDesincronizado) {
+        const seg = Math.round(Math.abs(desfase) / 1000);
+        datos.alertaFraude = true;
+        const nota = 'Reloj del dispositivo desincronizado ~' + seg + 's respecto de la hora oficial del servidor.';
+        datos.motivoFraude = datos.motivoFraude ? (datos.motivoFraude + ' | ' + nota) : nota;
+      }
+      return datos;
+    }
+
     // Devuelve un idToken fresco de la sesión activa (o null). Útil para
     // renovar el token antes de operaciones tras varios minutos de uso.
     async function refrescarTokenVigilador() {
       try {
-        if (vigAuth.currentUser) return await vigAuth.currentUser.getIdToken(true);
+        if (vigAuth.currentUser) {
+          const t = await vigAuth.currentUser.getIdToken(true);
+          sincronizarRelojDesdeToken(t); // aprovechamos el token fresco para tomar la hora oficial
+          return t;
+        }
       } catch (_) {}
       return null;
     }
