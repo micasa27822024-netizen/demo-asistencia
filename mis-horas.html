@@ -392,7 +392,7 @@
 
       // Primero: turno puntual asignado desde ADMIN para esa fecha.
       const turnosFecha = asignacionesTurnosVigilador.filter(t =>
-        String(t.legajo || '').trim() === legajoStr && String(t.fecha || '') === fechaClave
+        mismoLegajoVig(t.legajo, legajoStr) && String(t.fecha || '') === fechaClave
       );
 
       let turno = null;
@@ -418,7 +418,7 @@
 
       // Segundo: horario habitual configurado en ADMIN para ese vigilador.
       const persona = Object.values(mapaConfiguracionPersonalVigilador).find(p =>
-        String(p.legajo || '').trim() === legajoStr
+        mismoLegajoVig(p.legajo, legajoStr)
       );
       const h = persona?.horarioHabitual || {};
 

@@ -1543,6 +1543,9 @@
     function mismoLegajoAdmin(a, b) {
       const sa = String(a == null ? '' : a).trim();
       const sb = String(b == null ? '' : b).trim();
+      // Guard de vacio UNIFICADO con index/panel/mis-horas: dos legajos vacios NO
+      // se consideran el mismo (evita cruzar registros sin legajo entre si).
+      if (sa === '' || sb === '') return false;
       if (sa === sb) return true;
       const na = parseInt(sa, 10);
       const nb = parseInt(sb, 10);
