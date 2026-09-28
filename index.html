@@ -144,6 +144,11 @@
 
   <script>
     const URL_FIREBASE = "https://fir-asistencia-fad12-default-rtdb.firebaseio.com";
+    // Endpoint del Worker de Cloudflare (mismo que admin.html). Se usa para el
+    // FICHAJE AUTORITATIVO: el Worker valida objetivo + GPS del lado servidor y
+    // escribe la fichada con la service account. Si no esta disponible, el
+    // fichaje cae al guardado directo/offline previo (no se rompe nada).
+    const URL_WORKER_FICHAJE = "https://vigix-auth-admin.micasa27822024.workers.dev/";
 
     // Comparacion unificada de legajo (misma logica que mismoLegajoAdmin en
     // admin.html y mismoLegajoVig en mis-horas.html): normaliza con trim y, si
@@ -231,6 +236,7 @@
     //  fetch de personal/fichadas.
     // ===================================================================
     let idTokenVig = null;                 // idToken de la sesion Auth activa
+    let uidSesion = null;                  // uid de Firebase Auth de la sesion activa (para sellar authUid)
     let legajoSesion = null;               // legajo logueado
     let modoDispositivo = 'compartido';    // 'individual' mantiene sesion; 'compartido' cierra tras fichar
     let timerInactividad = null;
@@ -297,6 +303,7 @@
           return;
         }
         idTokenVig = r.idToken;
+        uidSesion = r.uid || null;
         legajoSesion = String(legajo).trim();
         document.getElementById('loginPin').value = '';
         document.getElementById('pantallaLogin').classList.add('hidden');
@@ -324,7 +331,7 @@
 
     async function cerrarSesionVigilador() {
       try { if (typeof window.logoutVigilador === 'function') await window.logoutVigilador(); } catch (_) {}
-      idTokenVig = null; legajoSesion = null;
+      idTokenVig = null; legajoSesion = null; uidSesion = null;
       if (timerInactividad) { clearTimeout(timerInactividad); timerInactividad = null; }
       personalActualGlobal = null; turnoProgramadoGlobal = null; fotoMasterGuardada = null;
       vigiladorInactivoGlobal = false; ultimoTipoFichadaGlobal = '';
@@ -1232,6 +1239,10 @@
         fichadaId: generarIdFichada(),
         // Legajo de la sesion autenticada (string): las Reglas exigen que coincida con /usuarios/<uid>/legajo.
         legajo: String((typeof legajoSesion !== 'undefined' && legajoSesion) ? legajoSesion : legajo).trim(),
+        // authUid de la sesion Auth activa. Campo CRITICO para la validacion
+        // server-side (Reglas /fichadas y /fichadasPendientes): si viaja, DEBE
+        // coincidir con auth.uid. El Worker lo re-sella con el uid del token.
+        authUid: (typeof uidSesion !== 'undefined' && uidSesion) ? uidSesion : null,
         // El PIN ya se validó antes de fichar (Firebase Auth / hash con salt), así que
         // NO se guarda dentro de la fichada: evitamos exponer PIN en /fichadas.
         nombre: nombre || ("Legajo " + legajo),
@@ -1324,7 +1335,60 @@
         divResultado.className = "p-3 rounded-xl text-xs text-center bg-slate-700 text-white";
         divResultado.innerText = "Registrando fichada...";
 
-        fetch(urlAuth(`${URL_FIREBASE}/fichadas/${datos.fichadaId}.json`), {
+        // Fichaje AUTORITATIVO: primero el Worker (valida objetivo + GPS del lado
+        // servidor); si el Worker no esta disponible, cae al guardado directo/offline.
+        guardarFichadaOnline(datos, tipo, legajo, divResultado);
+      });
+    }
+
+    // ===================================================================
+    //  GUARDADO ONLINE CON VALIDACION AUTORITATIVA (Worker)
+    //  1) Intenta el Worker: valida objetivo autorizado + GPS dentro del radio
+    //     del lado servidor y escribe la fichada con la service account.
+    //  2) Si el Worker RECHAZA por validacion (fuera de radio, objetivo no
+    //     autorizado, tipo/GPS invalido) la fichada se BLOQUEA (fail-closed) y
+    //     NO se guarda por ningun otro medio.
+    //  3) Solo ante una FALLA DE RED del Worker (no un rechazo) se cae al
+    //     guardado directo a RTDB / cola offline previa, para no romper el
+    //     fichaje si el Worker esta caido.
+    // ===================================================================
+    async function guardarFichadaOnline(datos, tipo, legajo, divResultado) {
+      if (URL_WORKER_FICHAJE && idTokenVig) {
+        try {
+          const resp = await fetch(URL_WORKER_FICHAJE, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accion: 'fichar', idToken: idTokenVig, fichada: datos })
+          });
+          let data = {};
+          try { data = await resp.json(); } catch (_) {}
+          if (resp.ok && data && data.ok) {
+            datos.fichadaId = data.fichadaId || datos.fichadaId;
+            divResultado.className = "p-3 rounded-xl text-xs text-center bg-emerald-950 text-emerald-200 border border-emerald-500";
+            divResultado.innerText = `✓ ¡Fichada de ${tipo} registrada y validada por el servidor!`;
+            ultimoTipoFichadaGlobal = tipo;
+            limpiarFormularioExitoso();
+            finalizarSesionTrasFichada();
+            return;
+          }
+          // Rechazo de VALIDACION (no de red): fail-closed, no se guarda por otra via.
+          if (resp.status === 403 || resp.status === 422 || (data && data.bloqueado)) {
+            const detalle = (data && data.distanciaMetros != null)
+              ? ` Estás a ${data.distanciaMetros} m del objetivo (radio permitido: ${data.radioPermitidoMetros} m).`
+              : '';
+            mostrarErrorUbicacion(`❌ FICHADA BLOQUEADA por el servidor: ${(data && data.error) || 'validación fallida'}.${detalle}`);
+            return;
+          }
+          // Cualquier otro estado -> intentamos el camino directo como respaldo.
+          throw new Error('Worker respondió ' + resp.status);
+        } catch (err) {
+          console.warn('Worker de fichaje no disponible; usando guardado directo como respaldo:', err);
+          // continua al guardado directo
+        }
+      }
+
+      // Respaldo: guardado directo a RTDB (comportamiento previo, no se rompe).
+      fetch(urlAuth(`${URL_FIREBASE}/fichadas/${datos.fichadaId}.json`), {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(Object.assign({}, datos, { timestampServidor: { ".sv": "timestamp" } }))
@@ -1334,8 +1398,6 @@
         return res.json();
       })
       .then(respuesta => {
-        // PUT devuelve el objeto guardado. Confirmamos que el servidor aceptó
-        // exactamente NUESTRA fichada (mismo fichadaId) antes de darla por buena.
         if (respuesta && respuesta.fichadaId === datos.fichadaId) {
           divResultado.className = "p-3 rounded-xl text-xs text-center bg-emerald-950 text-emerald-200 border border-emerald-500";
           divResultado.innerText = `✓ ¡Fichada de ${tipo} registrada con éxito!`;
@@ -1343,15 +1405,13 @@
           ultimoTipoFichadaGlobal = tipo;
           limpiarFormularioExitoso();
           finalizarSesionTrasFichada();
-          return; // Guardado online confirmado: NO encolar copia offline.
+          return;
         }
-        // Respuesta inesperada: Firebase no confirmo NUESTRA fichada -> tratar como fallo real.
         throw new Error("No se pudo confirmar el guardado en Firebase.");
       })
       .catch(err => {
         console.warn("Fallo al conectar con Firebase. Guardando offline automáticamente...", err);
         guardarFichadaOffline(datos, tipo, legajo);
-      });
       });
     }
 
