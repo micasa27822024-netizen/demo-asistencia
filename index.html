@@ -161,6 +161,17 @@
     // --- ANTI-DUPLICADO DE FICHAJES (aditivo) ---
     // Ventana de tiempo dentro de la cual una misma persona no puede repetir el mismo tipo de fichada.
     const VENTANA_ANTIDUPLICADO_MS = 120000; // 2 minutos
+    // --- ID IDEMPOTENTE DE FICHADA (aditivo) ---
+    // Genera un identificador único UNA sola vez por fichada. Ese ID viaja con
+    // la fichada (online y en la cola offline) y se usa como CLAVE en Firebase.
+    // Al guardar con PUT sobre esa clave, reintentar la sincronización
+    // SOBRESCRIBE el mismo registro en lugar de crear un duplicado.
+    function generarIdFichada() {
+      const rnd = (self.crypto && typeof crypto.randomUUID === 'function')
+        ? crypto.randomUUID()
+        : (Date.now().toString(36) + Math.random().toString(36).slice(2, 12));
+      return 'fch_' + rnd;
+    }
     // Consulta las fichadas recientes del legajo y detecta un duplicado (mismo tipo dentro de la ventana).
     // Ante cualquier error de red devuelve false para no bloquear una fichada legítima.
     async function existeFichadaReciente(legajo, tipo) {
@@ -1210,6 +1221,10 @@
 
     async function ejecutarPeticionFichada(tipo, lat, lng, legajo, pin, nombre, objetivo, validacionUbicacion, precisionGPS) {
       const datos = {
+        // ID idempotente: identifica de forma única ESTA fichada. Se genera una
+        // sola vez acá y se reutiliza en cada reintento de guardado/sincronización,
+        // por lo que nunca se crea un duplicado (se guarda con PUT sobre esta clave).
+        fichadaId: generarIdFichada(),
         legajo: legajo,
         // El PIN ya se validó antes de fichar (Firebase Auth / hash con salt), así que
         // NO se guarda dentro de la fichada: evitamos exponer PIN en /fichadas.
@@ -1295,8 +1310,8 @@
         divResultado.className = "p-3 rounded-xl text-xs text-center bg-slate-700 text-white";
         divResultado.innerText = "Registrando fichada...";
 
-        fetch(urlAuth(`${URL_FIREBASE}/fichadas.json`), {
-          method: "POST",
+        fetch(urlAuth(`${URL_FIREBASE}/fichadas/${datos.fichadaId}.json`), {
+          method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(Object.assign({}, datos, { timestamp: { ".sv": "timestamp" } }))
         })
@@ -1305,7 +1320,9 @@
         return res.json();
       })
       .then(respuesta => {
-        if (respuesta && respuesta.name) {
+        // PUT devuelve el objeto guardado. Confirmamos que el servidor aceptó
+        // exactamente NUESTRA fichada (mismo fichadaId) antes de darla por buena.
+        if (respuesta && respuesta.fichadaId === datos.fichadaId) {
           divResultado.className = "p-3 rounded-xl text-xs text-center bg-emerald-950 text-emerald-200 border border-emerald-500";
           divResultado.innerText = `✓ ¡Fichada de ${tipo} registrada con éxito!`;
           
@@ -1314,7 +1331,7 @@
           finalizarSesionTrasFichada();
           return; // Guardado online confirmado: NO encolar copia offline.
         }
-        // Respuesta sin 'name': Firebase no confirmo el ID del registro -> tratar como fallo real.
+        // Respuesta inesperada: Firebase no confirmo NUESTRA fichada -> tratar como fallo real.
         throw new Error("No se pudo confirmar el guardado en Firebase.");
       })
       .catch(err => {
@@ -1408,8 +1425,12 @@
       let datos = pendientes.splice(idx, 1)[0];
       localStorage.setItem('fichadas_pendientes', JSON.stringify(pendientes));
 
-      fetch(urlAuth(`${URL_FIREBASE}/fichadas.json`), {
-        method: "POST",
+      // Retrocompatibilidad: si una fichada quedo en cola ANTES de esta version
+      // (sin fichadaId), le asignamos uno ahora para poder guardarla idempotente.
+      if (!datos.fichadaId) datos.fichadaId = generarIdFichada();
+
+      fetch(urlAuth(`${URL_FIREBASE}/fichadas/${datos.fichadaId}.json`), {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(Object.assign({}, datos, { timestamp: { ".sv": "timestamp" }, sincronizadoDesdeOffline: true }))
       })
