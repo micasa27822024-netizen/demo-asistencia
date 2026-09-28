@@ -385,9 +385,8 @@
     // ==========================================
 
     window.onload = function() {
-      if (sessionStorage.getItem('auth_supervisor') === 'true') {
-        mostrarPanel();
-      }
+      // La restauracion de sesion la decide Firebase Auth (onAuthStateChanged),
+      // NO un flag editable en sessionStorage. Ver listener en el modulo Firebase.
     };
 
     function validarPassword(e) {
@@ -1562,6 +1561,34 @@
       }
     }
     window.loginSupervisorReal = loginSupervisorReal;
+
+    // --- Restauracion de sesion basada en Firebase Auth (no solo sessionStorage) ---
+    // El panel solo se muestra si Auth confirma un usuario REAL con rol
+    // supervisor o admin. Un flag editable (sessionStorage.auth_supervisor) ya
+    // no alcanza para exponer la UI del panel.
+    onAuthStateChanged(auth, async (user) => {
+      const contenido = document.getElementById('contenidoPanel');
+      const yaVisible = () => contenido && !contenido.classList.contains('hidden');
+      if (!user) {
+        sessionStorage.removeItem('auth_supervisor');
+        sessionStorage.removeItem('rol_supervisor');
+        sessionStorage.removeItem('uid_supervisor');
+        return;
+      }
+      let rol = null;
+      try {
+        const snap = await get(ref(db, `usuarios/${user.uid}`));
+        if (snap.exists()) { rol = (snap.val() || {}).rol || null; }
+      } catch (_) {}
+      if (rol !== 'admin' && rol !== 'supervisor') {
+        sessionStorage.removeItem('auth_supervisor');
+        return;
+      }
+      sessionStorage.setItem('auth_supervisor', 'true');
+      sessionStorage.setItem('rol_supervisor', rol);
+      sessionStorage.setItem('uid_supervisor', user.uid);
+      if (!yaVisible() && typeof window.mostrarPanel === 'function') window.mostrarPanel();
+    });
 
     async function logoutSupervisorReal() { try { await signOut(auth); } catch (_) {} }
     window.logoutSupervisorReal = logoutSupervisorReal;

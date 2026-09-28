@@ -1276,9 +1276,8 @@
 
     window.onload = function() {
       generarPinEmpleado();
-      if (sessionStorage.getItem('auth_admin') === 'true') {
-        mostrarAdmin();
-      }
+      // La restauracion de sesion la decide Firebase Auth (onAuthStateChanged),
+      // NO un flag editable en sessionStorage. Ver listener en el modulo Firebase.
     };
 
     // Genera un PIN aleatorio de 4 dígitos para el alta de empleado con acceso
@@ -3276,7 +3275,7 @@
   <script type="module">
     // ---- Módulos requeridos desde la CDN de Firebase (v10.8.0) ----
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
     import { getDatabase, ref, set, get, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
     // ---- Configuración de tu proyecto Firebase ----
@@ -3350,6 +3349,39 @@
       }
     }
     window.loginAdminReal = loginAdminReal;
+
+    // --- Restauracion de sesion basada en Firebase Auth (no solo sessionStorage) ---
+    // El panel solo se muestra si Auth confirma un usuario REAL con rol admin.
+    // Asi un flag editable (sessionStorage.auth_admin) ya no alcanza para exponer la UI.
+    onAuthStateChanged(mainAuth, async (user) => {
+      const contenido = document.getElementById('contenidoAdmin');
+      const yaVisible = () => contenido && !contenido.classList.contains('hidden');
+      if (!user) {
+        // Sin sesion real: limpiar flags. El estado inicial del HTML ya muestra el login.
+        sessionStorage.removeItem('auth_admin');
+        sessionStorage.removeItem('rol_admin');
+        sessionStorage.removeItem('uid_admin');
+        sessionStorage.removeItem('email_admin');
+        return;
+      }
+      // Hay usuario autenticado: validar rol admin contra /usuarios/<uid>/rol.
+      let rol = null;
+      try {
+        const snap = await get(ref(mainDb, `usuarios/${user.uid}/rol`));
+        rol = snap.exists() ? snap.val() : null;
+      } catch (_) {}
+      if (rol !== 'admin') {
+        // Autenticado pero sin rol admin: no se expone el panel de administracion.
+        sessionStorage.removeItem('auth_admin');
+        return;
+      }
+      // Sesion admin confirmada: repoblar flags de sesion y mostrar la UI una sola vez.
+      sessionStorage.setItem('auth_admin', 'true');
+      sessionStorage.setItem('rol_admin', rol);
+      sessionStorage.setItem('uid_admin', user.uid);
+      if (user.email) sessionStorage.setItem('email_admin', user.email);
+      if (!yaVisible() && typeof window.mostrarAdmin === 'function') window.mostrarAdmin();
+    });
 
     // --- Token del admin/supervisor para autenticar escrituras REST (reglas .write endurecidas) ---
     // Aditivo: no modifica ninguna lógica existente. Devuelve la URL con ?auth=<idToken> si hay sesión.
