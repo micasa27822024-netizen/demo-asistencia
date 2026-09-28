@@ -330,6 +330,21 @@
         .catch(() => null);
     }
 
+    // Consulta SOLO los turnos asignados al legajo indicado usando el indice
+    // del servidor (orderBy="legajo"&equalTo="..."), en vez de descargar TODO
+    // el nodo asignacionesTurnos (turnos de todos los empleados) y filtrar en
+    // el cliente. El legajo se guarda y se compara SIEMPRE como string (tambien
+    // en las Reglas de Seguridad), por eso NO se hace variante numerica: un
+    // equalTo numerico contra un indice string nunca coincide (query vacio).
+    // Requiere .indexOn:["legajo"] en la regla de asignacionesTurnos.
+    function fetchTurnosLegajo(legajo) {
+      const legajoStr = String(legajo == null ? '' : legajo).trim();
+      const urlScoped = urlAuth(`${URL_FIREBASE}/asignacionesTurnos.json?orderBy=%22legajo%22&equalTo=%22${encodeURIComponent(legajoStr)}%22&ts=${Date.now()}`);
+      return fetch(urlScoped, { cache: 'no-store' })
+        .then(res => res.ok ? res.json() : null)
+        .catch(() => null);
+    }
+
     function parseFechaSegura(fechaStr) {
       if (!fechaStr) return new Date(NaN);
       let d = new Date(fechaStr);
@@ -572,7 +587,7 @@
         const [personalData, fichadasData, turnosData] = await Promise.all([
           fetchPersonalScoped(legajoIngresado),
           fetchFichadasLegajo(legajoIngresado),
-          fetch(urlAuth(`${URL_FIREBASE}/asignacionesTurnos.json?ts=${Date.now()}`), { cache: 'no-store' }).then(res => res.json()).catch(() => null)
+          fetchTurnosLegajo(legajoIngresado)
         ]);
 
         mapaConfiguracionPersonalVigilador = personalData || {};
