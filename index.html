@@ -185,7 +185,10 @@
         const tipoBuscado = String(tipo || '').toUpperCase();
         return Object.values(data).some(f => {
           if (!f || String(f.tipo || '').toUpperCase() !== tipoBuscado) return false;
-          let ts = (typeof f.timestamp === 'number') ? f.timestamp
+          // Hora OFICIAL: sello de servidor unificado (timestampServidor). Se mantiene
+          // compatibilidad con fichadas antiguas que usaban 'timestamp' / 'timestampLocal'.
+          let ts = (typeof f.timestampServidor === 'number') ? f.timestampServidor
+                 : (typeof f.timestamp === 'number') ? f.timestamp
                  : (typeof f.timestampLocal === 'number' ? f.timestampLocal
                  : (f.fechaHoraDispositivo ? new Date(f.fechaHoraDispositivo).getTime() : 0));
           return ts && (ahora - ts) >= 0 && (ahora - ts) < VENTANA_ANTIDUPLICADO_MS;
@@ -771,9 +774,10 @@
           Object.values(dataFichadas).forEach(f => {
             if (mismoLegajo(f.legajo, legajoInput)) {
               // Hora OFICIAL para determinar la ultima fichada (ENTRADA/SALIDA): sello del
-              // servidor Firebase (f.timestamp, .sv=timestamp, NO manipulable) primero; el
-              // reloj del dispositivo queda SOLO como fallback para fichadas antiguas sin sello.
-              const refTiempo = f.timestamp || f.fechaHoraDispositivo;
+              // servidor Firebase unificado (timestampServidor, .sv=timestamp, NO manipulable)
+              // primero; 'timestamp' queda como compat de fichadas antiguas y el reloj del
+              // dispositivo SOLO como fallback final.
+              const refTiempo = f.timestampServidor || f.timestamp || f.fechaHoraDispositivo;
               let tiempoFichada = refTiempo ? new Date(refTiempo).getTime() : 0;
               if (tiempoFichada >= timestampUltimo) {
                 timestampUltimo = tiempoFichada;
@@ -1323,7 +1327,7 @@
         fetch(urlAuth(`${URL_FIREBASE}/fichadas/${datos.fichadaId}.json`), {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(Object.assign({}, datos, { timestamp: { ".sv": "timestamp" } }))
+          body: JSON.stringify(Object.assign({}, datos, { timestampServidor: { ".sv": "timestamp" } }))
         })
       .then(res => {
         if (!res.ok) throw new Error("Error en la respuesta de Firebase");
@@ -1442,7 +1446,7 @@
       fetch(urlAuth(`${URL_FIREBASE}/fichadas/${datos.fichadaId}.json`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(Object.assign({}, datos, { timestamp: { ".sv": "timestamp" }, sincronizadoDesdeOffline: true }))
+        body: JSON.stringify(Object.assign({}, datos, { timestampServidor: { ".sv": "timestamp" }, sincronizadoDesdeOffline: true }))
       })
       .then(res => {
         // Si el servidor RECHAZA (p. ej. permiso denegado por legajo), NO se

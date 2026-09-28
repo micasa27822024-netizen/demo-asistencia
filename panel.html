@@ -551,11 +551,11 @@
             const item = resFirebase[key];
             const arrayItem = [
               // Hora OFICIAL para tabla, metricas y alertas de supervision: se toma
-              // primero el sello del servidor Firebase (item.timestamp, .sv=timestamp,
-              // NO manipulable). El reloj del dispositivo queda SOLO como fallback para
-              // registros antiguos sin sello. Asi un telefono con la hora adelantada/
-              // atrasada no puede falsear llegada tarde / salida anticipada.
-              item.timestamp || item.fechaHoraDispositivo || item.fecha,
+              // primero el sello del servidor Firebase unificado (item.timestampServidor,
+              // .sv=timestamp, NO manipulable). 'timestamp' queda como compat de registros
+              // antiguos y el reloj del dispositivo SOLO como fallback final. Asi un
+              // telefono con la hora adelantada/atrasada no puede falsear cumplimiento.
+              item.timestampServidor || item.timestamp || item.fechaHoraDispositivo || item.fecha,
               item.legajo,
               item.nombre,
               item.objetivo,
@@ -951,7 +951,10 @@
         const diff = normalizar(minFichada - fin);
         if (diff < 0) return { texto: `Salida anticipada (${Math.abs(diff)} min antes)`, clase: 'bg-rose-500/15 text-rose-300 border-rose-500/40' };
         if (diff <= tolEgr) return { texto: 'Salida en horario', clase: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25' };
-        return { texto: `Horas extra (+${diff - tolEgr} min)`, clase: 'bg-sky-500/15 text-sky-300 border-sky-500/40' };
+        // REGLA DE NEGOCIO (Opcion B): al superar la tolerancia se computa como extra
+        // TODO el tiempo desde el fin del turno (diff), no solo el excedente. Misma
+        // logica que Admin. Ej. fin 07:00, tol 30': 07:31 -> +31 min; 07:40 -> +40 min.
+        return { texto: `Horas extra (+${diff} min)`, clase: 'bg-sky-500/15 text-sky-300 border-sky-500/40' };
       }
       return null;
     }

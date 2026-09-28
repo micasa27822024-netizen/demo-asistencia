@@ -267,7 +267,7 @@
       const base = `${URL_FIREBASE}/personal.json?orderBy=${encodeURIComponent('"legajo"')}`;
       const legajoStr = String(legajo == null ? '' : legajo).trim();
       const r = await fetch(urlAuth(base + '&equalTo=' + encodeURIComponent('"' + legajoStr + '"') + '&ts=' + Date.now()), { cache: 'no-store' }).then(x => x.json()).catch(() => null);
-      return (r && !r.error) ? r : null;
+      return r || null;
     }
 
     // Variables para control del Botón de Pánico sostenido
@@ -627,9 +627,10 @@
             const coincideLegajo = mismoLegajoVig(fLegajo, legajoIngresado);
             if (coincideLegajo) {
               misFichadas.push({
-                // Se prioriza el timestamp del servidor (no manipulable) y se convierte
-                // a texto ISO para que el resto del cálculo lo procese igual que antes.
-                fecha: (typeof f.timestamp === 'number' ? new Date(f.timestamp).toISOString() : (f.fechaHoraDispositivo || f.fecha)),
+                // Se prioriza el sello de servidor unificado (timestampServidor, no
+                // manipulable) y se convierte a texto ISO; 'timestamp' queda como compat
+                // de fichadas antiguas y el reloj del dispositivo como fallback final.
+                fecha: (typeof f.timestampServidor === 'number' ? new Date(f.timestampServidor).toISOString() : (typeof f.timestamp === 'number' ? new Date(f.timestamp).toISOString() : (f.fechaHoraDispositivo || f.fecha))),
                 legajo: f.legajo,
                 objetivo: f.objetivo || 'Objetivo General',
                 tipo: String(f.tipo || "").toUpperCase()

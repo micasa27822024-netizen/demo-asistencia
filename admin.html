@@ -596,7 +596,7 @@
           <div>
             <label class="block text-xs uppercase text-slate-400 mb-1">Ventana de egreso (min)</label>
             <input type="number" id="cfgToleranciaEgreso" min="0" max="120" value="30" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
-            <p class="text-[11px] text-slate-500 mt-1">Tras el fin del turno hay este margen para marcar salida. A partir del minuto siguiente se cuentan horas extra.</p>
+            <p class="text-[11px] text-slate-500 mt-1">Tras el fin del turno hay este margen para marcar salida. Si se supera, se computan como horas extra TODOS los minutos desde el fin del turno (no solo el excedente).</p>
           </div>
           <div>
             <label class="block text-xs uppercase text-slate-400 mb-1">Radio de fichaje (m)</label>
@@ -1094,7 +1094,7 @@
       document.getElementById('panicoNombre').innerText = datos.nombre || 'Vigilador No Especificado';
       document.getElementById('panicoDetalle').innerText = `Legajo: ${datos.legajo || '-'} | Objetivo: ${datos.objetivo || '-'}`;
       
-      const horaStr = datos.fechaHora ? new Date(datos.fechaHora).toLocaleString('es-AR', { hour12: false }) : (datos.timestamp ? new Date(datos.timestamp).toLocaleString('es-AR', { hour12: false }) : new Date().toLocaleString('es-AR', { hour12: false }));
+      const horaStr = datos.fechaHora ? new Date(datos.fechaHora).toLocaleString('es-AR', { hour12: false }) : ((datos.timestampServidor || datos.timestamp) ? new Date(datos.timestampServidor || datos.timestamp).toLocaleString('es-AR', { hour12: false }) : new Date().toLocaleString('es-AR', { hour12: false }));
       document.getElementById('panicoHora').innerText = `Activado a las: ${horaStr}`;
 
       const linkGps = document.getElementById('panicoMapaUrl');
@@ -1549,7 +1549,11 @@
         } else if (diff <= tolEgr) {
           return { estado: 'EN_HORARIO', texto: 'Salida en horario', clase: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25', fila: '' };
         } else {
-          const extra = diff - tolEgr;
+          // REGLA DE NEGOCIO (Opcion B): si la salida SUPERA la tolerancia de egreso,
+          // NO se perdonan los minutos de tolerancia: se computa como extra TODO el
+          // tiempo transcurrido desde el fin del turno (diff), no solo lo que excede.
+          // Ej. fin 07:00, tol 30': 07:30 -> en horario; 07:31 -> +31 min; 07:40 -> +40 min.
+          const extra = diff;
           return { estado: 'EXTRA', texto: `Horas extra (+${extra} min)`, clase: 'bg-sky-500/15 text-sky-300 border-sky-500/40', fila: 'bg-sky-950/20 border-l-4 border-l-sky-500' };
         }
       }
@@ -1689,10 +1693,11 @@
               // muestra en la tabla ni se contabiliza en horas/alertas/reportes.
               if (d.anulada === true) return;
               // Hora OFICIAL para tabla y alertas de cumplimiento (notificarAlertasCumplimiento):
-              // sello del servidor Firebase (d.timestamp, .sv=timestamp, NO manipulable) primero;
-              // el reloj del dispositivo queda SOLO como fallback para fichadas antiguas sin sello.
+              // sello del servidor Firebase unificado (d.timestampServidor, .sv=timestamp, NO
+              // manipulable) primero; 'timestamp' queda como compat de fichadas antiguas y el
+              // reloj del dispositivo SOLO como fallback final para registros sin sello.
               // Evita que un telefono con la hora cambiada falsee llegada tarde / salida anticipada.
-              const fecha = d.timestamp || d.fechaHoraDispositivo || '';
+              const fecha = d.timestampServidor || d.timestamp || d.fechaHoraDispositivo || '';
               const mapaUrl = (d.latitud && d.longitud) ? `https://maps.google.com/?q=${d.latitud},${d.longitud}` : '';
               
               const legajoStr = d.legajo ? String(d.legajo).trim() : '';
