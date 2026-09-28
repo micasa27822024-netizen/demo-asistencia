@@ -548,7 +548,12 @@
           Object.keys(resFirebase).forEach(key => {
             const item = resFirebase[key];
             const arrayItem = [
-              item.fechaHoraDispositivo || item.fecha || item.timestamp,
+              // Hora OFICIAL para tabla, metricas y alertas de supervision: se toma
+              // primero el sello del servidor Firebase (item.timestamp, .sv=timestamp,
+              // NO manipulable). El reloj del dispositivo queda SOLO como fallback para
+              // registros antiguos sin sello. Asi un telefono con la hora adelantada/
+              // atrasada no puede falsear llegada tarde / salida anticipada.
+              item.timestamp || item.fechaHoraDispositivo || item.fecha,
               item.legajo,
               item.nombre,
               item.objetivo,
