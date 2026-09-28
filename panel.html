@@ -951,10 +951,13 @@
         const diff = normalizar(minFichada - fin);
         if (diff < 0) return { texto: `Salida anticipada (${Math.abs(diff)} min antes)`, clase: 'bg-rose-500/15 text-rose-300 border-rose-500/40' };
         if (diff <= tolEgr) return { texto: 'Salida en horario', clase: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25' };
-        // REGLA DE NEGOCIO (Opcion B): al superar la tolerancia se computa como extra
-        // TODO el tiempo desde el fin del turno (diff), no solo el excedente. Misma
-        // logica que Admin. Ej. fin 07:00, tol 30': 07:31 -> +31 min; 07:40 -> +40 min.
-        return { texto: `Horas extra (+${diff} min)`, clase: 'bg-sky-500/15 text-sky-300 border-sky-500/40' };
+        // REGLA DE NEGOCIO (Opcion B, ajustada): al superar la tolerancia se computan
+        // como extra los minutos de tolerancia COMPLETOS mas cada minuto adicional; NO
+        // se cuenta el minuto en que se cruza el umbral. Misma logica que Admin.
+        // Formula: extra = diff - 1 (cuando diff > tolEgr).
+        // Ej. fin 07:00, tol 30': 07:31 -> +30 min; 07:40 -> +39 min.
+        const extra = diff - 1;
+        return { texto: `Horas extra (+${extra} min)`, clase: 'bg-sky-500/15 text-sky-300 border-sky-500/40' };
       }
       return null;
     }

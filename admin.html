@@ -1549,11 +1549,12 @@
         } else if (diff <= tolEgr) {
           return { estado: 'EN_HORARIO', texto: 'Salida en horario', clase: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25', fila: '' };
         } else {
-          // REGLA DE NEGOCIO (Opcion B): si la salida SUPERA la tolerancia de egreso,
-          // NO se perdonan los minutos de tolerancia: se computa como extra TODO el
-          // tiempo transcurrido desde el fin del turno (diff), no solo lo que excede.
-          // Ej. fin 07:00, tol 30': 07:30 -> en horario; 07:31 -> +31 min; 07:40 -> +40 min.
-          const extra = diff;
+          // REGLA DE NEGOCIO (Opcion B, ajustada): al SUPERAR la tolerancia de egreso
+          // se computan como extra los minutos de tolerancia COMPLETOS mas cada minuto
+          // adicional; NO se cuenta el minuto en que se cruza el umbral por si mismo.
+          // Formula: extra = diff - 1 (cuando diff > tolEgr).
+          // Ej. fin 07:00, tol 30': 07:30 -> en horario; 07:31 -> +30 min; 07:40 -> +39 min.
+          const extra = diff - 1;
           return { estado: 'EXTRA', texto: `Horas extra (+${extra} min)`, clase: 'bg-sky-500/15 text-sky-300 border-sky-500/40', fila: 'bg-sky-950/20 border-l-4 border-l-sky-500' };
         }
       }
