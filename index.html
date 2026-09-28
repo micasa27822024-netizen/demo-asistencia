@@ -177,6 +177,30 @@
         : (Date.now().toString(36) + Math.random().toString(36).slice(2, 12));
       return 'fch_' + rnd;
     }
+    // --- idEvento ESTABLE (determinístico) ---
+    // Deriva un identificador ESTABLE del evento físico a partir de
+    // legajo|tipo|objetivo|ventana. Dos intentos del MISMO evento dentro de la
+    // ventana producen el MISMO id => misma clave en RTDB => idempotencia por
+    // construcción, alineado con la Capa A del Worker. Se computa una sola vez
+    // por fichada y luego se REUTILIZA (queda guardado en el registro), por lo
+    // que los reintontos/sincronizaciones no cambian el id aunque cruce ventana.
+    async function generarIdEventoEstable(legajo, tipo, objetivoId) {
+      const win = Math.floor(Date.now() / VENTANA_ANTIDUPLICADO_MS);
+      const clave = `${String(legajo || '').trim()}|${String(tipo || '').toUpperCase()}|${String(objetivoId || '')}|${win}`;
+      try {
+        if (self.crypto && crypto.subtle && typeof crypto.subtle.digest === 'function') {
+          const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(clave));
+          const bytes = new Uint8Array(buf);
+          let hex = '';
+          for (let i = 0; i < 16; i++) hex += bytes[i].toString(16).padStart(2, '0');
+          return 'fch_' + hex;
+        }
+      } catch (e) { /* cae al fallback determinístico */ }
+      // Fallback (djb2) para contextos sin WebCrypto: igualmente determinístico.
+      let h = 5381;
+      for (let i = 0; i < clave.length; i++) { h = ((h << 5) + h + clave.charCodeAt(i)) >>> 0; }
+      return 'fch_' + h.toString(16).padStart(8, '0');
+    }
     // Consulta las fichadas recientes del legajo y detecta un duplicado (mismo tipo dentro de la ventana).
     // Ante cualquier error de red devuelve false para no bloquear una fichada legítima.
     async function existeFichadaReciente(legajo, tipo) {
@@ -1237,11 +1261,23 @@
     }
 
     async function ejecutarPeticionFichada(tipo, lat, lng, legajo, pin, nombre, objetivo, validacionUbicacion, precisionGPS) {
+      // Objetivo autorizado seleccionado: se captura UNA vez y se reutiliza como
+      // parte de la clave del evento y como objetivoAutorizadoId.
+      const objetivoIdSel = document.getElementById('objetivo').selectedOptions[0]?.dataset?.objetivoId || null;
+      // idEvento ESTABLE: identificador determinístico del evento físico. Se
+      // computa una sola vez y viaja con la fichada (online, respaldo directo y
+      // cola offline), habilitando la deduplicación idempotente del Worker.
+      const idEventoEstable = await generarIdEventoEstable(
+        (typeof legajoSesion !== 'undefined' && legajoSesion) ? legajoSesion : legajo,
+        tipo, objetivoIdSel
+      );
       const datos = {
-        // ID idempotente: identifica de forma única ESTA fichada. Se genera una
-        // sola vez acá y se reutiliza en cada reintento de guardado/sincronización,
-        // por lo que nunca se crea un duplicado (se guarda con PUT sobre esta clave).
-        fichadaId: generarIdFichada(),
+        // Clave idempotente de la fichada, ahora DETERMINÍSTICA (= idEvento): se
+        // reutiliza en cada reintento/sincronización y actúa como CLAVE en RTDB,
+        // por lo que un PUT nunca crea un duplicado (sobreescribe la misma clave).
+        fichadaId: idEventoEstable,
+        // idEvento explícito para el Worker (prioridad 1 de la Capa A).
+        idEvento: idEventoEstable,
         // Legajo de la sesion autenticada (string): las Reglas exigen que coincida con /usuarios/<uid>/legajo.
         legajo: String((typeof legajoSesion !== 'undefined' && legajoSesion) ? legajoSesion : legajo).trim(),
         // authUid de la sesion Auth activa. Campo CRITICO para la validacion
@@ -1277,7 +1313,7 @@
         horarioProgramadoFin: turnoProgramadoGlobal?.horaFin || personalActualGlobal?.horarioHabitual?.fin || null,
         horarioProgramadoOrigen: turnoProgramadoGlobal ? 'ASIGNACION_FECHA' : 'HORARIO_HABITUAL',
         asignacionTurnoId: turnoProgramadoGlobal?.id || null,
-        objetivoAutorizadoId: document.getElementById('objetivo').selectedOptions[0]?.dataset?.objetivoId || null
+        objetivoAutorizadoId: objetivoIdSel
       };
 
       // Turno nocturno: si es SALIDA y hay una ENTRADA activa (que pudo abrirse
