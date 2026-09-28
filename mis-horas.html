@@ -931,6 +931,9 @@
             mapa: `https://www.google.com/maps?q=${lat},${lon}`,
             fechaHora: fechaActual,
             fechaHoraDispositivo: fechaActual,
+            // Sello de servidor Firebase (.sv=timestamp): hora oficial NO manipulable,
+            // independiente del reloj del telefono. El admin/panel la leen con prioridad.
+            timestampServidor: { ".sv": "timestamp" },
             estado: "PENDIENTE",
             atendido: false,
             // Clave de idempotencia + token de sesión: permiten al panel descartar
@@ -1127,6 +1130,9 @@
         fechaHora: fechaNovedad,
         fechaHoraDispositivo: fechaNovedad,
         timestamp: fechaNovedad,
+        // Sello de servidor Firebase (.sv=timestamp): hora oficial NO manipulable,
+        // independiente del reloj del telefono. El admin la lee con prioridad.
+        timestampServidor: { ".sv": "timestamp" },
         legajo: legajo,
         nombre: nombre,
         objetivo: objetivo,

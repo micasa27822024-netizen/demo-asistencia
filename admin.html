@@ -1652,7 +1652,11 @@
           Object.keys(dataMarcaciones).forEach(id => {
             const d = dataMarcaciones[id];
             if (d) {
-              const fecha = d.fechaHoraDispositivo || d.timestamp || '';
+              // Hora OFICIAL para tabla y alertas de cumplimiento (notificarAlertasCumplimiento):
+              // sello del servidor Firebase (d.timestamp, .sv=timestamp, NO manipulable) primero;
+              // el reloj del dispositivo queda SOLO como fallback para fichadas antiguas sin sello.
+              // Evita que un telefono con la hora cambiada falsee llegada tarde / salida anticipada.
+              const fecha = d.timestamp || d.fechaHoraDispositivo || '';
               const mapaUrl = (d.latitud && d.longitud) ? `https://maps.google.com/?q=${d.latitud},${d.longitud}` : '';
               
               const legajoStr = d.legajo ? String(d.legajo).trim() : '';
@@ -1691,7 +1695,7 @@
           Object.keys(dataNovedades).forEach(id => {
             const d = dataNovedades[id];
             if (d) {
-              const fecha = d.fechaHoraDispositivo || d.timestamp || d.fechaHora || '';
+              const fecha = d.timestampServidor || d.fechaHoraDispositivo || d.timestamp || d.fechaHora || '';
               const mapaUrl = (d.latitud && d.longitud) ? `https://maps.google.com/?q=${d.latitud},${d.longitud}` : '';
               const fotoNovedad = d.fotoBase64 || d.foto || '';
               datosNovedades.push([fecha, d.legajo ? String(d.legajo) : '', d.nombre || '', d.objetivo || '', d.tipoIncidencia || 'General', d.descripcion || '', mapaUrl, fotoNovedad]);
@@ -1708,8 +1712,9 @@
           Object.keys(dataPanicos).forEach(id => {
             const d = dataPanicos[id];
             if (d) {
-              // Priorizamos fechaHora o timestamp enviado desde mis-horas
-              const rawFecha = d.fechaHora || d.timestamp || d.fecha || '';
+              // Priorizamos el sello de servidor (timestampServidor, .sv) por ser hora oficial
+              // NO manipulable; luego fechaHora/timestamp enviados desde mis-horas como fallback.
+              const rawFecha = d.timestampServidor || d.fechaHora || d.timestamp || d.fecha || '';
               const mapaUrl = (d.latitud && d.longitud) ? `https://maps.google.com/?q=${d.latitud},${d.longitud}` : '';
               
               datosPanicos.push([

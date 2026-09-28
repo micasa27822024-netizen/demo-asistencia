@@ -779,7 +779,11 @@
         if (dataFichadas) {
           Object.values(dataFichadas).forEach(f => {
             if (mismoLegajo(f.legajo, legajoInput)) {
-              let tiempoFichada = f.fechaHoraDispositivo ? new Date(f.fechaHoraDispositivo).getTime() : 0;
+              // Hora OFICIAL para determinar la ultima fichada (ENTRADA/SALIDA): sello del
+              // servidor Firebase (f.timestamp, .sv=timestamp, NO manipulable) primero; el
+              // reloj del dispositivo queda SOLO como fallback para fichadas antiguas sin sello.
+              const refTiempo = f.timestamp || f.fechaHoraDispositivo;
+              let tiempoFichada = refTiempo ? new Date(refTiempo).getTime() : 0;
               if (tiempoFichada >= timestampUltimo) {
                 timestampUltimo = tiempoFichada;
                 ultimaFichadaTipo = String(f.tipo || "").trim().toUpperCase();
