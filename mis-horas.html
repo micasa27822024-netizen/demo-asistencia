@@ -682,43 +682,6 @@
       }
     }
 
-    function ejecutarConsulta(legajo) {
-      Promise.all([
-        fetchFichadasLegajo(legajo),
-        fetchPersonalScoped(legajo),
-        fetch(urlAuth(`${URL_FIREBASE}/asignacionesTurnos.json?ts=${Date.now()}`), { cache: 'no-store' }).then(res => res.json()).catch(() => null)
-      ])
-        .then(([fichadasData, personalData, turnosData]) => {
-          mapaConfiguracionPersonalVigilador = personalData || {};
-          asignacionesTurnosVigilador = turnosData
-            ? Object.entries(turnosData).map(([id, d]) => ({ ...d, id }))
-            : [];
-
-          let misFichadas = [];
-
-          if (fichadasData) {
-            Object.values(fichadasData).forEach(f => {
-              const fLegajo = String(f.legajo || '').trim();
-              if (mismoLegajoVig(fLegajo, legajo)) {
-                misFichadas.push({
-                  fecha: f.fechaHoraDispositivo || f.fecha,
-                  legajo: f.legajo,
-                  objetivo: f.objetivo || 'Objetivo General',
-                  tipo: String(f.tipo || '').toUpperCase()
-                });
-              }
-            });
-          }
-
-          if (misFichadas.length > 0) {
-            datosVigiladorGlobal = misFichadas;
-            poblarSelectMeses(datosVigiladorGlobal);
-            aplicarFiltros();
-          }
-        })
-        .catch(err => console.error(err));
-    }
-
     function poblarSelectMeses(datos) {
       const selectMes = document.getElementById('filtroMes');
       const mesActualSeleccionado = selectMes.value;
