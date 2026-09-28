@@ -954,11 +954,12 @@
           fechaHoraDispositivo: new Date().toISOString(),
           timestampServidor: { ".sv": "timestamp" }
         };
-        await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/auditoria.json`), {
+        const resAud = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/auditoria.json`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(evento)
         });
+        if (!resAud.ok) throw new Error('Firebase rechazo el evento de auditoria (HTTP ' + resAud.status + ').');
       } catch (err) {
         console.warn('No se pudo registrar el evento de auditoría:', err);
       }
@@ -1274,18 +1275,11 @@
     }
 
     window.onload = function() {
-      generarPinAleatorio();
       generarPinEmpleado();
       if (sessionStorage.getItem('auth_admin') === 'true') {
         mostrarAdmin();
       }
     };
-
-    function generarPinAleatorio() {
-      const pin = Math.floor(1000 + Math.random() * 9000).toString();
-      const inputPin = document.getElementById('newPin');
-      if (inputPin) inputPin.value = pin;
-    }
 
     // Genera un PIN aleatorio de 4 dígitos para el alta de empleado con acceso
     function generarPinEmpleado() {
@@ -2515,9 +2509,24 @@
         //    No bloquean la operación si ya no existen; se registran los fallos.
         try { await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/usuarios/${firebaseId}.json`), { method: 'DELETE' }); } catch (_) {}
         try { await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/credenciales/${firebaseId}.json`), { method: 'DELETE' }); } catch (_) {}
+        // 3. Eliminar la cuenta de Firebase Auth para que no quede una cuenta
+        //    huerfana capaz de seguir autenticandose. El borrado en Auth solo se
+        //    puede hacer del lado del servidor (Admin SDK): se delega al Worker.
+        //    Es tolerante a fallo: no bloquea la baja de datos, pero avisa al admin.
+        let avisoAuthElim = '';
+        if (URL_WORKER_AUTH) {
+          try {
+            const tokenAdminElim = await window.obtenerTokenAdmin();
+            const wrElim = await fetch(URL_WORKER_AUTH, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken: tokenAdminElim, uid: firebaseId, accion: 'eliminar' }) });
+            const wdElim = await wrElim.json().catch(() => ({}));
+            if (!wrElim.ok || !wdElim.ok) avisoAuthElim = '\n\n⚠️ La ficha se elimino, pero NO se pudo dar de baja la cuenta de acceso (Auth): ' + (wdElim.error || ('HTTP ' + wrElim.status)) + '. El Worker debe soportar accion:"eliminar".';
+          } catch (e) { avisoAuthElim = '\n\n⚠️ La ficha se elimino, pero no se pudo contactar el servicio de acceso (Auth) para borrar la cuenta.'; }
+        } else {
+          avisoAuthElim = '\n\n⚠️ La ficha se elimino, pero la cuenta de acceso (Auth) sigue activa (falta configurar URL_WORKER_AUTH).';
+        }
         registrarAuditoria('PERSONAL_ELIMINADO', `personal/${firebaseId}`, { legajo: legajoElim });
         delete mapaConfiguracionPersonal[firebaseId];
-        alert('Registro eliminado con éxito (ficha, identidad y credenciales).');
+        alert('Registro eliminado con éxito (ficha, identidad y credenciales).' + avisoAuthElim);
         recargarDatosEfectivo();
       } catch(err) { alert('No se pudo eliminar el registro: ' + (err.message || err) + '\n\nSi el problema persiste, verificá que estés logueado como administrador.'); }
     }

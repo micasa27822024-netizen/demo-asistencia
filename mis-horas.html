@@ -20,35 +20,6 @@
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
 
-  <!-- ========================================================================= -->
-  <!--  SEGURIDAD DE PIN - hash con salt (Web Crypto / PBKDF2-SHA256)             -->
-  <!--  Respaldo offline: valida el PIN contra pinHash+pinSalt sin exponerlo.      -->
-  <!-- ========================================================================= -->
-  <script>
-    (function () {
-      function generarSaltVigix() {
-        const a = crypto.getRandomValues(new Uint8Array(16));
-        return Array.from(a).map(b => b.toString(16).padStart(2, '0')).join('');
-      }
-      async function hashPinVigix(pin, saltHex) {
-        const enc = new TextEncoder();
-        const salt = Uint8Array.from((String(saltHex).match(/.{1,2}/g) || []).map(b => parseInt(b, 16)));
-        const km = await crypto.subtle.importKey('raw', enc.encode(String(pin)), 'PBKDF2', false, ['deriveBits']);
-        const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, km, 256);
-        return Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('');
-      }
-      async function verificarPinHashVigix(pin, ficha) {
-        if (!ficha) return false;
-        const h = String(ficha.pinHash || '').trim();
-        const s = String(ficha.pinSalt || '').trim();
-        if (!h || !s) return false;
-        try { return (await hashPinVigix(pin, s)) === h; } catch (_) { return false; }
-      }
-      window.generarSaltVigix = generarSaltVigix;
-      window.hashPinVigix = hashPinVigix;
-      window.verificarPinHashVigix = verificarPinHashVigix;
-    })();
-  </script>
 
   <!-- ENCABEZADO Y MENÚ CORPORATIVO -->
   <header class="bg-slate-900 border-b border-slate-800 shadow-md">
@@ -1191,32 +1162,9 @@
     const vigAuth = getAuth(vigApp);
 
     /**
-     * Verifica legajo + PIN del vigilador contra Firebase Auth.
-     * Correo sintético: legajo@demo.asistencia ; contraseña: PIN a 6 dígitos.
-     * Cierra la sesión al instante: solo confirma el PIN.
-     * @returns {Promise<{ok:boolean, razon?:string}>}
-     */
-    async function verificarPinVigilador(legajo, pin) {
-      const legajoLimpio = String(legajo || '').trim();
-      const pinLimpio    = String(pin || '').trim();
-      if (!legajoLimpio || !pinLimpio) return { ok: false, razon: 'faltan_datos' };
-
-      const email    = `${legajoLimpio}@demo.asistencia`;
-      const password = pinLimpio.padStart(6, '0');
-      try {
-        await signInWithEmailAndPassword(vigAuth, email, password);
-        try { await signOut(vigAuth); } catch (_) {}
-        return { ok: true };
-      } catch (e) {
-        return { ok: false, razon: (e && e.code) || 'error' };
-      }
-    }
-    window.verificarPinVigilador = verificarPinVigilador;
-
-    /**
      * Inicia sesion REAL del vigilador (legajo + PIN) manteniendo la sesion en
      * Firebase Auth y devolviendo su idToken para autorizar las lecturas
-     * (?auth=). A diferencia de verificarPinVigilador, NO cierra la sesion:
+     * (?auth=). Mantiene la sesion viva (no la cierra):
      * la mantiene viva durante la consulta de horas.
      * Persistencia de sesion (no sobrevive al cierre de pestana).
      * @returns {Promise<{ok:boolean, idToken?:string, uid?:string, razon?:string}>}

@@ -12,35 +12,6 @@
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
 
-  <!-- ========================================================================= -->
-  <!--  SEGURIDAD DE PIN - hash con salt (Web Crypto / PBKDF2-SHA256)             -->
-  <!--  Respaldo offline: valida el PIN contra pinHash+pinSalt sin exponerlo.      -->
-  <!-- ========================================================================= -->
-  <script>
-    (function () {
-      function generarSaltVigix() {
-        const a = crypto.getRandomValues(new Uint8Array(16));
-        return Array.from(a).map(b => b.toString(16).padStart(2, '0')).join('');
-      }
-      async function hashPinVigix(pin, saltHex) {
-        const enc = new TextEncoder();
-        const salt = Uint8Array.from((String(saltHex).match(/.{1,2}/g) || []).map(b => parseInt(b, 16)));
-        const km = await crypto.subtle.importKey('raw', enc.encode(String(pin)), 'PBKDF2', false, ['deriveBits']);
-        const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, km, 256);
-        return Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('');
-      }
-      async function verificarPinHashVigix(pin, ficha) {
-        if (!ficha) return false;
-        const h = String(ficha.pinHash || '').trim();
-        const s = String(ficha.pinSalt || '').trim();
-        if (!h || !s) return false;
-        try { return (await hashPinVigix(pin, s)) === h; } catch (_) { return false; }
-      }
-      window.generarSaltVigix = generarSaltVigix;
-      window.hashPinVigix = hashPinVigix;
-      window.verificarPinHashVigix = verificarPinHashVigix;
-    })();
-  </script>
 
   <!-- ENCABEZADO Y MENÚ CORPORATIVO -->
   <header class="bg-slate-900 border-b border-slate-800 shadow-md mb-4">
@@ -1208,11 +1179,6 @@
             mostrarErrorUbicacion('❌ No se pudo verificar la distancia al objetivo. La fichada fue bloqueada.');
           });
           return;
-
-          ejecutarPeticionFichada(
-            tipo, lat, lng, legajo, '', nombre, objetivo,
-            validacionUbicacion, precisionGPS
-          );
         },
         err => {
           mostrarErrorUbicacion("❌ Permiso de GPS denegado o no disponible. Activa la ubicación en tu dispositivo.");
@@ -1290,6 +1256,11 @@
         return;
       }
 
+      // Sesion individual larga: renovar el idToken antes de las operaciones REST
+      // para no fichar con un token vencido (evita 401 y perdida de la fichada).
+      const tokenFresco = await refrescarTokenVigilador();
+      if (tokenFresco) idTokenVig = tokenFresco;
+
       divResultado.className = "p-3 rounded-xl text-xs text-center bg-slate-700 text-white";
       divResultado.innerText = "Verificando duplicados...";
       divResultado.classList.remove('hidden');
@@ -1320,8 +1291,10 @@
           ultimoTipoFichadaGlobal = tipo;
           limpiarFormularioExitoso();
           finalizarSesionTrasFichada();
-          throw new Error("No se pudo confirmar el guardado en Firebase.");
+          return; // Guardado online confirmado: NO encolar copia offline.
         }
+        // Respuesta sin 'name': Firebase no confirmo el ID del registro -> tratar como fallo real.
+        throw new Error("No se pudo confirmar el guardado en Firebase.");
       })
       .catch(err => {
         console.warn("Fallo al conectar con Firebase. Guardando offline automáticamente...", err);
