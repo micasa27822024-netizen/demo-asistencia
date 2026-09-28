@@ -3,17 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Blindaje CSP: solo se permiten los orígenes que la app realmente usa. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; font-src 'self' data: https://cdnjs.cloudflare.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://*.googleapis.com https://www.gstatic.com https://nominatim.openstreetmap.org https://vigix-auth-admin.micasa27822024.workers.dev; worker-src 'self' blob:; manifest-src 'self'">
   <title>Demo Asistencia - Panel de Control</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer">
   <!-- MAPA GRATUITO: Leaflet + OpenStreetMap -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha512-Zcn6bjR/8RZbLEpLIeOwNtzREBAJnUKESxces60Mpoj+2okopSAcSUIUOseddDm0cxnGQzxIR7vJgsLZbdLE3w==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha512-BwHfrr4c9kmRkLw6iXFdzcdWV/PGkVgiIyIWLLlTSXzWQzxuSg4DiQUCpauz/EWjgk5TYQqX/kvn9pG1NpYfqg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   
   <!-- LIBRERÍAS DE EXPORTACIÓN -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha512-r22gChDnGvBylk90+2e/ycr3RVrDi8DIOkIGNhJlKfuyQM4tIRAI062MaV8sfjQKYVGjOBaZBOA87z+IhZE9DA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha512-qZvrmS2ekKPF2mSznTQsxqPgnpkI4DNTlrdUmTzrDgektczlKNRRhy5X5AAOnx5S09ydFYWWNSfcEqDTTHgtNA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js" integrity="sha512-/cZZTKETbsuutvNXdPji/z8N+9e+LHq9D60JhcBCigq9I5a2VDEcLzml8PdVlVqzmWlVbhZCuTx+9CTi2xb30A==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
 
@@ -602,6 +604,17 @@
             <p class="text-[11px] text-slate-500 mt-1">Distancia máxima al objetivo para poder fichar. Por defecto 100 m.</p>
           </div>
         </div>
+        <!-- SEGURIDAD BIOMÉTRICA (modo estricto / fail-closed) -->
+        <div class="mt-5 border-t border-slate-700 pt-5">
+          <label class="flex items-start gap-3 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 cursor-pointer hover:border-emerald-500 transition">
+            <input type="checkbox" id="cfgBiometriaEstricta" class="mt-1 accent-emerald-500 w-4 h-4">
+            <span>
+              <span class="block text-sm font-semibold text-white">Exigir coincidencia facial para poder fichar (modo estricto)</span>
+              <span class="block text-[11px] text-slate-400 mt-0.5">Si está activado, NADIE puede fichar sin que su rostro coincida con la Foto Master cargada. Si la IA no está disponible, no hay Foto Master, la foto es ilegible o el rostro no coincide, la fichada se BLOQUEA (no queda "para revisar"). Requisito: TODOS los empleados deben tener su Foto Master cargada. Si está desactivado, la app sigue funcionando como hasta ahora (marca las dudosas para revisión, pero no bloquea).</span>
+            </span>
+          </label>
+        </div>
+
         <div class="flex items-center gap-3 mt-5">
           <button type="button" onclick="guardarConfiguracionGlobal()" id="btnGuardarConfig" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center gap-2">
             <i class="fa-solid fa-floppy-disk"></i> Guardar configuración
@@ -993,7 +1006,7 @@
     let alertasFichadasConocidas = new Set();
     let alertasFichadasInicializadas = false;
     // Configuración global de reglas laborales y radio de fichaje (persistida en Firebase /configuracionGlobal).
-    let configGlobalAdmin = { toleranciaIngresoMin: 15, toleranciaEgresoMin: 30, radioFichajeMetros: 100, modoDispositivo: 'compartido' };
+    let configGlobalAdmin = { toleranciaIngresoMin: 15, toleranciaEgresoMin: 30, radioFichajeMetros: 100, modoDispositivo: 'compartido', biometriaEstricta: false };
 
     function iniciarSonidoSirena() {
       if (audioCtxPanico) return; 
@@ -1416,6 +1429,8 @@
       const ri = document.getElementById('modoIndividual');
       if (rc) rc.checked = (modo === 'compartido');
       if (ri) ri.checked = (modo === 'individual');
+      const be = document.getElementById('cfgBiometriaEstricta');
+      if (be) be.checked = (configGlobalAdmin.biometriaEstricta === true);
     }
 
     async function cargarConfiguracionGlobal() {
@@ -1427,6 +1442,7 @@
           if (Number.isFinite(Number(data.toleranciaEgresoMin))) configGlobalAdmin.toleranciaEgresoMin = Number(data.toleranciaEgresoMin);
           if (Number.isFinite(Number(data.radioFichajeMetros)) && Number(data.radioFichajeMetros) > 0) configGlobalAdmin.radioFichajeMetros = Number(data.radioFichajeMetros);
           configGlobalAdmin.modoDispositivo = (String(data.modoDispositivo || '').trim() === 'individual') ? 'individual' : 'compartido';
+          configGlobalAdmin.biometriaEstricta = (data.biometriaEstricta === true);
         }
       } catch (err) {
         console.warn('No se pudo cargar la configuración global, se usan valores por defecto.', err);
@@ -1439,7 +1455,9 @@
       const tolIng = Math.max(0, Math.min(120, parseInt(document.getElementById('cfgToleranciaIngreso').value, 10) || 0));
       const tolEgr = Math.max(0, Math.min(120, parseInt(document.getElementById('cfgToleranciaEgreso').value, 10) || 0));
       const radio = Math.max(10, Math.min(5000, parseInt(document.getElementById('cfgRadioFichaje').value, 10) || 100));
-      const payload = { toleranciaIngresoMin: tolIng, toleranciaEgresoMin: tolEgr, radioFichajeMetros: radio, modoDispositivo: (configGlobalAdmin.modoDispositivo === 'individual' ? 'individual' : 'compartido'), actualizado: new Date().toISOString() };
+      const beEl = document.getElementById('cfgBiometriaEstricta');
+      const biometriaEstricta = !!(beEl && beEl.checked);
+      const payload = { toleranciaIngresoMin: tolIng, toleranciaEgresoMin: tolEgr, radioFichajeMetros: radio, modoDispositivo: (configGlobalAdmin.modoDispositivo === 'individual' ? 'individual' : 'compartido'), biometriaEstricta: biometriaEstricta, actualizado: new Date().toISOString() };
       if (estado) { estado.className = 'text-xs text-slate-400'; estado.innerText = 'Guardando...'; }
       try {
         const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/configuracionGlobal.json`), {
@@ -1449,6 +1467,7 @@
         configGlobalAdmin.toleranciaIngresoMin = tolIng;
         configGlobalAdmin.toleranciaEgresoMin = tolEgr;
         configGlobalAdmin.radioFichajeMetros = radio;
+        configGlobalAdmin.biometriaEstricta = biometriaEstricta;
         if (estado) { estado.className = 'text-xs text-emerald-400 font-semibold'; estado.innerText = '✓ Configuración guardada.'; }
         filtrarTablaMarcaciones();
       } catch (err) {

@@ -3,9 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Blindaje CSP: solo se permiten los orígenes que la app realmente usa. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; font-src 'self' data: https://cdnjs.cloudflare.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://*.googleapis.com https://www.gstatic.com https://nominatim.openstreetmap.org https://vigix-auth-admin.micasa27822024.workers.dev; worker-src 'self' blob:; manifest-src 'self'">
   <title>Demo Asistencia - Control de Asistencia</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer">
   
   <!-- LIBRERÍA FACE-API.JS COMPLETA Y ESTABLE -->
   <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
@@ -195,6 +197,11 @@
     let fotoMasterGuardada = null;
     let modelosCargados = false;
     let resultadoSimilitudGlobal = "NO_EVALUADO";
+    // Modo biométrico estricto (lo define el Admin en configuración global).
+    // Si está activo, NO se permite fichar sin una COINCIDENCIA facial real
+    // contra la Foto Master (bloquea IA no disponible, sin master, master
+    // ilegible, error de evaluación o rostro no evaluado).
+    let biometriaEstrictaGlobal = false;
     let sospechaFraudeGlobal = false;
     let motivoSospechaGlobal = "";
     let personalActualGlobal = null;
@@ -426,6 +433,7 @@
           .then(cfg => {
             const r = Number(cfg && cfg.radioFichajeMetros);
             if (Number.isFinite(r) && r > 0) radioGlobalConfigMetros = r;
+            biometriaEstrictaGlobal = (cfg && cfg.biometriaEstricta === true);
           }).catch(() => {});
       }
       const objetivosGuardados = JSON.parse(localStorage.getItem('demo_lista_objetivos') || '[]');
@@ -1128,6 +1136,19 @@
 
       if (!fotoBase64Global) {
         alert("Primero capture una selfie válida haciendo clic en 'CAPTURAR Y VALIDAR ROSTRO'.");
+        return;
+      }
+
+      // 🛡️ MODO BIOMÉTRICO ESTRICTO (fail-closed): si el Admin lo activó, solo se
+      // permite fichar cuando hubo una COINCIDENCIA facial real contra la Foto
+      // Master. Cualquier otro estado (IA no disponible, sin master, master
+      // ilegible, error o rostro no evaluado) BLOQUEA la fichada en vez de
+      // dejarla pasar marcada para revisión.
+      if (biometriaEstrictaGlobal && !/COINCIDENCIA/.test(String(resultadoSimilitudGlobal))) {
+        const divRes = document.getElementById('resultado');
+        divRes.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
+        divRes.innerText = "❌ FICHADA BLOQUEADA (modo estricto): no se validó tu rostro contra la Foto Master. Reintentá con buena luz y de frente; si no tenés Foto Master cargada, contactá al administrador.";
+        divRes.classList.remove('hidden');
         return;
       }
 
