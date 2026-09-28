@@ -1314,7 +1314,15 @@
 
       // Sesion individual larga: renovar el idToken antes de las operaciones REST
       // para no fichar con un token vencido (evita 401 y perdida de la fichada).
-      const tokenFresco = await refrescarTokenVigilador();
+      // Se renueva con LIMITE DE TIEMPO: si la renovacion se cuelga (red lenta),
+      // no bloquea el fichaje -> seguimos con el token vigente en memoria.
+      let tokenFresco = null;
+      try {
+        tokenFresco = await Promise.race([
+          refrescarTokenVigilador(),
+          new Promise(res => setTimeout(() => res(null), 8000))
+        ]);
+      } catch (_) { tokenFresco = null; }
       if (tokenFresco) idTokenVig = tokenFresco;
 
       // VALIDACION DE HORA POR SERVIDOR: con el token recien renovado ya tenemos la
@@ -1338,6 +1346,14 @@
         // Fichaje AUTORITATIVO: primero el Worker (valida objetivo + GPS del lado
         // servidor); si el Worker no esta disponible, cae al guardado directo/offline.
         guardarFichadaOnline(datos, tipo, legajo, divResultado);
+      }).catch(err => {
+        // Si la verificacion de duplicados falla de forma inesperada, NO dejamos
+        // la fichada congelada: se intenta guardar igual (el Worker es la barrera
+        // real de validacion) para que el proceso siempre avance.
+        console.warn('No se pudo verificar duplicados; se continua con el guardado:', err);
+        divResultado.className = "p-3 rounded-xl text-xs text-center bg-slate-700 text-white";
+        divResultado.innerText = "Registrando fichada...";
+        guardarFichadaOnline(datos, tipo, legajo, divResultado);
       });
     }
 
@@ -1352,14 +1368,25 @@
     //     guardado directo a RTDB / cola offline previa, para no romper el
     //     fichaje si el Worker esta caido.
     // ===================================================================
+    // Envuelve fetch con un LIMITE DE TIEMPO (AbortController). Si el Worker no
+    // responde dentro de 'ms', se aborta y la promesa RECHAZA en vez de quedar
+    // colgada para siempre. Asi la fichada nunca se queda congelada esperando al
+    // Worker: el llamador cae a su respaldo (guardado directo / cola offline).
+    function fetchConLimite(url, opciones, ms) {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), ms || 20000);
+      return fetch(url, Object.assign({}, opciones, { signal: ctrl.signal }))
+        .finally(() => clearTimeout(t));
+    }
+
     async function guardarFichadaOnline(datos, tipo, legajo, divResultado) {
       if (URL_WORKER_FICHAJE && idTokenVig) {
         try {
-          const resp = await fetch(URL_WORKER_FICHAJE, {
+          const resp = await fetchConLimite(URL_WORKER_FICHAJE, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ accion: 'fichar', idToken: idTokenVig, fichada: datos })
-          });
+          }, 20000);
           let data = {};
           try { data = await resp.json(); } catch (_) {}
           if (resp.ok && data && data.ok) {
@@ -1508,11 +1535,11 @@
       try { const tk = await refrescarTokenVigilador(); if (tk) idTokenVig = tk; } catch (_) {}
 
       try {
-        const resp = await fetch(URL_WORKER_FICHAJE, {
+        const resp = await fetchConLimite(URL_WORKER_FICHAJE, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ accion: 'fichar', idToken: idTokenVig, fichada: Object.assign({}, datos, { sincronizadoDesdeOffline: true }) })
-        });
+        }, 20000);
         let data = {};
         try { data = await resp.json(); } catch (_) {}
 
