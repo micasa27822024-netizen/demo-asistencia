@@ -1480,15 +1480,16 @@
       iniciarCamaraSegura();
     }
 
-    function sincronizarFichadasPendientes() {
+    async function sincronizarFichadasPendientes() {
       if (estaSincronizando) return; 
       if (!navigator.onLine) return;
-      // Seguridad ENFORCED server-side: las Reglas atan newData.legajo al legajo
-      // del uid autenticado. Por eso SOLO se puede sincronizar CON una sesion
-      // activa y SOLO las fichadas del propio legajo logueado; una fichada de
-      // otro legajo seria rechazada por las Reglas, asi que se conserva en la
-      // cola hasta que su verdadero dueno inicie sesion en este dispositivo.
+      // Seguridad ENFORCED server-side: la fichada se persiste EXCLUSIVAMENTE via
+      // Worker (accion 'fichar' con service account), que revalida objetivo + GPS.
+      // Tras el lockdown SA-only de las Reglas, el PUT directo del cliente queda
+      // rechazado; por eso la cola offline TAMBIEN sincroniza por el Worker.
+      // Solo se sincroniza con sesion activa y solo las fichadas del propio legajo.
       if (!idTokenVig || !legajoSesion) return;
+      if (!URL_WORKER_FICHAJE) return; // sin Worker no hay via autoritativa: se conserva la cola
       let pendientes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
       if (pendientes.length === 0) return;
 
@@ -1503,33 +1504,56 @@
       // (sin fichadaId), le asignamos uno ahora para poder guardarla idempotente.
       if (!datos.fichadaId) datos.fichadaId = generarIdFichada();
 
-      fetch(urlAuth(`${URL_FIREBASE}/fichadas/${datos.fichadaId}.json`), {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(Object.assign({}, datos, { timestampServidor: { ".sv": "timestamp" }, sincronizadoDesdeOffline: true }))
-      })
-      .then(res => {
-        // Si el servidor RECHAZA (p. ej. permiso denegado por legajo), NO se
-        // debe dar por sincronizada: se lanza para devolverla a la cola.
-        if (!res.ok) throw new Error('Firebase rechazo la fichada pendiente (HTTP ' + res.status + ').');
-        return res.json();
-      })
-      .then(respuesta => {
-        estaSincronizando = false;
-        console.log("🔄 Fichada pendiente sincronizada con Firebase.");
-        
-        const restantes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
-        if (restantes.some(f => f && mismoLegajo(f.legajo, legajoSesion))) {
-          sincronizarFichadasPendientes();
+      // Renovar el idToken antes de sincronizar: la sesion puede llevar rato abierta.
+      try { const tk = await refrescarTokenVigilador(); if (tk) idTokenVig = tk; } catch (_) {}
+
+      try {
+        const resp = await fetch(URL_WORKER_FICHAJE, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accion: 'fichar', idToken: idTokenVig, fichada: Object.assign({}, datos, { sincronizadoDesdeOffline: true }) })
+        });
+        let data = {};
+        try { data = await resp.json(); } catch (_) {}
+
+        if (resp.ok && data && data.ok) {
+          // Sincronizada y VALIDADA por el servidor: no vuelve a la cola.
+          estaSincronizando = false;
+          console.log("🔄 Fichada pendiente sincronizada y validada por el servidor.");
+          const restantes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
+          if (restantes.some(f => f && mismoLegajo(f.legajo, legajoSesion))) sincronizarFichadasPendientes();
+          return;
         }
-      })
-      .catch(err => {
-        console.error("Error al sincronizar fichada pendiente, devolviéndola a la cola...", err);
+
+        // Rechazo de VALIDACION (no de red): la fichada offline es invalida
+        // (fuera de radio, objetivo no autorizado, datos incompletos). No puede
+        // sincronizar nunca; se retira de la cola y se ARCHIVA como rechazada
+        // (localStorage 'fichadas_rechazadas') para auditoria: NO se descarta en
+        // silencio ni se reintenta en bucle.
+        if (resp.status === 403 || resp.status === 422 || (data && data.bloqueado)) {
+          estaSincronizando = false;
+          const rechazadas = JSON.parse(localStorage.getItem('fichadas_rechazadas') || '[]');
+          rechazadas.push(Object.assign({}, datos, {
+            motivoRechazo: (data && data.error) || 'validacion del servidor fallida',
+            distanciaMetros: (data && data.distanciaMetros != null) ? data.distanciaMetros : null,
+            rechazadaEn: new Date().toISOString()
+          }));
+          localStorage.setItem('fichadas_rechazadas', JSON.stringify(rechazadas));
+          console.warn("⛔ Fichada pendiente RECHAZADA por el servidor y archivada:", (data && data.error));
+          const restantes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
+          if (restantes.some(f => f && mismoLegajo(f.legajo, legajoSesion))) sincronizarFichadasPendientes();
+          return;
+        }
+
+        // Otro estado (500/502/red): reintentar luego -> vuelve a la cola.
+        throw new Error('Worker respondio ' + resp.status);
+      } catch (err) {
+        console.error("Error al sincronizar fichada pendiente via Worker, devolviéndola a la cola...", err);
         let actualizadas = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
         actualizadas.unshift(datos);
         localStorage.setItem('fichadas_pendientes', JSON.stringify(actualizadas));
         estaSincronizando = false;
-      });
+      }
     }
   </script>
 
