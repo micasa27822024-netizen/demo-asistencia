@@ -244,14 +244,11 @@
     // el indice .indexOn: ["legajo"] sobre /personal y /fichadas.
     async function fetchScoped(path, legajo) {
       const base = `${URL_FIREBASE}/${path}.json?orderBy=${encodeURIComponent('"legajo"')}`;
-      let r = await fetch(urlAuth(base + '&equalTo=' + encodeURIComponent('"' + legajo + '"')), { cache: 'no-store' }).then(x => x.json()).catch(() => null);
-      if (r && Object.keys(r).length) return r;
-      const n = Number(legajo);
-      if (Number.isFinite(n)) {
-        const r2 = await fetch(urlAuth(base + '&equalTo=' + n), { cache: 'no-store' }).then(x => x.json()).catch(() => null);
-        if (r2 && Object.keys(r2).length) return r2;
-      }
-      return r || null;
+      // El legajo es SIEMPRE string (tambien en las Reglas): no hay variante numerica,
+      // las Reglas la deniegan. Una respuesta {error:...} no es dato: se descarta.
+      const r = await fetch(urlAuth(base + '&equalTo=' + encodeURIComponent('"' + String(legajo).trim() + '"')), { cache: 'no-store' }).then(x => x.json()).catch(() => null);
+      if (r && typeof r === 'object' && !r.error && Object.keys(r).length) return r;
+      return null;
     }
 
     function reiniciarInactividad() {
@@ -482,8 +479,12 @@
     async function obtenerTurnoProgramadoParaFecha(legajo, fecha) {
       if (!navigator.onLine) return null;
       try {
-        const res=await fetch(urlAuth(`${URL_FIREBASE}/asignacionesTurnos.json?ts=${Date.now()}`),{cache:'no-store'}); const data=await res.json();
-        if(!data)return null;
+        // Consulta ACOTADA por legajo (string): las Reglas solo permiten al vigilador leer su propio legajo.
+        const legajoQ=String((typeof legajoSesion!=='undefined'&&legajoSesion)?legajoSesion:legajo).trim();
+        const res=await fetch(urlAuth(`${URL_FIREBASE}/asignacionesTurnos.json?orderBy=%22legajo%22&equalTo=%22${encodeURIComponent(legajoQ)}%22&ts=${Date.now()}`),{cache:'no-store'});
+        if(!res.ok)return null;
+        const data=await res.json();
+        if(!data||data.error)return null;
         const lista=Object.entries(data).map(([id,d])=>({...d,id})).filter(d=>mismoLegajo(d.legajo, legajo) && String(d.fecha||'')===String(fecha));
         lista.sort((a,b)=>String(b.actualizadoEn||'').localeCompare(String(a.actualizadoEn||'')));
         return lista[0]||null;
@@ -1225,7 +1226,8 @@
         // sola vez acá y se reutiliza en cada reintento de guardado/sincronización,
         // por lo que nunca se crea un duplicado (se guarda con PUT sobre esta clave).
         fichadaId: generarIdFichada(),
-        legajo: legajo,
+        // Legajo de la sesion autenticada (string): las Reglas exigen que coincida con /usuarios/<uid>/legajo.
+        legajo: String((typeof legajoSesion !== 'undefined' && legajoSesion) ? legajoSesion : legajo).trim(),
         // El PIN ya se validó antes de fichar (Firebase Auth / hash con salt), así que
         // NO se guarda dentro de la fichada: evitamos exponer PIN en /fichadas.
         nombre: nombre || ("Legajo " + legajo),

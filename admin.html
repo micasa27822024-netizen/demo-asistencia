@@ -720,7 +720,7 @@
           <i class="fa-solid fa-circle-check"></i> Aprobar / Descartar Sospecha (Validar Marcación)
         </button>
         <button onclick="eliminarFraudeMarca()" class="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-md">
-          <i class="fa-solid fa-ban"></i> Rechazar y Eliminar Fichada por Suplantación
+          <i class="fa-solid fa-ban"></i> Rechazar y ANULAR Fichada por Suplantación
         </button>
         <button onclick="verAuditoriaDesdeAccion()" class="w-full bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold py-2 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2">
           <i class="fa-solid fa-brain text-amber-400"></i> Ver Evidencia Comparativa
@@ -975,6 +975,12 @@
         if (!resAud.ok) throw new Error('Firebase rechazo el evento de auditoria (HTTP ' + resAud.status + ').');
       } catch (err) {
         console.warn('No se pudo registrar el evento de auditoría:', err);
+        // Aviso visible, como maximo 1 vez por minuto, sin interrumpir la operacion en curso.
+        const ahoraAud = Date.now();
+        if (!window.__ultimoAvisoAuditoria || ahoraAud - window.__ultimoAvisoAuditoria > 60000) {
+          window.__ultimoAvisoAuditoria = ahoraAud;
+          setTimeout(() => alert('⚠️ La acción se realizó, pero NO quedó registrada en la auditoría. Avisá al responsable técnico.'), 0);
+        }
       }
     }
 
@@ -1679,6 +1685,9 @@
           Object.keys(dataMarcaciones).forEach(id => {
             const d = dataMarcaciones[id];
             if (d) {
+              // Fichada ANULADA: se conserva en la base como evidencia, pero NO se
+              // muestra en la tabla ni se contabiliza en horas/alertas/reportes.
+              if (d.anulada === true) return;
               // Hora OFICIAL para tabla y alertas de cumplimiento (notificarAlertasCumplimiento):
               // sello del servidor Firebase (d.timestamp, .sv=timestamp, NO manipulable) primero;
               // el reloj del dispositivo queda SOLO como fallback para fichadas antiguas sin sello.
@@ -1739,6 +1748,8 @@
           Object.keys(dataPanicos).forEach(id => {
             const d = dataPanicos[id];
             if (d) {
+              // Panico ANULADO: se conserva en la base como evidencia, pero NO se muestra.
+              if (d.anulado === true) return;
               // Priorizamos el sello de servidor (timestampServidor, .sv) por ser hora oficial
               // NO manipulable; luego fechaHora/timestamp enviados desde mis-horas como fallback.
               const rawFecha = d.timestampServidor || d.fechaHora || d.timestamp || d.fecha || '';
@@ -2004,16 +2015,33 @@
       const id = document.getElementById('fraudeFirebaseId').value;
       if (!id) return;
 
-      if (!confirm("¿Está seguro de que desea eliminar permanentemente esta marcación por considerar fraude de identidad?")) return;
+      // ANULACION LOGICA (no borra): la marcacion se conserva en la base como
+      // evidencia laboral y queda marcada como anulada, con motivo, quien y cuando.
+      // Deja de mostrarse en la tabla y de contar en reportes/horas/alertas.
+      const motivo = prompt("Motivo de la ANULACIÓN de esta marcación (queda registrado; la marcación NO se borra):", "Sospecha de fraude de identidad");
+      if (motivo === null) return; // el admin canceló
+      if (!confirm("Se ANULARÁ esta marcación: queda guardada como evidencia, marcada como anulada y sin contar en los reportes. ¿Confirmás?")) return;
 
       try {
-        await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/fichadas/${id}.json`), { method: "DELETE" });
-        registrarAuditoria('FICHADA_ELIMINADA', `fichadas/${id}`, { motivo: 'Eliminada por sospecha de fraude de identidad' });
-        alert("Marcación eliminada.");
+        const quien = sessionStorage.getItem('email_admin') || sessionStorage.getItem('uid_admin') || 'admin';
+        const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/fichadas/${id}.json`), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            anulada: true,
+            motivoAnulacion: motivo || 'Sospecha de fraude de identidad',
+            anuladaPor: quien,
+            fechaAnulacion: new Date().toISOString(),
+            timestampAnulacion: { ".sv": "timestamp" }
+          })
+        });
+        if (!res.ok) throw new Error('el servidor rechazó la anulación (HTTP ' + res.status + ').');
+        registrarAuditoria('FICHADA_ANULADA', `fichadas/${id}`, { motivo: motivo || 'Sospecha de fraude de identidad', anuladaPor: quien });
+        alert("Marcación anulada. Queda guardada como evidencia y no se contabiliza en los reportes.");
         cerrarModalAccionFraude();
         recargarDatosEfectivo();
       } catch (e) {
-        alert("Error al eliminar la marcación: " + e.toString());
+        alert("Error al anular la marcación: " + e.toString());
       }
     }
 
@@ -2165,7 +2193,7 @@
           <td class="p-4 text-center">${btnMapa}</td>
           <td class="p-4 text-center">
             <button onclick="eliminarPanico('${id}')" class="bg-rose-600/20 text-rose-400 hover:bg-rose-600/40 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1">
-              <i class="fa-solid fa-trash"></i> Borrar
+              <i class="fa-solid fa-ban"></i> Anular
             </button>
           </td>
         `;
@@ -2174,14 +2202,30 @@
     }
 
     async function eliminarPanico(id) {
-      if (!confirm("¿Está seguro de que desea eliminar este registro de pánico?")) return;
+      // ANULACION LOGICA (no borra): el panico se conserva en la base como
+      // evidencia y queda marcado como anulado, con motivo, quien y cuando.
+      const motivo = prompt("Motivo de la ANULACIÓN de este pánico (queda registrado; el registro NO se borra):", "");
+      if (motivo === null) return; // el admin canceló
+      if (!confirm("Se ANULARÁ este registro de pánico: queda guardado como evidencia y marcado como anulado. ¿Confirmás?")) return;
       try {
-        await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/panicos/${id}.json`), { method: "DELETE" });
-        registrarAuditoria('PANICO_ELIMINADO', `panicos/${id}`, {});
-        alert("Registro de pánico eliminado.");
+        const quien = sessionStorage.getItem('email_admin') || sessionStorage.getItem('uid_admin') || 'admin';
+        const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/panicos/${id}.json`), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            anulado: true,
+            motivoAnulacion: motivo || '',
+            anuladoPor: quien,
+            fechaAnulacion: new Date().toISOString(),
+            timestampAnulacion: { ".sv": "timestamp" }
+          })
+        });
+        if (!res.ok) throw new Error('el servidor rechazó la anulación (HTTP ' + res.status + ').');
+        registrarAuditoria('PANICO_ANULADO', `panicos/${id}`, { motivo: motivo || '', anuladoPor: quien });
+        alert("Registro de pánico anulado. Queda guardado como evidencia.");
         recargarDatosEfectivo();
       } catch (e) {
-        alert("Error al eliminar el registro: " + e.toString());
+        alert("Error al anular el registro: " + e.toString());
       }
     }
 
