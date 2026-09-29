@@ -857,8 +857,8 @@
         // reservado al rol admin (ademas de estar bloqueado por las Reglas de Firebase).
         const esAdminPanel = sessionStorage.getItem('rol_supervisor') === 'admin';
         const btnBorrar = (firebaseKey && esAdminPanel)
-          ? `<button onclick="eliminarFichadaFirebase('${firebaseKey}')" class="bg-rose-600/20 hover:bg-rose-600/40 text-rose-400 border border-rose-500/30 px-2.5 py-1 rounded-lg text-xs font-semibold transition" title="Eliminar registro">
-              <i class="fa-solid fa-trash-can"></i>
+          ? `<button onclick="eliminarFichadaFirebase('${firebaseKey}')" class="bg-rose-600/20 hover:bg-rose-600/40 text-rose-400 border border-rose-500/30 px-2.5 py-1 rounded-lg text-xs font-semibold transition" title="Anular registro (se conserva como evidencia)">
+              <i class="fa-solid fa-ban"></i>
              </button>`
           : `<span class="text-[10px] text-slate-500">-</span>`;
 
@@ -881,28 +881,41 @@
       });
     }
 
+    // ANULACION LOGICA de fichada (NO borrado fisico). Antes esta funcion hacia un
+    // DELETE /fichadas/<id> que destruia la evidencia. Ahora llama al Worker
+    // autoritativo (accion 'anularFichada'), que valida el rol admin, marca la
+    // fichada como anulada=true con motivo/actor/fecha y deja registro en /auditoria.
+    // La fichada se conserva siempre como evidencia laboral.
     async function eliminarFichadaFirebase(firebaseKey) {
-      // Solo el rol admin puede borrar (defensa en profundidad; las Reglas de
-      // Firebase tambien rechazan el borrado si el rol no es admin).
+      // Solo el rol admin puede anular (defensa en profundidad; el Worker tambien
+      // revalida el rol admin server-side).
       if (sessionStorage.getItem('rol_supervisor') !== 'admin') {
-        alert('Tu rol es de solo lectura. El borrado de fichadas está reservado al administrador.');
+        alert('Tu rol es de solo lectura. La anulación de fichadas está reservada al administrador.');
         return;
       }
-      if (!confirm("¿Estás seguro de que deseas eliminar este registro de fichada?")) return;
+      const motivo = prompt('Motivo de la ANULACIÓN (la fichada NO se borra: queda guardada como evidencia, marcada como anulada y sin contar en los reportes):', '');
+      if (motivo === null) return; // cancelado
 
+      const URL_WORKER_ANULAR = 'https://vigix-auth-admin.micasa27822024.workers.dev/';
       try {
-        const urlDelete = `https://fir-asistencia-fad12-default-rtdb.firebaseio.com/fichadas/${firebaseKey}.json`;
-        const respuesta = await fetch(await window.urlConAuthPanel(urlDelete), { method: 'DELETE' });
-
-        if (respuesta.ok) {
-          alert("Registro eliminado con éxito.");
-          cargarDatos(); 
+        const idToken = await window.obtenerTokenSupervisor();
+        if (!idToken) { alert('Tu sesión expiró. Volvé a iniciar sesión e intentalo de nuevo.'); return; }
+        const resp = await fetch(URL_WORKER_ANULAR, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken, accion: 'anularFichada', fichadaId: firebaseKey, motivo: (motivo || '').trim() })
+        });
+        let data = {};
+        try { data = await resp.json(); } catch (_) {}
+        if (resp.ok && data && data.ok) {
+          alert('Fichada anulada. Queda guardada como evidencia y no se contabiliza en los reportes.');
+          cargarDatos();
         } else {
-          alert("No se pudo eliminar el registro en Firebase.");
+          alert('No se pudo anular la fichada: ' + ((data && data.error) || ('HTTP ' + resp.status)) + '.\n\nVerificá que el Worker esté desplegado y actualizado.');
         }
       } catch (err) {
         console.error(err);
-        alert("Ocurrió un error al intentar eliminar.");
+        alert('Ocurrió un error al intentar anular la fichada. Revisá tu conexión.');
       }
     }
 
