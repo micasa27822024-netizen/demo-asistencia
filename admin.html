@@ -2227,6 +2227,19 @@
         return coincideBusqueda && coincideTipo && coincideAuditoria;
       });
 
+      // Orden REAL por fecha/hora (mas reciente primero) EN EL ORIGEN, para que la
+      // tabla en pantalla Y los reportes detallados (Excel/PDF, que recorren esta
+      // misma lista) queden siempre en el mismo orden cronologico. Antes el orden
+      // dependia de las claves internas de Firebase, por eso una fichada podia
+      // aparecer fuera de lugar. Las filas sin fecha valida quedan al final.
+      datosFiltradosMarcaciones.sort((a, b) => {
+        const ta = a && a[0] ? new Date(a[0]).getTime() : NaN;
+        const tb = b && b[0] ? new Date(b[0]).getTime() : NaN;
+        const va = Number.isFinite(ta) ? ta : -Infinity;
+        const vb = Number.isFinite(tb) ? tb : -Infinity;
+        return vb - va;
+      });
+
       paginaActualMarcaciones = 1;
       renderizarTablaMarcaciones(datosFiltradosMarcaciones);
     }

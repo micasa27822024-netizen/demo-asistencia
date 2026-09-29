@@ -929,6 +929,19 @@
         return coincideBusqueda && coincideTipo && coincideFecha;
       });
 
+      // Orden REAL por fecha/hora (mas reciente primero) EN EL ORIGEN, para que la
+      // tabla en pantalla Y los reportes detallados (Excel/PDF que recorren esta
+      // misma lista) queden siempre en el mismo orden cronologico. Antes el orden
+      // dependia de las claves internas de Firebase. Las filas sin fecha valida
+      // quedan al final.
+      datosFiltradosActuales.sort((a, b) => {
+        const ta = a && a[0] ? new Date(a[0]).getTime() : NaN;
+        const tb = b && b[0] ? new Date(b[0]).getTime() : NaN;
+        const va = Number.isFinite(ta) ? ta : -Infinity;
+        const vb = Number.isFinite(tb) ? tb : -Infinity;
+        return vb - va;
+      });
+
       renderizarTabla(datosFiltradosActuales);
       // Los KPI representan el estado GENERAL (dataset completo), no el subconjunto
       // filtrado. Asi los indicadores no cambian al aplicar busqueda/fecha/tipo.
