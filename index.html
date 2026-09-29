@@ -917,19 +917,56 @@
       return `${y}-${m}-${day}`;
     }
 
+    // --- Caché local de turnos asignados (para resolver el turno del día SIN
+    //     conexión). Se refresca en cada consulta online y se lee cuando no hay
+    //     internet. Gracias a esto, un vigilador que SOLO tiene turnos asignados
+    //     —sin horario habitual— también puede fichar offline: antes el turno del
+    //     día requería red y, al no resolverse, la fichada quedaba bloqueada.
+    //     No guarda datos sensibles: solo la grilla de turnos del propio legajo. ---
+    const LS_TURNOS_CACHE = 'vigix_turnos_cache';   // { <legajo>: { guardadoEn, asignaciones:[...] } }
+    function _guardarTurnosCache(legajo, asignaciones) {
+      try {
+        const all = JSON.parse(localStorage.getItem(LS_TURNOS_CACHE) || '{}') || {};
+        all[String(legajo).trim()] = { guardadoEn: new Date().toISOString(), asignaciones: Array.isArray(asignaciones) ? asignaciones : [] };
+        localStorage.setItem(LS_TURNOS_CACHE, JSON.stringify(all));
+      } catch (_) {}
+    }
+    function _leerTurnosCache(legajo) {
+      try {
+        const all = JSON.parse(localStorage.getItem(LS_TURNOS_CACHE) || '{}') || {};
+        const reg = all[String(legajo).trim()];
+        return (reg && Array.isArray(reg.asignaciones)) ? reg.asignaciones : [];
+      } catch (_) { return []; }
+    }
+    // Resuelve el turno de una fecha desde la caché local (usado offline o cuando
+    // la consulta online falla puntualmente).
+    function _resolverTurnoDesdeCache(legajo, fecha) {
+      const lista = _leerTurnosCache(legajo).filter(d => mismoLegajo(d.legajo, legajo) && String(d.fecha||'')===String(fecha));
+      lista.sort((a,b)=>String(b.actualizadoEn||'').localeCompare(String(a.actualizadoEn||'')));
+      return lista[0] || null;
+    }
+
     async function obtenerTurnoProgramadoParaFecha(legajo, fecha) {
-      if (!navigator.onLine) return null;
+      // SIN conexión: resolvemos el turno del día desde la caché local (se
+      // refresca en cada consulta online). Esto habilita el fichaje offline al
+      // vigilador que solo tiene turnos asignados y no horario habitual.
+      if (!navigator.onLine) return _resolverTurnoDesdeCache(legajo, fecha);
       try {
         // Consulta ACOTADA por legajo (string): las Reglas solo permiten al vigilador leer su propio legajo.
         const legajoQ=String((typeof legajoSesion!=='undefined'&&legajoSesion)?legajoSesion:legajo).trim();
         const res=await fetch(await urlAuthFresca(`${URL_FIREBASE}/asignacionesTurnos.json?orderBy=%22legajo%22&equalTo=%22${encodeURIComponent(legajoQ)}%22&ts=${Date.now()}`),{cache:'no-store'});
-        if(!res.ok)return null;
+        if(!res.ok)return _resolverTurnoDesdeCache(legajo, fecha);   // fallo de red puntual: caemos a la caché
         const data=await res.json();
-        if(!data||data.error)return null;
-        const lista=Object.entries(data).map(([id,d])=>({...d,id})).filter(d=>mismoLegajo(d.legajo, legajo) && String(d.fecha||'')===String(fecha));
+        if(!data||data.error)return _resolverTurnoDesdeCache(legajo, fecha);
+        // Cacheamos TODAS las asignaciones del legajo (no solo las de hoy) para que
+        // offline pueda resolverse cualquier fecha, incluidos turnos nocturnos que
+        // cruzan la medianoche.
+        const todas=Object.entries(data).map(([id,d])=>({...d,id})).filter(d=>mismoLegajo(d.legajo, legajo));
+        _guardarTurnosCache(legajo, todas);
+        const lista=todas.filter(d=>String(d.fecha||'')===String(fecha));
         lista.sort((a,b)=>String(b.actualizadoEn||'').localeCompare(String(a.actualizadoEn||'')));
         return lista[0]||null;
-      }catch(e){console.warn('No se pudo obtener la asignación del turno:',e);return null;}
+      }catch(e){console.warn('No se pudo obtener la asignación del turno:',e);return _resolverTurnoDesdeCache(legajo, fecha);}
     }
 
     async function aplicarConfiguracionVigilador(personal) {
@@ -951,7 +988,11 @@
         objetivoAutorizadoIdsGlobal = permitidos.map(x=>x.id);
       }
       const select=document.getElementById('objetivo'); select.innerHTML='<option value="">Seleccione su puesto asignado</option>';
-      permitidos.forEach(o=>select.insertAdjacentHTML('beforeend',`<option value="${String(o.nombre||'').replace(/"/g,'&quot;')}" data-objetivo-id="${String(o.id||'')}">${String(o.nombre||o.id||'')}</option>`));
+      // Anti-XSS: el nombre del objetivo viene de la base de datos (lo configura el
+      // admin). Se escapa antes de insertarlo como HTML para que un nombre con
+      // caracteres como < > " no pueda inyectar codigo en la pagina del vigilador.
+      const escHtmlObj = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+      permitidos.forEach(o=>select.insertAdjacentHTML('beforeend',`<option value="${escHtmlObj(o.nombre||'')}" data-objetivo-id="${escHtmlObj(o.id||'')}">${escHtmlObj(o.nombre||o.id||'')}</option>`));
       const objStatus=document.getElementById('objetivo-status'); const turnoStatus=document.getElementById('turno-status');
       objStatus.className='text-[11px] mt-1 text-slate-500'; objStatus.innerText=permitidos.length ? `✓ ${permitidos.length} objetivo(s) autorizado(s) para este vigilador.` : '⚠️ No tiene objetivos autorizados. Debe configurarlos el administrador.';
       turnoStatus.classList.remove('hidden'); turnoStatus.className='text-[11px] mt-1 '+(turnoProgramadoGlobal?'text-sky-300':'text-slate-400');
@@ -1752,7 +1793,9 @@
         // Respaldo de integridad: si la ENTRADA no dejó guardado su horario, lo
         // resolvemos por la FECHA en que se abrió esa entrada (no por la fecha de
         // hoy), para que el turno nocturno quede íntegro en el registro de la SALIDA.
-        if ((!datos.horarioProgramadoInicio || !datos.horarioProgramadoFin) && ultimaEntradaActivaGlobal.fechaHoraDispositivo && navigator.onLine) {
+        // Funciona también SIN conexión: obtenerTurnoProgramadoParaFecha lee la
+        // caché local de turnos, así el turno nocturno offline queda completo.
+        if ((!datos.horarioProgramadoInicio || !datos.horarioProgramadoFin) && ultimaEntradaActivaGlobal.fechaHoraDispositivo) {
           try {
             const fEntrada = new Date(ultimaEntradaActivaGlobal.fechaHoraDispositivo);
             const claveEntrada = `${fEntrada.getFullYear()}-${String(fEntrada.getMonth()+1).padStart(2,'0')}-${String(fEntrada.getDate()).padStart(2,'0')}`;
@@ -1969,11 +2012,16 @@
         }
       }
 
-      // 🛡️ SEGURIDAD ANTI-TRAMPA: Fuerza la alerta si se fichó sin cotejo de Foto Master
+      // Fichada sin cotejo de identidad en el momento (tipico caso offline: no
+      // hubo servidor para verificar el rostro). NO es fraude: se marca como
+      // PENDIENTE DE VERIFICACION para que RRHH la revise con criterio, sin
+      // acusar al vigilador. La alerta de fraude REAL (rostro sospechoso o foto
+      // de pantalla detectada por el analisis local) se conserva aparte en
+      // datos.alertaFraude y NO se pisa aqui.
       if (resultadoSimilitudGlobal === "SIN_MASTER" || resultadoSimilitudGlobal === "IA_NO_DISPONIBLE" || resultadoSimilitudGlobal === "NO_EVALUADO") {
-        datos.alertaFraude = true;
-        datos.motivoFraude = "⚠️ Fichada Offline: Requiere revisión manual (Rostro no cotejado en servidor)";
-        datos.validacionFacial = "OFFLINE_AUDITORIA_REQUERIDA";
+        datos.requiereRevisionManual = true;
+        datos.motivoRevision = "Fichada registrada sin conexión: la identidad no pudo verificarse en el momento y queda pendiente de revisión.";
+        datos.validacionFacial = "OFFLINE_PENDIENTE_VERIFICACION";
       }
 
       // Fase 2: marca de origen. Solo las creadas REALMENTE sin conexion viajan por
@@ -1989,7 +2037,7 @@
       ultimoTipoFichadaGlobal = tipo;
       const divResultado = document.getElementById('resultado');
       divResultado.className = "p-3 rounded-xl text-xs text-center bg-amber-950 text-amber-200 border border-amber-500";
-      divResultado.innerText = `⚠️ Registrada Offline. Al no haber conexión para verificar tu identidad, esta fichada requerirá REVISIÓN MANUAL por RRHH.`;
+      divResultado.innerText = `✅ Fichada de ${tipo} registrada sin conexión. Se sincronizará automáticamente al recuperar internet y quedará pendiente de verificación por RRHH.`;
 
       limpiarFormularioExitoso();
       finalizarSesionTrasFichada();
