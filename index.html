@@ -461,11 +461,17 @@
 
     // --- Credencial de login OFFLINE (hash PBKDF2 del PIN + snapshot del vigilador) ---
     function _leerCredsOffline() { try { return JSON.parse(localStorage.getItem(LS_CRED_OFFLINE) || '{}') || {}; } catch (_) { return {}; } }
-    // Se llama tras un login ONLINE exitoso (solo si offline esta habilitado). Guarda
-    // el hash del PIN (nunca el PIN) y una copia de la config del vigilador para poder
-    // operar sin red mas tarde.
+    // Se llama tras un login ONLINE exitoso. Guarda el hash del PIN (nunca el PIN)
+    // y una copia de la config del vigilador para poder operar sin red mas tarde.
+    // Se cachea si el modo offline esta habilitado globalmente O si este telefono
+    // ya fue VINCULADO por el admin (provisionado para offline). Vincular el
+    // dispositivo es en si mismo el opt-in explicito del administrador para ESTE
+    // telefono, asi que no dependemos de que el flag global se haya leido justo a
+    // tiempo en este login (antes, esa dependencia hacia que el offline fallara
+    // en silencio y hubiera que loguearse online dos veces). El servidor igual
+    // revalida el lote al sincronizar, por lo que cachear el hash local es seguro.
     async function cachearCredencialOffline(legajo, pin, uid, nombre, personal, fotoMaster) {
-      if (!offlineHabilitadoLocal()) return;
+      if (!offlineHabilitadoLocal() && !obtenerCredencialDispositivo()) return;
       if (!(self.crypto && crypto.subtle)) return;
       try {
         const salt = crypto.getRandomValues(new Uint8Array(16));
@@ -499,7 +505,12 @@
       const cred = await verificarCredencialOffline(legajo, pin);
       if (!cred) {
         st.className = 'text-xs mt-1 text-center text-rose-400 block';
-        if (!offlineHabilitadoLocal()) {
+        if (obtenerCredencialDispositivo()) {
+          // El dispositivo YA esta vinculado: no es un problema de registro. Falta
+          // el paso de guardar el acceso del vigilador, que ocurre en el primer
+          // login ONLINE en este mismo telefono despues de activar el modo offline.
+          st.innerText = 'Este teléfono ya está vinculado, pero todavía no guardó tu acceso para fichar sin conexión. Con internet, iniciá sesión una vez con tu legajo y PIN en este mismo teléfono; después vas a poder fichar offline.';
+        } else if (!offlineHabilitadoLocal()) {
           // Ni credencial ni modo offline habilitado: guia clara para el usuario.
           st.innerText = 'Sin conexión: este teléfono todavía no está habilitado para uso offline. Pedile al administrador que active el modo offline y, con internet, iniciá sesión una vez en este mismo teléfono.';
         } else {
