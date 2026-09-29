@@ -324,6 +324,22 @@
       try { localStorage.setItem(LS_OFFLINE_CFG, JSON.stringify({ offlineHabilitado: !!(cfg && cfg.offlineHabilitado === true), ventanaLoteOfflineHoras: Number(cfg && cfg.ventanaLoteOfflineHoras) || 168 })); } catch (_) {}
     }
 
+    // Lee /configuracionGlobal AHORA (con conexion) y persiste el flag offline de
+    // forma AWAITABLE. Se usa en el login online para GARANTIZAR que el flag este
+    // cacheado ANTES de cachear la credencial offline. Sin esto habia una carrera:
+    // cargarObjetivos() persiste el flag en un fetch aparte sin await, por lo que
+    // en el PRIMER login el flag podia no estar seteado todavia cuando se intentaba
+    // cachear la credencial -> la credencial NO se guardaba y el login offline
+    // quedaba bloqueado hasta un segundo login online.
+    async function asegurarOfflineCfg() {
+      if (!navigator.onLine) return;
+      try {
+        const res = await fetch(urlAuth(`${URL_FIREBASE}/configuracionGlobal.json?ts=${Date.now()}`), { cache: 'no-store' });
+        const cfg = await res.json();
+        guardarOfflineCfg(cfg);
+      } catch (_) {}
+    }
+
     // --- Utilidades cripto (WebCrypto) ---
     function _b64FromBytes(bytes) { let s = ''; for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]); return btoa(s); }
     function _bytesFromB64(b64) { const s = atob(String(b64 || '')); const a = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); return a; }
@@ -420,15 +436,19 @@
 
     // --- Login OFFLINE (sin idToken; identidad probada por hash local del PIN) ---
     async function iniciarSesionOffline(legajo, pin, st, btn) {
-      if (!offlineHabilitadoLocal()) {
-        st.className = 'text-xs mt-1 text-center text-rose-400 block';
-        st.innerText = 'Sin conexión: no se puede iniciar sesión de forma segura.';
-        if (btn) btn.disabled = false; return;
-      }
+      // La credencial cacheada SOLO se guarda cuando el modo offline estaba
+      // habilitado en el momento del login online. Por eso, si existe una
+      // credencial valida para este legajo/PIN, el ingreso offline es seguro
+      // aunque el flag local se haya perdido. Verificamos la credencial primero.
       const cred = await verificarCredencialOffline(legajo, pin);
       if (!cred) {
         st.className = 'text-xs mt-1 text-center text-rose-400 block';
-        st.innerText = 'Sin conexión: legajo/PIN no verificados en este dispositivo. Iniciá sesión online al menos una vez.';
+        if (!offlineHabilitadoLocal()) {
+          // Ni credencial ni modo offline habilitado: guia clara para el usuario.
+          st.innerText = 'Sin conexión: este teléfono todavía no está habilitado para uso offline. Pedile al administrador que active el modo offline y, con internet, iniciá sesión una vez en este mismo teléfono.';
+        } else {
+          st.innerText = 'Sin conexión: legajo/PIN no verificados en este dispositivo. Conectate a internet e iniciá sesión al menos una vez en este teléfono.';
+        }
         if (btn) btn.disabled = false; return;
       }
       // Sesion OFFLINE: NO hay idToken. La identidad se ata luego, al sincronizar,
@@ -617,6 +637,7 @@
         // Fase 2 (opt-in): si el modo offline esta habilitado, cacheamos en el
         // dispositivo el hash del PIN (PBKDF2+salt) y la config del vigilador para
         // permitir un login OFFLINE posterior. Nunca se guarda el PIN en claro.
+        try { await asegurarOfflineCfg(); } catch (_) {}
         try { await cachearCredencialOffline(legajoSesion, pin, uidSesion, (personalActualGlobal && personalActualGlobal.nombre) || document.getElementById('nombre').value, personalActualGlobal, fotoMasterGuardada); } catch (_) {}
         reiniciarInactividad();
         // Ya con sesion activa (idToken + legajo propio), intenta subir las

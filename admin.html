@@ -1469,11 +1469,23 @@
       sessionStorage.removeItem('rol_admin');
       sessionStorage.removeItem('uid_admin');
       sessionStorage.removeItem('email_admin');
-      if (typeof window.logoutAdminReal === 'function') { try { window.logoutAdminReal(); } catch (_) {} }
       if (intervaloPanicoPoll) clearInterval(intervaloPanicoPoll);
       if (intervaloAlertasFichadas) clearInterval(intervaloAlertasFichadas);
       detenerSonidoSirena();
-      location.reload();
+      // IMPORTANTE: esperamos a que Firebase cierre la sesion (signOut) ANTES de
+      // recargar. Si recargaramos antes de que termine, la sesion podria quedar
+      // a medio cerrar y el panel volveria a mostrarse (o quedaria en un estado
+      // roto que obligaba a borrar el historial para poder reingresar).
+      function finalizar() { location.reload(); }
+      if (typeof window.logoutAdminReal === 'function') {
+        try {
+          const p = window.logoutAdminReal();
+          if (p && typeof p.then === 'function') { p.then(finalizar).catch(finalizar); }
+          else { finalizar(); }
+        } catch (_) { finalizar(); }
+      } else {
+        finalizar();
+      }
     }
 
     function cambiarTab(tab) {
@@ -3662,7 +3674,7 @@
   <script type="module">
     // ---- Módulos requeridos desde la CDN de Firebase (v10.8.0) ----
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
     import { getDatabase, ref, set, get, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
     // ---- Configuración de tu proyecto Firebase ----
@@ -3681,6 +3693,12 @@
     const mainDb  = getDatabase(mainApp);
     const mainAuth = getAuth(mainApp);
 
+    // La sesion del admin NO debe sobrevivir al cierre de la pestana/navegador.
+    // Con persistencia de SESION (no local), al salir y volver a entrar el panel
+    // arranca limpio en la pantalla de login, sin quedar 'pegado' a una sesion
+    // vieja (esto evita tener que borrar el historial para poder reingresar).
+    try { setPersistence(mainAuth, browserSessionPersistence); } catch (_) {}
+
     /**
      * Login REAL de admin: valida credenciales en Firebase Auth
      * y lee el rol guardado en la base de datos: /usuarios/<uid>/rol.
@@ -3692,6 +3710,9 @@
         return { ok: false, mensaje: 'Ingresá el correo y la contraseña.' };
       }
       try {
+        // Aseguramos persistencia de SESION antes de autenticar, para que la
+        // credencial quede en sessionStorage (se limpia al cerrar) y no en local.
+        try { await setPersistence(mainAuth, browserSessionPersistence); } catch (_) {}
         const cred = await signInWithEmailAndPassword(mainAuth, email, password);
         const uid  = cred.user.uid;
 
