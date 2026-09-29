@@ -156,6 +156,31 @@
     // fichaje cae al guardado directo/offline previo (no se rompe nada).
     const URL_WORKER_FICHAJE = "https://vigix-auth-admin.micasa27822024.workers.dev/";
 
+    // --- VALIDACIÓN ESTRICTA DE URLs (defensa en profundidad, Punto 7) ---
+    // El idToken del vigilador viaja al Worker (en el body) y a la RTDB (?auth=).
+    // Una URL manipulada (host ajeno o http://) podría FILTRAR ese token. Antes de
+    // usar un endpoint sensible verificamos que sea https:// y que su host esté en
+    // la lista blanca de dominios de confianza del sistema.
+    const HOSTS_CONFIABLES = [
+      'fir-asistencia-fad12-default-rtdb.firebaseio.com',
+      'vigix-auth-admin.micasa27822024.workers.dev'
+    ];
+    function esEndpointConfiable(url) {
+      try {
+        const u = new URL(String(url));
+        if (u.protocol !== 'https:') return false;
+        return HOSTS_CONFIABLES.includes(u.hostname);
+      } catch (_) { return false; }
+    }
+    // Construye la URL de Google Maps SOLO con coordenadas numéricas válidas, para
+    // no inyectar texto arbitrario en el campo 'mapa' de la fichada. Si las
+    // coordenadas no son números finitos devuelve cadena vacía.
+    function urlMapaSegura(lat, lng) {
+      const la = Number(lat), lo = Number(lng);
+      if (!Number.isFinite(la) || !Number.isFinite(lo)) return '';
+      return `https://www.google.com/maps?q=${la},${lo}`;
+    }
+
     // Comparacion unificada de legajo (misma logica que mismoLegajoAdmin en
     // admin.html y mismoLegajoVig en mis-horas.html): normaliza con trim y, si
     // ambos son numericos, compara tambien por valor entero para tolerar ceros
@@ -212,7 +237,7 @@
     async function existeFichadaReciente(legajo, tipo) {
       try {
         const url = `${URL_FIREBASE}/fichadas.json?orderBy=%22legajo%22&equalTo=%22${encodeURIComponent(String(legajo))}%22`;
-        const res = await fetch(urlAuth(url), { cache: 'no-store' });
+        const res = await fetch(await urlAuthFresca(url), { cache: 'no-store' });
         if (!res.ok) return false;
         const data = await res.json();
         if (!data) return false;
@@ -489,9 +514,29 @@
     }
 
     // Agrega ?auth=<idToken> a una URL de la RTDB si hay sesion activa.
+    // Punto 7: NO adjunta el token si la URL no es HTTPS o su host no es de
+    // confianza (defensa contra filtrado del idToken a un endpoint manipulado).
     function urlAuth(url) {
       if (!idTokenVig) return url;
+      if (!esEndpointConfiable(url)) {
+        console.warn('urlAuth: host no confiable; no se adjunta el idToken.');
+        return url;
+      }
       return url + (url.includes('?') ? '&' : '?') + 'auth=' + encodeURIComponent(idTokenVig);
+    }
+
+    // Igual que urlAuth pero, para LECTURAS SENSIBLES en sesiones largas, primero
+    // asegura un idToken VIGENTE (Firebase lo renueva solo si está por vencer, así
+    // no agrega una ida y vuelta a cada lectura). Evita leer con un token vencido
+    // (401 de la RTDB) y garantiza que los claims (legajo/uid) viajen al día.
+    async function urlAuthFresca(url) {
+      try {
+        if (typeof window.tokenVigiladorVigente === 'function') {
+          const t = await window.tokenVigiladorVigente();
+          if (t) idTokenVig = t;
+        }
+      } catch (_) {}
+      return urlAuth(url);
     }
 
     // Lee SOLO los registros propios (query scoped por legajo, string y numero)
@@ -501,7 +546,7 @@
       const base = `${URL_FIREBASE}/${path}.json?orderBy=${encodeURIComponent('"legajo"')}`;
       // El legajo es SIEMPRE string (tambien en las Reglas): no hay variante numerica,
       // las Reglas la deniegan. Una respuesta {error:...} no es dato: se descarta.
-      const r = await fetch(urlAuth(base + '&equalTo=' + encodeURIComponent('"' + String(legajo).trim() + '"')), { cache: 'no-store' }).then(x => x.json()).catch(() => null);
+      const r = await fetch(await urlAuthFresca(base + '&equalTo=' + encodeURIComponent('"' + String(legajo).trim() + '"')), { cache: 'no-store' }).then(x => x.json()).catch(() => null);
       if (r && typeof r === 'object' && !r.error && Object.keys(r).length) return r;
       return null;
     }
@@ -761,7 +806,7 @@
       try {
         // Consulta ACOTADA por legajo (string): las Reglas solo permiten al vigilador leer su propio legajo.
         const legajoQ=String((typeof legajoSesion!=='undefined'&&legajoSesion)?legajoSesion:legajo).trim();
-        const res=await fetch(urlAuth(`${URL_FIREBASE}/asignacionesTurnos.json?orderBy=%22legajo%22&equalTo=%22${encodeURIComponent(legajoQ)}%22&ts=${Date.now()}`),{cache:'no-store'});
+        const res=await fetch(await urlAuthFresca(`${URL_FIREBASE}/asignacionesTurnos.json?orderBy=%22legajo%22&equalTo=%22${encodeURIComponent(legajoQ)}%22&ts=${Date.now()}`),{cache:'no-store'});
         if(!res.ok)return null;
         const data=await res.json();
         if(!data||data.error)return null;
@@ -1537,7 +1582,7 @@
         tipo: tipo,  
         latitud: lat,
         longitud: lng,
-        mapa: `https://www.google.com/maps?q=${lat},${lng}`,
+        mapa: urlMapaSegura(lat, lng),
         fotoBase64: fotoBase64Global,
         validacionFacial: resultadoSimilitudGlobal,
         alertaFraude: sospechaFraudeGlobal,
@@ -1667,41 +1712,63 @@
     }
 
     async function guardarFichadaOnline(datos, tipo, legajo, divResultado) {
-      if (URL_WORKER_FICHAJE && idTokenVig) {
-        try {
-          const resp = await fetchConLimite(URL_WORKER_FICHAJE, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ accion: 'fichar', idToken: idTokenVig, fichada: datos })
-          }, 20000);
-          let data = {};
-          try { data = await resp.json(); } catch (_) {}
-          if (resp.ok && data && data.ok) {
-            datos.fichadaId = data.fichadaId || datos.fichadaId;
-            divResultado.className = "p-3 rounded-xl text-xs text-center bg-emerald-950 text-emerald-200 border border-emerald-500";
-            divResultado.innerText = `✓ ¡Fichada de ${tipo} registrada y validada por el servidor!`;
-            ultimoTipoFichadaGlobal = tipo;
-            limpiarFormularioExitoso();
-            finalizarSesionTrasFichada();
+      // Punto 7: solo se envía el idToken al Worker si su URL es HTTPS y pertenece
+      // a un host de confianza (evita filtrar el token a un endpoint manipulado).
+      const hayWorker = !!(URL_WORKER_FICHAJE && idTokenVig && esEndpointConfiable(URL_WORKER_FICHAJE));
+      if (URL_WORKER_FICHAJE && idTokenVig && !hayWorker) {
+        console.warn('URL del Worker de fichaje no confiable; no se envía el idToken.');
+      }
+      if (hayWorker) {
+        // Reintento ACOTADO: ante un fallo TRANSITORIO (red/5xx, no un rechazo de
+        // validación) se reintenta el Worker una vez con una pausa corta antes de
+        // caer al respaldo. Evita encolar fichadas por un micro-corte de red.
+        const MAX_INTENTOS_WORKER = 2;
+        for (let intento = 1; intento <= MAX_INTENTOS_WORKER; intento++) {
+          try {
+            const resp = await fetchConLimite(URL_WORKER_FICHAJE, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ accion: 'fichar', idToken: idTokenVig, fichada: datos })
+            }, 20000);
+            let data = {};
+            try { data = await resp.json(); } catch (_) {}
+            if (resp.ok && data && data.ok) {
+              datos.fichadaId = data.fichadaId || datos.fichadaId;
+              divResultado.className = "p-3 rounded-xl text-xs text-center bg-emerald-950 text-emerald-200 border border-emerald-500";
+              divResultado.innerText = `✓ ¡Fichada de ${tipo} registrada y validada por el servidor!`;
+              ultimoTipoFichadaGlobal = tipo;
+              limpiarFormularioExitoso();
+              finalizarSesionTrasFichada();
+              return;
+            }
+            // Rechazo de VALIDACION (no de red): fail-closed, no se guarda por otra
+            // via y NO se reintenta (el resultado sería el mismo).
+            if (resp.status === 403 || resp.status === 422 || (data && data.bloqueado)) {
+              const detalle = (data && data.distanciaMetros != null)
+                ? ` Estás a ${data.distanciaMetros} m del objetivo (radio permitido: ${data.radioPermitidoMetros} m).`
+                : '';
+              mostrarErrorUbicacion(`❌ FICHADA BLOQUEADA por el servidor: ${(data && data.error) || 'validación fallida'}.${detalle}`);
+              return;
+            }
+            // Cualquier otro estado (500/502/red) -> fallo transitorio: reintentar.
+            throw new Error('Worker respondió ' + resp.status);
+          } catch (err) {
+            console.warn(`Worker de fichaje no disponible (intento ${intento}/${MAX_INTENTOS_WORKER}):`, err);
+            if (intento < MAX_INTENTOS_WORKER) {
+              await new Promise(r => setTimeout(r, 1500)); // pausa corta antes de reintentar
+              continue;
+            }
+            // Agotados los reintentos. Con las Reglas SA-only el PUT directo del
+            // cliente está DENEGADO (camino muerto): en vez de intentarlo, encolamos
+            // la fichada (ya validada online) para que se sincronice por el Worker.
+            encolarParaReintentoWorker(datos, tipo, legajo, divResultado);
             return;
           }
-          // Rechazo de VALIDACION (no de red): fail-closed, no se guarda por otra via.
-          if (resp.status === 403 || resp.status === 422 || (data && data.bloqueado)) {
-            const detalle = (data && data.distanciaMetros != null)
-              ? ` Estás a ${data.distanciaMetros} m del objetivo (radio permitido: ${data.radioPermitidoMetros} m).`
-              : '';
-            mostrarErrorUbicacion(`❌ FICHADA BLOQUEADA por el servidor: ${(data && data.error) || 'validación fallida'}.${detalle}`);
-            return;
-          }
-          // Cualquier otro estado -> intentamos el camino directo como respaldo.
-          throw new Error('Worker respondió ' + resp.status);
-        } catch (err) {
-          console.warn('Worker de fichaje no disponible; usando guardado directo como respaldo:', err);
-          // continua al guardado directo
         }
       }
 
-      // Respaldo: guardado directo a RTDB (comportamiento previo, no se rompe).
+      // Respaldo LEGACY: solo cuando NO hay Worker de confianza configurado.
+      // Guardado directo a RTDB (comportamiento previo, no se rompe).
       fetch(urlAuth(`${URL_FIREBASE}/fichadas/${datos.fichadaId}.json`), {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -1727,6 +1794,33 @@
         console.warn("Fallo al conectar con Firebase. Guardando offline automáticamente...", err);
         guardarFichadaOffline(datos, tipo, legajo);
       });
+    }
+
+    // Encola una fichada YA VALIDADA online cuando el Worker tuvo un fallo
+    // TRANSITORIO (red/5xx) tras agotar los reintentos. A diferencia de la cola
+    // offline "pura": NO fuerza alerta de fraude (el rostro SÍ se cotejó online),
+    // marca la fichada como generada online y dispara de inmediato la
+    // sincronización por la vía autoritativa (Worker), con un mensaje honesto.
+    function encolarParaReintentoWorker(datos, tipo, legajo, divResultado) {
+      let pendientes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
+      // Anti-duplicado: no encolar dos veces el mismo evento (misma fichadaId).
+      const yaEnCola = datos.fichadaId && pendientes.some(f => f && f.fichadaId === datos.fichadaId);
+      if (!yaEnCola) {
+        datos.creadaOffline = false; // se generó ONLINE: sincroniza por Worker con idToken
+        if (!datos.authUid && typeof uidSesion !== 'undefined' && uidSesion) datos.authUid = uidSesion;
+        pendientes.push(datos);
+        localStorage.setItem('fichadas_pendientes', JSON.stringify(pendientes));
+      }
+      ultimoTipoFichadaGlobal = tipo;
+      const div = divResultado || document.getElementById('resultado');
+      if (div) {
+        div.className = "p-3 rounded-xl text-xs text-center bg-amber-950 text-amber-200 border border-amber-500";
+        div.innerText = `⏳ Fichada de ${tipo} registrada. El servidor no respondió en este momento; se sincronizará automáticamente en cuanto se restablezca la conexión.`;
+      }
+      limpiarFormularioExitoso();
+      finalizarSesionTrasFichada();
+      // Reintento inmediato por la vía autoritativa (Worker).
+      if (navigator.onLine) sincronizarFichadasPendientes();
     }
 
     function guardarFichadaOffline(datos, tipo, legajo) {
@@ -2001,9 +2095,25 @@
       return null;
     }
 
+    // Devuelve un idToken VIGENTE de la sesión activa (o null). A diferencia de
+    // refrescarTokenVigilador NO fuerza la renovación: Firebase devuelve el token
+    // en caché y solo lo renueva si está por expirar. Ligero, pensado para firmar
+    // LECTURAS sensibles sin penalizar el rendimiento.
+    async function tokenVigiladorVigente() {
+      try {
+        if (vigAuth.currentUser) {
+          const t = await vigAuth.currentUser.getIdToken(); // sin forzar
+          sincronizarRelojDesdeToken(t);
+          return t;
+        }
+      } catch (_) {}
+      return null;
+    }
+
     window.loginVigilador = loginVigilador;
     window.logoutVigilador = logoutVigilador;
     window.refrescarTokenVigilador = refrescarTokenVigilador;
+    window.tokenVigiladorVigente = tokenVigiladorVigente;
     // Sellado de hora oficial: lo llama el script clasico (ejecutarPeticionFichada).
     // Debe exponerse a window; de lo contrario queda fuera de alcance (module scope)
     // y su llamada lanza ReferenceError, congelando la fichada tras "Ubicacion verificada".
