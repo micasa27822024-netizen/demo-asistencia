@@ -292,6 +292,7 @@
     //  fetch de personal/fichadas.
     // ===================================================================
     let idTokenVig = null;                 // idToken de la sesion Auth activa
+    let sesionEsOffline = false;           // true = sesion iniciada SIN conexion (login por hash local del PIN, sin idToken). Distingue "sesion offline legitima" de "token vencido".
     let uidSesion = null;                  // uid de Firebase Auth de la sesion activa (para sellar authUid)
     let legajoSesion = null;               // legajo logueado
     let modoDispositivo = 'compartido';    // 'individual' mantiene sesion; 'compartido' cierra tras fichar
@@ -521,6 +522,7 @@
       // Sesion OFFLINE: NO hay idToken. La identidad se ata luego, al sincronizar,
       // via el authUid cacheado + la credencial firmada del dispositivo (Worker).
       idTokenVig = null;
+      sesionEsOffline = true;   // marca de sesion offline legitima: el fichaje NO debe exigir idToken
       uidSesion = cred.uid || null;
       legajoSesion = String(legajo).trim();
       document.getElementById('loginPin').value = '';
@@ -536,7 +538,19 @@
       const lblNom = document.getElementById('lblSesionNombre'); if (lblNom) lblNom.innerText = cred.nombre || legajoSesion;
       fotoMasterGuardada = cred.fotoMaster || null;
       vigiladorInactivoGlobal = false;
-      if (cred.personal) { try { await aplicarConfiguracionVigilador(cred.personal); } catch (_) {} }
+      // Config del vigilador para poblar objetivos/horario SIN conexion. Se usa la
+      // copia guardada junto a la credencial; si por algun motivo no viniera, se
+      // recurre al ultimo snapshot que aplicarConfiguracionVigilador persiste en
+      // 'personal_config_fichada' durante el ultimo login online. Asi los objetivos
+      // asignados aparecen aunque la credencial se haya cacheado sin la config.
+      let personalOffline = cred.personal || null;
+      if (!personalOffline || !personalOffline.objetivosAsignados) {
+        try {
+          const cache = JSON.parse(localStorage.getItem('personal_config_fichada') || 'null');
+          if (cache && String(cache.legajo || '').trim() === legajoSesion) personalOffline = cache;
+        } catch (_) {}
+      }
+      if (personalOffline) { try { await aplicarConfiguracionVigilador(personalOffline); } catch (_) {} }
       verificarUltimoEstadoLocal(legajoSesion);
       reiniciarInactividad();
     }
@@ -689,6 +703,7 @@
           return;
         }
         idTokenVig = r.idToken;
+        sesionEsOffline = false;   // sesion ONLINE autenticada con idToken
         uidSesion = r.uid || null;
         legajoSesion = String(legajo).trim();
         document.getElementById('loginPin').value = '';
@@ -722,10 +737,17 @@
 
     async function cerrarSesionVigilador() {
       try { if (typeof window.logoutVigilador === 'function') await window.logoutVigilador(); } catch (_) {}
-      idTokenVig = null; legajoSesion = null; uidSesion = null;
+      idTokenVig = null; sesionEsOffline = false; legajoSesion = null; uidSesion = null;
       if (timerInactividad) { clearTimeout(timerInactividad); timerInactividad = null; }
       personalActualGlobal = null; turnoProgramadoGlobal = null; fotoMasterGuardada = null;
       vigiladorInactivoGlobal = false; ultimoTipoFichadaGlobal = '';
+      // Higiene de UI: al cerrar sesion se descarta la selfie capturada y su vista
+      // previa, para que NUNCA quede una foto vieja al entrar el proximo vigilador.
+      fotoBase64Global = ''; resultadoSimilitudGlobal = 'NO_EVALUADO';
+      sospechaFraudeGlobal = false; motivoSospechaGlobal = '';
+      const prev = document.getElementById('preview'); if (prev) { prev.src = ''; prev.classList.add('hidden'); }
+      const fst = document.getElementById('foto-status'); if (fst) { fst.innerText = '⚠️ Foto no capturada'; fst.className = 'text-xs text-rose-400 text-center font-semibold'; }
+      const res = document.getElementById('resultado'); if (res) { res.innerText = ''; res.className = 'text-xs mt-1 hidden'; }
       const panel = document.getElementById('panelFichaje'); if (panel) panel.classList.add('hidden');
       const login = document.getElementById('pantallaLogin'); if (login) login.classList.remove('hidden');
       const st = document.getElementById('login-status'); if (st) { st.className = 'text-xs mt-1 text-center hidden'; st.innerText = ''; }
@@ -1141,7 +1163,11 @@
       statusLbl.className = "text-xs mt-1 text-amber-400 block";
       statusLbl.innerText = "Buscando legajo y foto oficial...";
 
-      Promise.all([
+      // IMPORTANTE: se DEVUELVE la promesa para que 'await validarLegajo()' del login
+      // online espere a que 'personalActualGlobal' quede cargado ANTES de cachear la
+      // credencial offline. Antes no se devolvia: la credencial se guardaba con la
+      // config del vigilador vacia y, sin conexion, no aparecian los objetivos.
+      return Promise.all([
         fetchScoped('personal', legajoInput),
         fetchScoped('fichadas', legajoInput)
       ])
@@ -1503,9 +1529,22 @@
       const nombre = document.getElementById('nombre').value.trim();
       const objetivo = document.getElementById('objetivo').value;
 
-      // Guarda de sesion: la identidad ya se valido en el login (Firebase Auth).
-      // Si por algun motivo se perdio el token, se obliga a re-loguear.
-      if (!idTokenVig || !legajoSesion) {
+      // Guarda de sesion. IMPORTANTE: debe permitir la sesion OFFLINE.
+      // En modo offline NO existe idToken (idTokenVig === null): la identidad ya
+      // quedo probada por el hash local del PIN al iniciar sesion, y la fichada
+      // se guardara en la cola offline firmada por el dispositivo (no usa idToken).
+      // Se usa 'sesionEsOffline' (se fija al iniciar sesion) en lugar de
+      // navigator.onLine, porque navigator.onLine es POCO FIABLE: un telefono
+      // conectado a WiFi/datos SIN internet real puede reportar 'online' y volvia
+      // a disparar "sesion expiro" en bucle. Ahora: solo se fuerza re-login si
+      // (a) no hay sesion (sin legajo), o (b) es una sesion ONLINE que perdio su
+      // idToken (token realmente vencido).
+      if (!legajoSesion) {
+        alert('Tu sesión expiró. Volvé a ingresar tu legajo y PIN.');
+        cerrarSesionVigilador();
+        return;
+      }
+      if (!idTokenVig && !sesionEsOffline) {
         alert('Tu sesión expiró. Volvé a ingresar tu legajo y PIN.');
         cerrarSesionVigilador();
         return;
