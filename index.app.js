@@ -1184,8 +1184,11 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(Object.assign({}, datos, { timestampServidor: { ".sv": "timestamp" } }))
         })
-      .then(res => {
-        if (!res.ok) throw new Error("Error en la respuesta de Firebase");
+      .then(async res => {
+        if (!res.ok) {
+          const cuerpo = await res.text().catch(() => '');
+          throw new Error("HTTP " + res.status + " " + (res.statusText || '') + " :: " + cuerpo);
+        }
         return res.json();
       })
       .then(respuesta => {
@@ -1205,6 +1208,9 @@
       })
       .catch(err => {
         console.warn("Fallo al conectar con Firebase. Guardando offline automáticamente...", err);
+        // DIAGNÓSTICO TEMPORAL: mostrar el motivo real del fallo del guardado online
+        // (se quita una vez resuelto). Permite ver por qué cae a modo offline.
+        try { alert("DIAGNÓSTICO FICHADA (sacale captura y mandámela):\n\n" + (err && err.message ? err.message : String(err))); } catch (_) {}
         guardarFichadaOffline(datos, tipo, legajo);
       });
       });
