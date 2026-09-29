@@ -2113,7 +2113,18 @@
       // Resumen de cumplimiento sobre el total filtrado (no solo la página visible).
       actualizarResumenCumplimiento(registros);
 
-      const ordenados = [...registros].reverse();
+      // Orden REAL por fecha/hora (mas reciente arriba). Antes se usaba
+      // [...registros].reverse(), que dependia del orden interno de las claves
+      // de Firebase; si una fichada se guardaba con una clave no cronologica,
+      // quedaba fuera de lugar (p.ej. debajo de un dia anterior). Ahora se ordena
+      // por el sello oficial fila[0], dejando al fondo las filas sin fecha valida.
+      const ordenados = [...registros].sort((a, b) => {
+        const ta = a && a[0] ? new Date(a[0]).getTime() : NaN;
+        const tb = b && b[0] ? new Date(b[0]).getTime() : NaN;
+        const va = Number.isFinite(ta) ? ta : -Infinity;
+        const vb = Number.isFinite(tb) ? tb : -Infinity;
+        return vb - va;
+      });
 
       // Paginación (aditivo): recorta el conjunto ordenado a la página actual.
       const totalRegistros = ordenados.length;
