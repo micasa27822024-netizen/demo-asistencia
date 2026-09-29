@@ -882,6 +882,70 @@
       const offlineActivo = offlineHabilitadoLocal() || !!obtenerCredencialDispositivo();
       if (!offlineActivo) { try { localStorage.removeItem(LS_CRED_OFFLINE); } catch (_) {} }
       purgarCacheOfflineVencido();
+      purgarColasOfflineSensibles();
+    }
+
+    // ===================================================================
+    //  CADUCIDAD + TOPE DE COLAS OFFLINE CON DATOS SENSIBLES (Punto 2)
+    //  Estas colas guardan selfie (dato biometrico) y GPS en este navegador:
+    //    - fichadas_pendientes        -> fichadas que esperan subir (selfie+GPS)
+    //    - alertas_fichadas_pendientes-> alertas de fichada bloqueada (GPS)
+    //    - fichadas_rechazadas        -> archivo local de rechazadas (solo crece)
+    //  Para acotar su exposicion y que no crezcan sin limite se aplican dos
+    //  medidas AL ARRANCAR y AL CERRAR SESION:
+    //    (1) Caducidad: se descartan los items mas viejos que su ventana. Si un
+    //        item no tiene fecha legible se CONSERVA (nunca se descarta a ciegas
+    //        un posible fichaje real sin sincronizar).
+    //    (2) Tope: si aun asi la cola supera su maximo, se conservan los mas
+    //        recientes (el tope es un techo de seguridad, muy por encima del uso
+    //        normal de un telefono).
+    //  La ventana de las fichadas pendientes se ata a la ventana de lote offline
+    //  del servidor: pasada esa ventana el Worker las rechazaria por vencidas, asi
+    //  que purgarlas despues es correcto y no pierde nada aprovechable.
+    // ===================================================================
+    function _tsColaOffline(it) {
+      if (!it || typeof it !== 'object') return 0;
+      const numCampos = ['timestampServidorEstimado', 'timestampLocal', 'emitidoEnMs'];
+      for (const c of numCampos) { const v = Number(it[c]); if (Number.isFinite(v) && v > 0) return v; }
+      const isoCampos = ['rechazadaEn', 'horaServidorFichaje', 'fechaHoraDispositivo', 'fechaHora', 'creadaEn', 'timestamp'];
+      for (const c of isoCampos) {
+        if (it[c] == null) continue;
+        const n = Number(it[c]); if (Number.isFinite(n) && n > 1e11) return n; // epoch ms en campo mixto
+        const t = Date.parse(it[c]); if (Number.isFinite(t) && t > 0) return t;
+      }
+      return 0;
+    }
+    function _colasOfflineSensiblesSpecs() {
+      const ventanaLoteMs = ventanaLoteOfflineHorasLocal() * 3600000;
+      return [
+        // Fichadas por subir: se conservan al menos toda la ventana de lote (+1 dia de margen).
+        { clave: 'fichadas_pendientes',         ttl: Math.max(ventanaLoteMs, 7 * 24 * 3600000) + 24 * 3600000, max: 500 },
+        // Alertas de fichada bloqueada: seguridad; ventana amplia.
+        { clave: 'alertas_fichadas_pendientes', ttl: 30 * 24 * 3600000, max: 300 },
+        // Archivo local de rechazadas: solo auditoria, se puede recortar antes.
+        { clave: 'fichadas_rechazadas',         ttl: 30 * 24 * 3600000, max: 200 },
+      ];
+    }
+    function purgarColasOfflineSensibles() {
+      const ahora = Date.now();
+      for (const spec of _colasOfflineSensiblesSpecs()) {
+        try {
+          let arr = JSON.parse(localStorage.getItem(spec.clave) || '[]');
+          if (!Array.isArray(arr) || arr.length === 0) continue;
+          const antes = arr.length;
+          // (1) Caducidad por antiguedad (los sin fecha legible se conservan).
+          arr = arr.filter(it => { const ts = _tsColaOffline(it); return !ts || (ahora - ts) <= spec.ttl; });
+          // (2) Tope: conserva los mas recientes, restaurando el orden original.
+          if (arr.length > spec.max) {
+            arr = arr.map((it, i) => ({ it, i, ts: _tsColaOffline(it) || 0 }))
+                     .sort((a, b) => (b.ts - a.ts) || (b.i - a.i))
+                     .slice(0, spec.max)
+                     .sort((a, b) => a.i - b.i)
+                     .map(x => x.it);
+          }
+          if (arr.length !== antes) localStorage.setItem(spec.clave, JSON.stringify(arr));
+        } catch (_) {}
+      }
     }
 
     async function cerrarSesionVigilador() {
@@ -915,6 +979,7 @@
     window.onload = async function() {
       actualizarEstadoRed();
       try { purgarCacheOfflineVencido(); } catch (_) {}   // caducidad de datos sensibles offline
+      try { purgarColasOfflineSensibles(); } catch (_) {}   // caducidad + tope de colas (selfie/GPS)
       refrescarEstadoVinculacion();
       refrescarEstadoOfflinePendientes();
       const f = document.getElementById('formLogin');
