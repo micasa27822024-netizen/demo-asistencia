@@ -2415,7 +2415,16 @@
         return;
       }
 
-      const ordenados = [...registros].reverse();
+      // La lista ya llega ordenada por fecha desc desde filtrarTablaNovedades;
+      // reordenamos aqui por robustez para dejar siempre la mas reciente arriba
+      // (sin depender del orden interno de las claves de Firebase).
+      const ordenados = [...registros].sort((a, b) => {
+        const ta = a && a[0] ? new Date(a[0]).getTime() : NaN;
+        const tb = b && b[0] ? new Date(b[0]).getTime() : NaN;
+        const va = Number.isFinite(ta) ? ta : -Infinity;
+        const vb = Number.isFinite(tb) ? tb : -Infinity;
+        return vb - va;
+      });
 
       ordenados.forEach(fila => {
         const fecha = fila[0] ? new Date(fila[0]).toLocaleString('es-AR', { hour12: false }) : '-';
@@ -2542,6 +2551,18 @@
       datosFiltradosNovedades = datosNovedades.filter(fila => {
         const textoFila = `${fila[1]} ${fila[2]} ${fila[3]} ${fila[4]} ${fila[5]}`.toLowerCase();
         return textoFila.includes(busqueda);
+      });
+
+      // Orden REAL por fecha/hora (mas reciente primero) EN EL ORIGEN, para que la
+      // tabla de novedades en pantalla Y los reportes (Excel/PDF, que recorren esta
+      // misma lista) queden en el mismo orden cronologico. Las filas sin fecha
+      // valida quedan al final.
+      datosFiltradosNovedades.sort((a, b) => {
+        const ta = a && a[0] ? new Date(a[0]).getTime() : NaN;
+        const tb = b && b[0] ? new Date(b[0]).getTime() : NaN;
+        const va = Number.isFinite(ta) ? ta : -Infinity;
+        const vb = Number.isFinite(tb) ? tb : -Infinity;
+        return vb - va;
       });
 
       renderizarTablaNovedades(datosFiltradosNovedades);
