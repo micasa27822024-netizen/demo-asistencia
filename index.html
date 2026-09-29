@@ -14,6 +14,14 @@
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
 
+  <!-- Indicador visual de sincronizacion (flotante, aparece solo al sincronizar) -->
+  <div id="indicadorSync" class="hidden" role="status" aria-live="polite"></div>
+
+  <style>
+    @keyframes girarSync { to { transform: rotate(360deg); } }
+    #indicadorSync .icono-girando { display:inline-block; animation: girarSync 1s linear infinite; }
+  </style>
+
 
   <!-- ENCABEZADO Y MENÚ CORPORATIVO -->
   <header class="bg-slate-900 border-b border-slate-800 shadow-md mb-4">
@@ -813,6 +821,83 @@
     //     / focus), que es cuando el telefono suele restablecer la conexion real.
     let _sincronizandoTodo = false;
     let _debounceSyncTimer = null;
+    let _syncTimerOcultar = null;
+    let _reintentoSyncTimer = null;
+    let _reintentoPaso = 0;
+
+    // Indicador visual flotante de sincronizacion. Estados: 'sincronizando' | 'ok' | 'error' | 'oculto'.
+    // 'texto' solo contiene numeros/frases fijas generadas aqui (sin datos del usuario).
+    function mostrarIndicadorSync(estado, texto) {
+      const el = document.getElementById('indicadorSync');
+      if (!el) return;
+      if (_syncTimerOcultar) { clearTimeout(_syncTimerOcultar); _syncTimerOcultar = null; }
+      const base = 'fixed left-1/2 -translate-x-1/2 bottom-4 z-50 px-4 py-2 rounded-full shadow-lg text-xs font-semibold flex items-center gap-2 border';
+      let cls = '', icono = '';
+      if (estado === 'sincronizando') {
+        cls = 'bg-sky-950 text-sky-300 border-sky-500/40';
+        icono = '<span class="icono-girando">🔄</span>';
+      } else if (estado === 'ok') {
+        cls = 'bg-emerald-950 text-emerald-300 border-emerald-500/40';
+        icono = '<span>✅</span>';
+      } else if (estado === 'error') {
+        cls = 'bg-amber-950 text-amber-300 border-amber-500/40';
+        icono = '<span>⚠️</span>';
+      } else {
+        el.className = 'hidden'; el.textContent = ''; return;
+      }
+      el.className = base + ' ' + cls;
+      const span = document.createElement('span');
+      span.textContent = texto || '';           // texto insertado como TEXTO (no HTML)
+      el.innerHTML = icono;                       // solo iconos fijos van como HTML
+      el.appendChild(span);
+      if (estado !== 'sincronizando') {
+        _syncTimerOcultar = setTimeout(() => { el.className = 'hidden'; el.textContent = ''; }, 4500);
+      }
+    }
+
+    // Suma total de registros pendientes (fichadas + alertas) para calcular cuantos se subieron.
+    function contarPendientesTotales() {
+      let n = 0;
+      try { n += (JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]') || []).length; } catch (_) {}
+      try { n += (JSON.parse(localStorage.getItem('alertas_fichadas_pendientes') || '[]') || []).length; } catch (_) {}
+      return n;
+    }
+
+    // === TIEMPO DE ESPERA DEL REINTENTO AUTOMATICO (backoff exponencial + jitter) ===
+    // En vez de rendirse tras 2 intentos fijos, el sistema se re-agenda solo con una
+    // espera que arranca CORTA (reacciona rapido si la red vuelve enseguida) y crece
+    // de forma progresiva si sigue sin haber internet real (para no gastar bateria/
+    // datos golpeando en bucle). El jitter (+/-20%) evita que muchos telefonos
+    // reintenten exactamente a la vez. Un disparador del usuario (volver online / abrir
+    // la app) reinicia la espera a su valor mas corto.
+    const _REINTENTO_BASE_MS = 800;    // primera espera aproximada
+    const _REINTENTO_FACTOR = 2;       // duplica en cada paso
+    const _REINTENTO_TOPE_MS = 30000;  // techo: como maximo cada 30 s
+    function calcularEsperaReintento(paso) {
+      const bruto = Math.min(_REINTENTO_BASE_MS * Math.pow(_REINTENTO_FACTOR, paso), _REINTENTO_TOPE_MS);
+      const jitter = bruto * 0.2 * (Math.random() * 2 - 1); // +/-20%
+      return Math.max(500, Math.round(bruto + jitter));
+    }
+    function cancelarReintentoAuto() {
+      if (_reintentoSyncTimer) { clearTimeout(_reintentoSyncTimer); _reintentoSyncTimer = null; }
+    }
+    // Reinicia la espera al valor mas corto (tras un disparo del usuario o un exito).
+    function reiniciarReintentoAuto() {
+      cancelarReintentoAuto();
+      _reintentoPaso = 0;
+    }
+    // Agenda el proximo reintento con la espera calculada, si aun quedan pendientes.
+    function programarReintentoAuto() {
+      cancelarReintentoAuto();
+      if (!navigator.onLine || !hayPendientesPorSincronizar()) { _reintentoPaso = 0; return; }
+      const espera = calcularEsperaReintento(_reintentoPaso);
+      _reintentoPaso++;
+      console.log(`⏳ Reintento automatico en ${(espera / 1000).toFixed(1)} s (paso ${_reintentoPaso}).`);
+      _reintentoSyncTimer = setTimeout(() => {
+        _reintentoSyncTimer = null;
+        sincronizarTodoPendiente('reintento-auto');
+      }, espera);
+    }
 
     function hayPendientesPorSincronizar() {
       try {
@@ -843,19 +928,25 @@
       if (!navigator.onLine) return;
       if (!hayPendientesPorSincronizar()) return;
       _sincronizandoTodo = true;
+      const _antes = contarPendientesTotales();
       try {
-        let conectado = await sondearConectividadReal(4000);
-        // Al reconectar la red suele tardar un instante en estabilizarse: reintento
-        // breve con backoff antes de rendirse (la cola se conserva intacta si falla).
-        for (let intento = 1; intento <= 2 && !conectado; intento++) {
+        mostrarIndicadorSync('sincronizando', 'Comprobando conexión…');
+        let conectado = await sondearConectividadReal(3000);
+        // Ramp CORTO al reconectar: la red suele volver en <2 s. Probamos rapido
+        // varias veces antes de delegar en el reintento automatico de fondo.
+        const _esperasProbe = [500, 900, 1500];
+        for (let i = 0; i < _esperasProbe.length && !conectado; i++) {
           if (!navigator.onLine) break;
-          await new Promise(r => setTimeout(r, 1200 * intento));
-          conectado = await sondearConectividadReal(4000);
+          await new Promise(r => setTimeout(r, _esperasProbe[i]));
+          conectado = await sondearConectividadReal(3000);
         }
         if (!conectado) {
           console.log(`⏳ Sincronizacion (${motivo || 'auto'}) pospuesta: sin internet real todavia. La cola se conserva.`);
+          mostrarIndicadorSync('error', 'Sin internet real todavía. Reintentaremos automáticamente.');
+          programarReintentoAuto(); // se re-agenda solo con backoff creciente
           return;
         }
+        mostrarIndicadorSync('sincronizando', 'Sincronizando registros pendientes…');
         // Las 3 vias son independientes -> EN PARALELO para minimizar el tiempo total.
         await Promise.allSettled([
           Promise.resolve().then(() => sincronizarFichadasPendientes()),
@@ -863,6 +954,20 @@
           Promise.resolve().then(() => sincronizarLoteOffline())
         ]);
         console.log(`🔄 Sincronizacion (${motivo || 'auto'}) disparada en paralelo tras confirmar internet real.`);
+        // Resultado visible: cuantos registros se subieron y cuantos siguen en cola.
+        const _despues = contarPendientesTotales();
+        const _subidas = Math.max(0, _antes - _despues);
+        if (_despues === 0) {
+          mostrarIndicadorSync('ok', _subidas > 0 ? (_subidas + ' registro(s) sincronizado(s)') : 'Todo sincronizado');
+          reiniciarReintentoAuto(); // exito: se cancela el backoff pendiente
+        } else if (_subidas > 0) {
+          mostrarIndicadorSync('ok', _subidas + ' sincronizado(s), ' + _despues + ' en cola');
+          reiniciarReintentoAuto(); // hubo progreso: reintentar pronto (paso 0)
+          programarReintentoAuto();
+        } else {
+          mostrarIndicadorSync('error', _despues + ' registro(s) siguen en cola. Reintentaremos.');
+          programarReintentoAuto(); // sin progreso: reintento con backoff creciente
+        }
       } finally {
         _sincronizandoTodo = false;
         try { if (typeof refrescarEstadoOfflinePendientes === 'function') refrescarEstadoOfflinePendientes(); } catch (_) {}
@@ -870,7 +975,9 @@
     }
 
     // Anti-rafaga: agrupa disparos muy seguidos del evento 'online'/'focus'.
+    // Un disparo del usuario reinicia el backoff a su espera mas corta.
     function programarSincronizacion(motivo, msDebounce) {
+      reiniciarReintentoAuto();
       if (_debounceSyncTimer) clearTimeout(_debounceSyncTimer);
       _debounceSyncTimer = setTimeout(() => {
         _debounceSyncTimer = null;
@@ -893,7 +1000,10 @@
       if (navigator.onLine) programarSincronizacion('focus', 800);
     });
 
-    window.addEventListener('offline', actualizarEstadoRed);
+    window.addEventListener('offline', () => {
+      actualizarEstadoRed();
+      cancelarReintentoAuto(); // sin red no tiene sentido reintentar; se re-arma al volver online
+    });
 
     function iniciarCamaraSegura() {
       const status = document.getElementById('foto-status');
