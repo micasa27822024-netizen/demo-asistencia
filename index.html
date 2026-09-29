@@ -73,6 +73,12 @@
         <button type="submit" id="btnIngresar" class="w-full bg-emerald-600 hover:bg-emerald-500 font-bold py-3 rounded-xl transition">Ingresar</button>
         <p id="login-status" class="text-xs mt-1 text-center hidden"></p>
       </form>
+      <div class="pt-2 border-t border-slate-700/60">
+        <button type="button" onclick="vincularDispositivo()" class="text-[11px] text-slate-400 hover:text-emerald-400 transition inline-flex items-center gap-1.5">
+          <i class="fa-solid fa-mobile-screen"></i> <span id="lblVincular">Vincular dispositivo para fichaje offline</span>
+        </button>
+        <p id="estadoVincular" class="text-[11px] mt-1"></p>
+      </div>
     </div>
   </main>
 
@@ -266,6 +272,222 @@
     let timerInactividad = null;
     const MS_INACTIVIDAD = 2 * 60 * 1000;  // auto-logout por inactividad (~2 min) en modo compartido
 
+    // ===================================================================
+    //  FASE 2 - COLA OFFLINE OPT-IN (login local + lote firmado por dispositivo)
+    //  Habilita que un vigilador inicie sesion y fiche SIN conexion, y que esas
+    //  fichadas se suban despues por una via AUTONOMA de la sesion: un lote
+    //  firmado con la credencial HMAC del dispositivo (endpoint 'ficharLoteOffline'
+    //  del Worker). Todo es OPT-IN: solo actua si el modo offline esta habilitado
+    //  globalmente (cfg.offlineHabilitado) y si el dispositivo esta provisionado.
+    //  El PIN NUNCA se guarda en claro: se cachea su hash PBKDF2+salt.
+    // ===================================================================
+    const LS_OFFLINE_CFG   = 'vigix_offline_cfg';    // { offlineHabilitado, ventanaLoteOfflineHoras }
+    const LS_CRED_OFFLINE  = 'vigix_cred_offline';   // { <legajo>: { salt, hashHex, uid, personal, ... } }
+    const LS_DISPOSITIVO   = 'vigix_dispositivo';     // { deviceId, secreto } (lo provisiona el Admin en Fase 3)
+    const PBKDF2_ITER      = 150000;
+
+    // --- Config offline cacheada (para saber, estando offline, si se permite) ---
+    function offlineHabilitadoLocal() {
+      try { const c = JSON.parse(localStorage.getItem(LS_OFFLINE_CFG) || '{}'); return !!(c && c.offlineHabilitado === true); } catch (_) { return false; }
+    }
+    function ventanaLoteOfflineHorasLocal() {
+      try { const c = JSON.parse(localStorage.getItem(LS_OFFLINE_CFG) || '{}'); const v = Number(c && c.ventanaLoteOfflineHoras); return (Number.isFinite(v) && v > 0) ? v : 168; } catch (_) { return 168; }
+    }
+    // Persiste el flag desde /configuracionGlobal cuando hay conexion. Si el Admin
+    // apaga el modo offline, en la proxima carga online queda deshabilitado local.
+    function guardarOfflineCfg(cfg) {
+      try { localStorage.setItem(LS_OFFLINE_CFG, JSON.stringify({ offlineHabilitado: !!(cfg && cfg.offlineHabilitado === true), ventanaLoteOfflineHoras: Number(cfg && cfg.ventanaLoteOfflineHoras) || 168 })); } catch (_) {}
+    }
+
+    // --- Utilidades cripto (WebCrypto) ---
+    function _b64FromBytes(bytes) { let s = ''; for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]); return btoa(s); }
+    function _bytesFromB64(b64) { const s = atob(String(b64 || '')); const a = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); return a; }
+    // Comparacion de hex en tiempo casi constante (no cortocircuita por caracter).
+    function _igualHex(a, b) { a = String(a || '').toLowerCase(); b = String(b || '').toLowerCase(); if (!a || a.length !== b.length) return false; let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i); return d === 0; }
+    async function _pbkdf2Hex(pin, saltBytes, iteraciones) {
+      const baseKey = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(pin)), 'PBKDF2', false, ['deriveBits']);
+      const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: saltBytes, iterations: iteraciones, hash: 'SHA-256' }, baseKey, 256);
+      const b = new Uint8Array(bits); let h = ''; for (let i = 0; i < b.length; i++) h += b[i].toString(16).padStart(2, '0'); return h;
+    }
+    async function firmarHmacHex(secreto, mensaje) {
+      const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(secreto)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+      const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(mensaje)));
+      let h = ''; for (let i = 0; i < mac.length; i++) h += mac[i].toString(16).padStart(2, '0'); return h;
+    }
+
+    // --- Credencial del dispositivo (deviceId + secreto HMAC) ---
+    // La provisiona el Admin en Fase 3. Sin ella no hay via firmada: las fichadas
+    // offline se conservan en cola hasta que el dispositivo quede provisionado.
+    function obtenerCredencialDispositivo() {
+      try { const d = JSON.parse(localStorage.getItem(LS_DISPOSITIVO) || 'null'); return (d && d.deviceId && d.secreto) ? d : null; } catch (_) { return null; }
+    }
+
+    // --- Vinculacion del dispositivo (Fase 3): el operador pega el codigo que
+    //     genero el Admin. Se decodifica y se guarda {deviceId, secreto} en
+    //     localStorage. El secreto NUNCA sale de este dispositivo salvo dentro
+    //     de la firma HMAC de cada lote.
+    function _parsearCodigoVinculacion(codigo) {
+      const raw = String(codigo || '').trim();
+      if (!raw) return null;
+      let obj = null;
+      // 1) Intento base64 (formato compacto del panel).
+      try { obj = JSON.parse(atob(raw)); } catch (_) { obj = null; }
+      // 2) Fallback: JSON en texto plano.
+      if (!obj) { try { obj = JSON.parse(raw); } catch (_) { obj = null; } }
+      if (obj && typeof obj.deviceId === 'string' && typeof obj.secreto === 'string' && obj.deviceId && obj.secreto) {
+        return { deviceId: obj.deviceId, secreto: obj.secreto };
+      }
+      return null;
+    }
+
+    function vincularDispositivo() {
+      const estado = document.getElementById('estadoVincular');
+      const ya = obtenerCredencialDispositivo();
+      const msgInicial = ya ? 'Este dispositivo YA está vinculado. Pegar un código nuevo lo reemplaza.\n\nCódigo de vinculación:' : 'Pegá el código de vinculación que te dio el administrador:';
+      const codigo = prompt(msgInicial);
+      if (codigo === null) return; // cancelado
+      const cred = _parsearCodigoVinculacion(codigo);
+      if (!cred) {
+        if (estado) { estado.className = 'text-[11px] mt-1 text-rose-400 font-semibold'; estado.innerText = '❌ Código inválido. Verificá que lo hayas copiado completo.'; }
+        return;
+      }
+      try {
+        localStorage.setItem(LS_DISPOSITIVO, JSON.stringify(cred));
+        if (estado) { estado.className = 'text-[11px] mt-1 text-emerald-400 font-semibold'; estado.innerText = '✓ Dispositivo vinculado. Ya puede fichar sin conexión.'; }
+        const lbl = document.getElementById('lblVincular');
+        if (lbl) lbl.innerText = 'Dispositivo vinculado — volver a vincular';
+      } catch (_) {
+        if (estado) { estado.className = 'text-[11px] mt-1 text-rose-400 font-semibold'; estado.innerText = '❌ No se pudo guardar en este navegador.'; }
+      }
+    }
+    window.vincularDispositivo = vincularDispositivo;
+
+    // --- Credencial de login OFFLINE (hash PBKDF2 del PIN + snapshot del vigilador) ---
+    function _leerCredsOffline() { try { return JSON.parse(localStorage.getItem(LS_CRED_OFFLINE) || '{}') || {}; } catch (_) { return {}; } }
+    // Se llama tras un login ONLINE exitoso (solo si offline esta habilitado). Guarda
+    // el hash del PIN (nunca el PIN) y una copia de la config del vigilador para poder
+    // operar sin red mas tarde.
+    async function cachearCredencialOffline(legajo, pin, uid, nombre, personal, fotoMaster) {
+      if (!offlineHabilitadoLocal()) return;
+      if (!(self.crypto && crypto.subtle)) return;
+      try {
+        const salt = crypto.getRandomValues(new Uint8Array(16));
+        const hashHex = await _pbkdf2Hex(String(pin).padStart(6, '0'), salt, PBKDF2_ITER);
+        const creds = _leerCredsOffline();
+        creds[String(legajo).trim()] = {
+          legajo: String(legajo).trim(), uid: uid || null, nombre: nombre || null,
+          salt: _b64FromBytes(salt), hashHex, iteraciones: PBKDF2_ITER,
+          personal: personal || null, fotoMaster: fotoMaster || null,
+          guardadoEn: new Date().toISOString()
+        };
+        localStorage.setItem(LS_CRED_OFFLINE, JSON.stringify(creds));
+      } catch (e) { console.warn('No se pudo cachear la credencial offline:', e); }
+    }
+    // Verifica el PIN contra el hash local. Devuelve el registro cacheado o null.
+    async function verificarCredencialOffline(legajo, pin) {
+      const c = _leerCredsOffline()[String(legajo).trim()];
+      if (!c || !c.salt || !c.hashHex) return null;
+      try {
+        const h = await _pbkdf2Hex(String(pin).padStart(6, '0'), _bytesFromB64(c.salt), c.iteraciones || PBKDF2_ITER);
+        return _igualHex(h, c.hashHex) ? c : null;
+      } catch (_) { return null; }
+    }
+
+    // --- Login OFFLINE (sin idToken; identidad probada por hash local del PIN) ---
+    async function iniciarSesionOffline(legajo, pin, st, btn) {
+      if (!offlineHabilitadoLocal()) {
+        st.className = 'text-xs mt-1 text-center text-rose-400 block';
+        st.innerText = 'Sin conexión: no se puede iniciar sesión de forma segura.';
+        if (btn) btn.disabled = false; return;
+      }
+      const cred = await verificarCredencialOffline(legajo, pin);
+      if (!cred) {
+        st.className = 'text-xs mt-1 text-center text-rose-400 block';
+        st.innerText = 'Sin conexión: legajo/PIN no verificados en este dispositivo. Iniciá sesión online al menos una vez.';
+        if (btn) btn.disabled = false; return;
+      }
+      // Sesion OFFLINE: NO hay idToken. La identidad se ata luego, al sincronizar,
+      // via el authUid cacheado + la credencial firmada del dispositivo (Worker).
+      idTokenVig = null;
+      uidSesion = cred.uid || null;
+      legajoSesion = String(legajo).trim();
+      document.getElementById('loginPin').value = '';
+      document.getElementById('pantallaLogin').classList.add('hidden');
+      document.getElementById('panelFichaje').classList.remove('hidden');
+      document.getElementById('legajo').value = legajoSesion;
+      st.className = 'text-xs mt-1 text-center hidden'; st.innerText = '';
+      iniciarCamaraSegura();
+      cargarModelosIA();
+      cargarObjetivos();                 // usa la cache local de objetivos
+      modoDispositivo = 'compartido';    // offline: no se pudo leer config -> por defecto compartido
+      document.getElementById('nombre').value = cred.nombre || '';
+      const lblNom = document.getElementById('lblSesionNombre'); if (lblNom) lblNom.innerText = cred.nombre || legajoSesion;
+      fotoMasterGuardada = cred.fotoMaster || null;
+      vigiladorInactivoGlobal = false;
+      if (cred.personal) { try { await aplicarConfiguracionVigilador(cred.personal); } catch (_) {} }
+      verificarUltimoEstadoLocal(legajoSesion);
+      reiniciarInactividad();
+    }
+
+    // --- Sincronizacion del LOTE OFFLINE firmado por dispositivo ---
+    // Sube por 'ficharLoteOffline' las fichadas creadas realmente sin conexion.
+    // No requiere idToken (por eso rescata las fichadas varadas del modo compartido).
+    // El Worker revalida identidad + objetivo + geocerca y es idempotente por idEvento.
+    let estaSincronizandoLote = false;
+    async function sincronizarLoteOffline() {
+      if (estaSincronizandoLote) return;
+      if (!navigator.onLine) return;
+      if (!URL_WORKER_FICHAJE) return;
+      if (!offlineHabilitadoLocal()) return;               // opt-in
+      const disp = obtenerCredencialDispositivo();
+      if (!disp) return;                                    // sin dispositivo provisionado no hay via firmada
+      const pendientes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
+      const loteItems = pendientes.filter(f => f && (f.creadaOffline === true || f.origenOffline === true));
+      if (loteItems.length === 0) return;
+      estaSincronizandoLote = true;
+      try {
+        const envio = loteItems.slice(0, 200).map(f => Object.assign({}, f, {
+          // Mejor estimacion de la hora del fichaje offline (el Worker la conserva
+          // y marca horaVerificadaServidor:false + timestampArriboServidor .sv).
+          timestampServidorEstimado: (typeof f.timestampServidorEstimado === 'number') ? f.timestampServidorEstimado
+            : (f.horaServidorFichaje ? Date.parse(f.horaServidorFichaje) : (f.timestampLocal || null))
+        }));
+        const fichadasStr = JSON.stringify(envio);
+        const timestamp = Date.now();
+        const firma = await firmarHmacHex(disp.secreto, `${disp.deviceId}.${timestamp}.${fichadasStr}`);
+        const resp = await fetchConLimite(URL_WORKER_FICHAJE, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accion: 'ficharLoteOffline', deviceId: disp.deviceId, timestamp, fichadas: fichadasStr, firma })
+        }, 25000);
+        let data = {}; try { data = await resp.json(); } catch (_) {}
+        // El Admin desactivo el modo offline: no reintentar en bucle, se conserva la cola.
+        if (resp.status === 403 && data && data.motivo === 'OFFLINE_DESHABILITADO') { estaSincronizandoLote = false; return; }
+        if (!resp.ok || !data || !data.ok) throw new Error('Lote offline respondió ' + resp.status);
+
+        const porRef = {}; (data.resultados || []).forEach(r => { if (r && r.ref) porRef[String(r.ref)] = r; });
+        const rechazadasArch = JSON.parse(localStorage.getItem('fichadas_rechazadas') || '[]');
+        let restantes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
+        restantes = restantes.filter(f => {
+          if (!(f && (f.creadaOffline === true || f.origenOffline === true))) return true; // ajenas al lote: no se tocan
+          const r = porRef[String(f.idEvento || f.fichadaId || '')];
+          if (!r) return true;                       // sin resultado: se conserva para reintentar
+          if (r.creada || r.duplicada) return false; // aceptada: sale de la cola
+          if (r.rechazada) {                         // invalida server-side: se archiva y sale
+            rechazadasArch.push(Object.assign({}, f, { motivoRechazo: r.motivo || 'validación del servidor fallida', rechazadaEn: new Date().toISOString(), viaLoteOffline: true }));
+            return false;
+          }
+          return true;
+        });
+        localStorage.setItem('fichadas_rechazadas', JSON.stringify(rechazadasArch));
+        localStorage.setItem('fichadas_pendientes', JSON.stringify(restantes));
+        console.log(`🔒 Lote offline sincronizado: creadas ${data.creadas || 0}, duplicadas ${data.duplicadas || 0}, rechazadas ${data.rechazadas || 0}.`);
+      } catch (err) {
+        console.warn('No se pudo sincronizar el lote offline (se reintentará):', err);
+      } finally {
+        estaSincronizandoLote = false;
+      }
+    }
+
     // Agrega ?auth=<idToken> a una URL de la RTDB si hay sesion activa.
     function urlAuth(url) {
       if (!idTokenVig) return url;
@@ -312,7 +534,14 @@
       const st = document.getElementById('login-status');
       const btn = document.getElementById('btnIngresar');
       if (!legajo || !pin) { st.className = 'text-xs mt-1 text-center text-rose-400 block'; st.innerText = 'Ingresá tu legajo y PIN.'; return; }
-      if (!navigator.onLine) { st.className = 'text-xs mt-1 text-center text-rose-400 block'; st.innerText = 'Sin conexión: no se puede iniciar sesión de forma segura.'; return; }
+      if (!navigator.onLine) {
+        // Sin conexión: intento de login OFFLINE contra el hash local del PIN
+        // (solo si el modo offline esta habilitado y la credencial fue cacheada).
+        if (btn) btn.disabled = true;
+        st.className = 'text-xs mt-1 text-center text-amber-400 block'; st.innerText = 'Verificando credencial local...';
+        await iniciarSesionOffline(legajo, pin, st, btn);
+        return;
+      }
       st.className = 'text-xs mt-1 text-center text-amber-400 block'; st.innerText = 'Verificando...';
       if (btn) btn.disabled = true;
       try {
@@ -340,12 +569,16 @@
         cargarObjetivos();
         await cargarModoDispositivo();
         await validarLegajo();   // lee SOLO el registro propio, con token
+        // Fase 2 (opt-in): si el modo offline esta habilitado, cacheamos en el
+        // dispositivo el hash del PIN (PBKDF2+salt) y la config del vigilador para
+        // permitir un login OFFLINE posterior. Nunca se guarda el PIN en claro.
+        try { await cachearCredencialOffline(legajoSesion, pin, uidSesion, (personalActualGlobal && personalActualGlobal.nombre) || document.getElementById('nombre').value, personalActualGlobal, fotoMasterGuardada); } catch (_) {}
         reiniciarInactividad();
         // Ya con sesion activa (idToken + legajo propio), intenta subir las
         // fichadas/alertas offline que pertenezcan a ESTE legajo. Las Reglas de
         // Seguridad atan cada fichada al legajo del uid autenticado, por eso la
         // sincronizacion debe ocurrir con la sesion del propio vigilador.
-        if (navigator.onLine) { sincronizarFichadasPendientes(); sincronizarAlertasFichadasPendientes(); }
+        if (navigator.onLine) { sincronizarFichadasPendientes(); sincronizarAlertasFichadasPendientes(); sincronizarLoteOffline(); }
       } catch (err) {
         st.className = 'text-xs mt-1 text-center text-rose-400 block';
         st.innerText = 'Error al iniciar sesión.';
@@ -378,6 +611,7 @@
       if (navigator.onLine) {
         sincronizarFichadasPendientes();
         sincronizarAlertasFichadasPendientes();
+        sincronizarLoteOffline();
       }
     };
 
@@ -410,6 +644,7 @@
       actualizarEstadoRed();
       sincronizarFichadasPendientes();
       sincronizarAlertasFichadasPendientes();
+      sincronizarLoteOffline();
     });
     
     window.addEventListener('offline', actualizarEstadoRed);
@@ -432,6 +667,16 @@
     }
 
     function actualizarEstadoRed() {
+      const indicadorLogin = document.getElementById('estadoRedLogin');
+      if (indicadorLogin) {
+        if (navigator.onLine) {
+          indicadorLogin.className = "text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-500/30";
+          indicadorLogin.innerText = "🟢 Online";
+        } else {
+          indicadorLogin.className = "text-[11px] font-semibold px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-500/30";
+          indicadorLogin.innerText = offlineHabilitadoLocal() ? "⚠️ Offline (login local disponible)" : "⚠️ Sin conexión";
+        }
+      }
       const indicador = document.getElementById('estadoRed');
       if (!indicador) return;
       if (navigator.onLine) {
@@ -476,6 +721,7 @@
             const r = Number(cfg && cfg.radioFichajeMetros);
             if (Number.isFinite(r) && r > 0) radioGlobalConfigMetros = r;
             biometriaEstrictaGlobal = (cfg && cfg.biometriaEstricta === true);
+            guardarOfflineCfg(cfg); // Fase 2: persiste el flag offline para el proximo login sin red
           }).catch(() => {});
       }
       const objetivosGuardados = JSON.parse(localStorage.getItem('demo_lista_objetivos') || '[]');
@@ -1503,6 +1749,13 @@
         datos.validacionFacial = "OFFLINE_AUDITORIA_REQUERIDA";
       }
 
+      // Fase 2: marca de origen. Solo las creadas REALMENTE sin conexion viajan por
+      // la via firmada por dispositivo (lote offline), que no depende del idToken.
+      datos.creadaOffline = !navigator.onLine;
+      // authUid de la sesion (online u offline desde cache): el Worker lo exige para
+      // atar la fichada a un legajo real al sincronizar el lote.
+      if (!datos.authUid && typeof uidSesion !== 'undefined' && uidSesion) datos.authUid = uidSesion;
+
       pendientes.push(datos);
       localStorage.setItem('fichadas_pendientes', JSON.stringify(pendientes));
 
@@ -1513,6 +1766,10 @@
 
       limpiarFormularioExitoso();
       finalizarSesionTrasFichada();
+      // Si en este momento hay conexion (p.ej. fallo puntual del Worker/RTDB), se
+      // intenta subir de inmediato por el lote firmado; si estamos offline, quedara
+      // para el evento 'online'. Solo actua sobre fichadas creadas offline.
+      if (navigator.onLine) sincronizarLoteOffline();
     }
 
     // Tras una fichada exitosa: en modo COMPARTIDO se cierra la sesion (para
@@ -1561,8 +1818,13 @@
       let pendientes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
       if (pendientes.length === 0) return;
 
-      const idx = pendientes.findIndex(f => f && mismoLegajo(f.legajo, legajoSesion));
-      if (idx === -1) return; // ninguna pendiente es del vigilador logueado
+      // Reparto de responsabilidades (Fase 2): si el dispositivo esta provisionado,
+      // las fichadas creadas OFFLINE se suben por la via firmada (sincronizarLoteOffline),
+      // no por aqui. Sin dispositivo provisionado, esta sync (con sesion activa) sigue
+      // siendo el respaldo para no perderlas.
+      const hayDispositivo = !!obtenerCredencialDispositivo();
+      const idx = pendientes.findIndex(f => f && mismoLegajo(f.legajo, legajoSesion) && !(hayDispositivo && (f.creadaOffline === true || f.origenOffline === true)));
+      if (idx === -1) return; // ninguna pendiente corresponde a esta via
 
       estaSincronizando = true;
       let datos = pendientes.splice(idx, 1)[0];
