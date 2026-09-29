@@ -2617,6 +2617,43 @@
       datosActualizados.pinHash = null;
       datosActualizados.pinSalt = null;
       if (inputFoto.files && inputFoto.files[0]) datosActualizados.fotoMaster = await convertirImagenBase64(inputFoto.files[0]);
+      // ================== INTENTO ATOMICO (server-side) ==================
+      // Una sola llamada al Worker consolida ficha + credencial + Auth (PIN y/o
+      // legajo/email) + identidad, con orden fail-fast (Auth primero). Evita el
+      // estado "a medias" que producian las 4 escrituras sueltas de abajo.
+      // Si el Worker es una version vieja que no conoce la accion, se cae con
+      // gracia a la ruta clasica. Cualquier OTRO error (incluido 'inconsistente')
+      // se informa y se ABORTA, para no duplicar escrituras por la ruta legacy.
+      const legajoAnteriorAtom = String(fichaActual.legajo || '').trim();
+      const legajoNuevoAtom = String(legajo).trim();
+      const legajoCambioAtom = legajoAnteriorAtom !== '' && legajoAnteriorAtom !== legajoNuevoAtom;
+      if (URL_WORKER_AUTH) {
+        try {
+          const payloadAtom = { accion: 'actualizarEmpleado', uid: id, personal: datosActualizados, usuario: { legajo: legajoNuevoAtom, nombre } };
+          if (credencialNueva) { payloadAtom.credencial = credencialNueva; payloadAtom.nuevaClave = String(pin).trim().padStart(6, '0'); }
+          if (legajoCambioAtom) payloadAtom.nuevoEmail = legajoNuevoAtom + '@demo.asistencia';
+          await window.llamarWorkerAdmin(payloadAtom);
+          // Exito atomico: el Worker ya audito. Refrescamos cache local y cerramos
+          // SIN ejecutar las escrituras sueltas de abajo (ruta no atomica).
+          mapaConfiguracionPersonal[id] = { ...(mapaConfiguracionPersonal[id] || {}), ...datosActualizados };
+          alert('Personal actualizado con éxito.');
+          cerrarModalEditar();
+          recargarDatosEfectivo();
+          btn.disabled = false; btn.innerText = 'Guardar Cambios';
+          return;
+        } catch (eAtom) {
+          const msgAtom = String((eAtom && eAtom.message) || eAtom);
+          if (!/desconocida/i.test(msgAtom)) {
+            // Error real de la operacion atomica (Auth, o inconsistencia parcial):
+            // se informa y NO se reintenta por la ruta legacy.
+            alert('No se pudo guardar de forma atómica: ' + msgAtom);
+            btn.disabled = false; btn.innerText = 'Guardar Cambios';
+            return;
+          }
+          console.warn('El Worker no conoce actualizarEmpleado; usando la ruta clásica.', msgAtom);
+        }
+      }
+      // ================== RUTA CLASICA (fallback) ==================
       try {
         const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/personal/${id}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datosActualizados) });
         if (!res.ok) throw new Error('Error al actualizar en Firebase');
@@ -2824,6 +2861,28 @@
     async function eliminarPersonal(firebaseId) {
       if (!confirm(`¿Estás seguro de que deseas eliminar este registro? Se dará de baja su ficha, su identidad de acceso y sus credenciales.`)) return;
       const legajoElim = (mapaConfiguracionPersonal[firebaseId] || {}).legajo || '';
+      // ================== INTENTO ATOMICO (server-side) ==================
+      // Una sola llamada da de baja Auth PRIMERO (fail-fast) y luego limpia
+      // credenciales/usuarios/personal con la service account, auditando una vez.
+      // Evita el estado "ficha borrada pero cuenta de Auth viva". Si el Worker es
+      // una version vieja que no conoce la accion, cae a la ruta clasica.
+      if (URL_WORKER_AUTH) {
+        try {
+          await window.llamarWorkerAdmin({ accion: 'darDeBajaEmpleado', uid: firebaseId, modo: 'ELIMINAR' });
+          delete mapaConfiguracionPersonal[firebaseId];
+          alert('Registro eliminado con éxito (ficha, identidad, credenciales y acceso).');
+          recargarDatosEfectivo();
+          return;
+        } catch (eAtomDel) {
+          const msgAtomDel = String((eAtomDel && eAtomDel.message) || eAtomDel);
+          if (!/desconocida/i.test(msgAtomDel)) {
+            alert('No se pudo eliminar de forma atómica: ' + msgAtomDel);
+            return;
+          }
+          console.warn('El Worker no conoce darDeBajaEmpleado; usando la ruta clásica.', msgAtomDel);
+        }
+      }
+      // ================== RUTA CLASICA (fallback) ==================
       try {
         // 1. Borrar la ficha de /personal (verificando que el servidor lo acepte).
         const resP = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/personal/${firebaseId}.json`), { method: 'DELETE' });
