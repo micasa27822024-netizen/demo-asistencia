@@ -1,0 +1,1337 @@
+    const URL_FIREBASE = "https://fir-asistencia-fad12-default-rtdb.firebaseio.com";
+
+    // Comparacion unificada de legajo (misma logica que mismoLegajoAdmin en
+    // admin.html y mismoLegajoVig en mis-horas.html): normaliza con trim y, si
+    // ambos son numericos, compara tambien por valor entero para tolerar ceros
+    // a la izquierda (ej: "0286" === "286"). Legajo SIEMPRE se maneja como string.
+    function mismoLegajo(a, b) {
+      const x = String(a == null ? '' : a).trim();
+      const y = String(b == null ? '' : b).trim();
+      if (x === '' || y === '') return false;
+      if (x === y) return true;
+      const nx = parseInt(x, 10), ny = parseInt(y, 10);
+      return Number.isFinite(nx) && Number.isFinite(ny) && nx === ny;
+    }
+
+    // --- ANTI-DUPLICADO DE FICHAJES (aditivo) ---
+    // Ventana de tiempo dentro de la cual una misma persona no puede repetir el mismo tipo de fichada.
+    const VENTANA_ANTIDUPLICADO_MS = 120000; // 2 minutos
+    // --- ID IDEMPOTENTE DE FICHADA (aditivo) ---
+    // Genera un identificador único UNA sola vez por fichada. Ese ID viaja con
+    // la fichada (online y en la cola offline) y se usa como CLAVE en Firebase.
+    // Al guardar con PUT sobre esa clave, reintentar la sincronización
+    // SOBRESCRIBE el mismo registro en lugar de crear un duplicado.
+    function generarIdFichada() {
+      const rnd = (self.crypto && typeof crypto.randomUUID === 'function')
+        ? crypto.randomUUID()
+        : (Date.now().toString(36) + Math.random().toString(36).slice(2, 12));
+      return 'fch_' + rnd;
+    }
+    // Consulta las fichadas recientes del legajo y detecta un duplicado (mismo tipo dentro de la ventana).
+    // Ante cualquier error de red devuelve false para no bloquear una fichada legítima.
+    async function existeFichadaReciente(legajo, tipo) {
+      try {
+        const url = `${URL_FIREBASE}/fichadas.json?orderBy=%22legajo%22&equalTo=%22${encodeURIComponent(String(legajo))}%22`;
+        const res = await fetch(urlAuth(url), { cache: 'no-store' });
+        if (!res.ok) return false;
+        const data = await res.json();
+        if (!data) return false;
+        const ahora = Date.now();
+        const tipoBuscado = String(tipo || '').toUpperCase();
+        return Object.values(data).some(f => {
+          if (!f || String(f.tipo || '').toUpperCase() !== tipoBuscado) return false;
+          // Hora OFICIAL: sello de servidor unificado (timestampServidor). Se mantiene
+          // compatibilidad con fichadas antiguas que usaban 'timestamp' / 'timestampLocal'.
+          let ts = (typeof f.timestampServidor === 'number') ? f.timestampServidor
+                 : (typeof f.timestamp === 'number') ? f.timestamp
+                 : (typeof f.timestampLocal === 'number' ? f.timestampLocal
+                 : (f.fechaHoraDispositivo ? new Date(f.fechaHoraDispositivo).getTime() : 0));
+          return ts && (ahora - ts) >= 0 && (ahora - ts) < VENTANA_ANTIDUPLICADO_MS;
+        });
+      } catch (e) {
+        console.warn('No se pudo verificar duplicados de fichada:', e);
+        return false;
+      }
+    }
+
+    let fotoBase64Global = "";
+    let estaSincronizando = false;
+    let ultimoTipoFichadaGlobal = "";
+    // Turno/horario de la ENTRADA activa (si la hay). Permite ligar la SALIDA
+    // al turno con el que se abrio el servicio, aunque cruce la medianoche.
+    let ultimaEntradaActivaGlobal = null;
+    // Marca si el legajo validado figura como INACTIVO / dado de baja. Si es
+    // asi, se bloquea toda posibilidad de fichar.
+    let vigiladorInactivoGlobal = false;
+    let fotoMasterGuardada = null;
+    let modelosCargados = false;
+    let resultadoSimilitudGlobal = "NO_EVALUADO";
+    // Modo biométrico estricto (lo define el Admin en configuración global).
+    // Si está activo, NO se permite fichar sin una COINCIDENCIA facial real
+    // contra la Foto Master (bloquea IA no disponible, sin master, master
+    // ilegible, error de evaluación o rostro no evaluado).
+    let biometriaEstrictaGlobal = false;
+    let sospechaFraudeGlobal = false;
+    let motivoSospechaGlobal = "";
+    let personalActualGlobal = null;
+    let turnoProgramadoGlobal = null;
+    let objetivoAutorizadoIdsGlobal = [];
+
+    // ===================================================================
+    //  SESION AUTENTICADA DEL VIGILADOR (login-first)
+    //  El vigilador inicia sesion con legajo + PIN contra Firebase Auth y
+    //  la sesion se MANTIENE (no signOut inmediato). Con ese idToken se
+    //  leen SOLO sus propios datos (query scoped) en vez de bajar toda la
+    //  base de PII. Sin sesion no se muestra el panel ni se hace ningun
+    //  fetch de personal/fichadas.
+    // ===================================================================
+    let idTokenVig = null;                 // idToken de la sesion Auth activa
+    let legajoSesion = null;               // legajo logueado
+    let modoDispositivo = 'compartido';    // 'individual' mantiene sesion; 'compartido' cierra tras fichar
+    let timerInactividad = null;
+    const MS_INACTIVIDAD = 2 * 60 * 1000;  // auto-logout por inactividad (~2 min) en modo compartido
+
+    // Agrega ?auth=<idToken> a una URL de la RTDB si hay sesion activa.
+    function urlAuth(url) {
+      if (!idTokenVig) return url;
+      return url + (url.includes('?') ? '&' : '?') + 'auth=' + encodeURIComponent(idTokenVig);
+    }
+
+    // Lee SOLO los registros propios (query scoped por legajo, string y numero)
+    // para no descargar toda la coleccion. Requiere en las Reglas de Seguridad
+    // el indice .indexOn: ["legajo"] sobre /personal y /fichadas.
+    async function fetchScoped(path, legajo) {
+      const base = `${URL_FIREBASE}/${path}.json?orderBy=${encodeURIComponent('"legajo"')}`;
+      // El legajo es SIEMPRE string (tambien en las Reglas): no hay variante numerica,
+      // las Reglas la deniegan. Una respuesta {error:...} no es dato: se descarta.
+      const r = await fetch(urlAuth(base + '&equalTo=' + encodeURIComponent('"' + String(legajo).trim() + '"')), { cache: 'no-store' }).then(x => x.json()).catch(() => null);
+      if (r && typeof r === 'object' && !r.error && Object.keys(r).length) return r;
+      return null;
+    }
+
+    function reiniciarInactividad() {
+      if (modoDispositivo !== 'compartido') { if (timerInactividad) { clearTimeout(timerInactividad); timerInactividad = null; } return; }
+      if (!legajoSesion) return;
+      if (timerInactividad) clearTimeout(timerInactividad);
+      timerInactividad = setTimeout(() => {
+        alert('Sesion cerrada por inactividad. Volve a ingresar tu legajo y PIN.');
+        cerrarSesionVigilador();
+      }, MS_INACTIVIDAD);
+    }
+    ['click', 'keydown', 'touchstart'].forEach(ev =>
+      document.addEventListener(ev, () => { if (legajoSesion) reiniciarInactividad(); }, { passive: true })
+    );
+
+    async function cargarModoDispositivo() {
+      try {
+        const res = await fetch(urlAuth(`${URL_FIREBASE}/configuracionGlobal/modoDispositivo.json?ts=${Date.now()}`), { cache: 'no-store' });
+        const m = await res.json();
+        modoDispositivo = (String(m || '').trim() === 'individual') ? 'individual' : 'compartido';
+      } catch (_) { modoDispositivo = 'compartido'; }
+    }
+
+    async function iniciarSesionVigilador(e) {
+      if (e && e.preventDefault) e.preventDefault();
+      const legajo = document.getElementById('loginLegajo').value.trim();
+      const pin = document.getElementById('loginPin').value.trim();
+      const st = document.getElementById('login-status');
+      const btn = document.getElementById('btnIngresar');
+      if (!legajo || !pin) { st.className = 'text-xs mt-1 text-center text-rose-400 block'; st.innerText = 'Ingresá tu legajo y PIN.'; return; }
+      if (!navigator.onLine) { st.className = 'text-xs mt-1 text-center text-rose-400 block'; st.innerText = 'Sin conexión: no se puede iniciar sesión de forma segura.'; return; }
+      st.className = 'text-xs mt-1 text-center text-amber-400 block'; st.innerText = 'Verificando...';
+      if (btn) btn.disabled = true;
+      try {
+        const r = (typeof window.loginVigilador === 'function') ? await window.loginVigilador(legajo, pin) : { ok: false, razon: 'sin_auth' };
+        if (!r || !r.ok) {
+          const cod = r && r.razon;
+          st.className = 'text-xs mt-1 text-center text-rose-400 block';
+          st.innerText = (cod === 'auth/too-many-requests')
+            ? 'Demasiados intentos. Esperá unos minutos.'
+            : 'Legajo o PIN incorrectos.';
+          if (btn) btn.disabled = false;
+          return;
+        }
+        idTokenVig = r.idToken;
+        legajoSesion = String(legajo).trim();
+        document.getElementById('loginPin').value = '';
+        document.getElementById('pantallaLogin').classList.add('hidden');
+        document.getElementById('panelFichaje').classList.remove('hidden');
+        document.getElementById('legajo').value = legajoSesion;
+        st.className = 'text-xs mt-1 text-center hidden'; st.innerText = '';
+        // Recursos del panel: recien ahora, ya autenticado.
+        iniciarCamaraSegura();
+        cargarModelosIA();
+        cargarObjetivos();
+        await cargarModoDispositivo();
+        await validarLegajo();   // lee SOLO el registro propio, con token
+        reiniciarInactividad();
+        // Ya con sesion activa (idToken + legajo propio), intenta subir las
+        // fichadas/alertas offline que pertenezcan a ESTE legajo. Las Reglas de
+        // Seguridad atan cada fichada al legajo del uid autenticado, por eso la
+        // sincronizacion debe ocurrir con la sesion del propio vigilador.
+        if (navigator.onLine) { sincronizarFichadasPendientes(); sincronizarAlertasFichadasPendientes(); }
+      } catch (err) {
+        st.className = 'text-xs mt-1 text-center text-rose-400 block';
+        st.innerText = 'Error al iniciar sesión.';
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    async function cerrarSesionVigilador() {
+      try { if (typeof window.logoutVigilador === 'function') await window.logoutVigilador(); } catch (_) {}
+      idTokenVig = null; legajoSesion = null;
+      if (timerInactividad) { clearTimeout(timerInactividad); timerInactividad = null; }
+      personalActualGlobal = null; turnoProgramadoGlobal = null; fotoMasterGuardada = null;
+      vigiladorInactivoGlobal = false; ultimoTipoFichadaGlobal = '';
+      const panel = document.getElementById('panelFichaje'); if (panel) panel.classList.add('hidden');
+      const login = document.getElementById('pantallaLogin'); if (login) login.classList.remove('hidden');
+      const st = document.getElementById('login-status'); if (st) { st.className = 'text-xs mt-1 text-center hidden'; st.innerText = ''; }
+      const btn = document.getElementById('btnIngresar'); if (btn) btn.disabled = false;
+      const ll = document.getElementById('loginLegajo'); if (ll) ll.value = '';
+      const lp = document.getElementById('loginPin'); if (lp) lp.value = '';
+      const nom = document.getElementById('lblSesionNombre'); if (nom) nom.innerText = '—';
+    }
+    window.iniciarSesionVigilador = iniciarSesionVigilador;
+    window.cerrarSesionVigilador = cerrarSesionVigilador;
+
+    window.onload = async function() {
+      actualizarEstadoRed();
+      const f = document.getElementById('formLogin');
+      if (f) f.addEventListener('submit', iniciarSesionVigilador);
+
+      if (navigator.onLine) {
+        sincronizarFichadasPendientes();
+        sincronizarAlertasFichadasPendientes();
+      }
+    };
+
+    // CARGAR MODELOS DESDE LA CARPETA LOCAL /models
+    async function cargarModelosIA() {
+      const status = document.getElementById('foto-status');
+      status.innerText = "⏳ Cargando modelos de Inteligencia Artificial...";
+      status.className = "text-xs text-amber-400 text-center font-semibold";
+      
+      try {
+        const MODEL_URL = './models';
+
+        await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+
+        modelosCargados = true;
+        status.innerText = "⚠️ Foto no capturada (IA Lista)";
+        status.className = "text-xs text-rose-400 text-center font-semibold";
+        console.log("✅ Modelos de IA cargados con éxito desde la carpeta local.");
+      } catch (err) {
+        console.error("Error al cargar modelos de la IA:", err);
+        modelosCargados = false;
+        status.innerText = "⚠️ Modo IA no disponible (Error al cargar modelos)";
+        status.className = "text-xs text-amber-400 text-center font-semibold";
+      }
+    }
+
+    window.addEventListener('online', () => {
+      actualizarEstadoRed();
+      sincronizarFichadasPendientes();
+      sincronizarAlertasFichadasPendientes();
+    });
+    
+    window.addEventListener('offline', actualizarEstadoRed);
+
+    function iniciarCamaraSegura() {
+      const status = document.getElementById('foto-status');
+      
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+          .then(stream => { 
+            document.getElementById('webcam').srcObject = stream; 
+          })
+          .catch(err => {
+            console.warn("No se pudo iniciar la cámara automáticamente: ", err);
+            status.innerText = "⚠️ Cámara pausada o sin permisos (pulse Capturar Foto)";
+          });
+      } else {
+        status.innerText = "⚠️ Su navegador no soporta el acceso a la cámara";
+      }
+    }
+
+    function actualizarEstadoRed() {
+      const indicador = document.getElementById('estadoRed');
+      if (!indicador) return;
+      if (navigator.onLine) {
+        indicador.className = "text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-500/30";
+        indicador.innerText = "🟢 Online";
+      } else {
+        indicador.className = "text-[11px] font-semibold px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-500/30";
+        indicador.innerText = "⚠️ Modo Offline";
+      }
+    }
+
+    // RADIO DE SEGURIDAD POR DEFECTO: 100 METROS.
+    // Si el objetivo tiene radioPermitido, radio o radioMetros, se usa ese valor.
+    const RADIO_OBJETIVO_DEFAULT_METROS = 100;
+    // Radio por defecto configurable desde Admin (/configuracionGlobal). Se usa como respaldo
+    // cuando el objetivo no define su propio radio.
+    let radioGlobalConfigMetros = RADIO_OBJETIVO_DEFAULT_METROS;
+    let objetivosDetalleGlobal = [];
+
+    function obtenerDatosObjetivoSeleccionado(nombreObjetivo) {
+      return objetivosDetalleGlobal.find(o =>
+        String(o.nombre || o.codigo || '').trim() === String(nombreObjetivo || '').trim()
+      ) || null;
+    }
+
+    function normalizarRadioObjetivo(objetivo) {
+      const radio = Number(
+        objetivo?.radioPermitido ??
+        objetivo?.radio ??
+        objetivo?.radioMetros ??
+        radioGlobalConfigMetros
+      );
+      return Number.isFinite(radio) && radio > 0 ? radio : RADIO_OBJETIVO_DEFAULT_METROS;
+    }
+
+    function cargarObjetivos() {
+      // Radio por defecto configurable desde el panel Admin.
+      if (navigator.onLine) {
+        fetch(urlAuth(`${URL_FIREBASE}/configuracionGlobal.json?ts=${Date.now()}`), { cache: 'no-store' })
+          .then(res => res.json())
+          .then(cfg => {
+            const r = Number(cfg && cfg.radioFichajeMetros);
+            if (Number.isFinite(r) && r > 0) radioGlobalConfigMetros = r;
+            biometriaEstrictaGlobal = (cfg && cfg.biometriaEstricta === true);
+          }).catch(() => {});
+      }
+      const objetivosGuardados = JSON.parse(localStorage.getItem('demo_lista_objetivos') || '[]');
+      if (objetivosGuardados.length > 0) objetivosDetalleGlobal = objetivosGuardados.map(item => typeof item === 'string' ? { nombre: item } : item);
+      if (navigator.onLine) {
+        fetch(urlAuth(`${URL_FIREBASE}/objetivos.json?ts=${Date.now()}`), { cache: 'no-store' })
+          .then(res => res.json())
+          .then(data => {
+            if (!data) return;
+            const listaNuevos = Object.entries(data).filter(([id,item]) => item && (item.nombre || item.codigo)).map(([id,item]) => ({
+              id, nombre:item.nombre||item.codigo, codigo:item.codigo||'', latitud:item.latitud??item.lat??item.latitude??null, longitud:item.longitud??item.lng??item.lon??item.longitude??null, radioPermitido:normalizarRadioObjetivo(item)
+            }));
+            if (listaNuevos.length) { localStorage.setItem('demo_lista_objetivos',JSON.stringify(listaNuevos)); objetivosDetalleGlobal=listaNuevos; if(personalActualGlobal) aplicarConfiguracionVigilador(personalActualGlobal); }
+          }).catch(err=>console.warn('No se pudieron actualizar los objetivos desde Firebase:',err));
+      }
+    }
+
+    function normalizarObjetivosAsignados(personal) {
+      const raw = personal?.objetivosAsignados;
+      if (Array.isArray(raw)) return raw.filter(x => x && (x.id || x.firebaseId || x.nombre)).map(x => ({ id:String(x.id||x.firebaseId||''), nombre:String(x.nombre||'') }));
+      if (raw && typeof raw === 'object') return Object.entries(raw).map(([id,x]) => ({id:String(x?.id||id),nombre:String(x?.nombre||x||'')}));
+      return [];
+    }
+
+    function formatearHorarioTurno(inicio, fin) { return inicio && fin ? `${inicio} → ${fin}` : 'Sin horario programado'; }
+
+    function obtenerFechaLocalISO() {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,'0');
+      const day = String(d.getDate()).padStart(2,'0');
+      return `${y}-${m}-${day}`;
+    }
+
+    async function obtenerTurnoProgramadoParaFecha(legajo, fecha) {
+      if (!navigator.onLine) return null;
+      try {
+        // Consulta ACOTADA por legajo (string): las Reglas solo permiten al vigilador leer su propio legajo.
+        const legajoQ=String((typeof legajoSesion!=='undefined'&&legajoSesion)?legajoSesion:legajo).trim();
+        const res=await fetch(urlAuth(`${URL_FIREBASE}/asignacionesTurnos.json?orderBy=%22legajo%22&equalTo=%22${encodeURIComponent(legajoQ)}%22&ts=${Date.now()}`),{cache:'no-store'});
+        if(!res.ok)return null;
+        const data=await res.json();
+        if(!data||data.error)return null;
+        const lista=Object.entries(data).map(([id,d])=>({...d,id})).filter(d=>mismoLegajo(d.legajo, legajo) && String(d.fecha||'')===String(fecha));
+        lista.sort((a,b)=>String(b.actualizadoEn||'').localeCompare(String(a.actualizadoEn||'')));
+        return lista[0]||null;
+      }catch(e){console.warn('No se pudo obtener la asignación del turno:',e);return null;}
+    }
+
+    async function aplicarConfiguracionVigilador(personal) {
+      personalActualGlobal=personal||null;
+      if(!personal)return;
+      localStorage.setItem('personal_config_fichada',JSON.stringify(personal));
+      const asignadosRaw=normalizarObjetivosAsignados(personal);
+      const asignados=asignadosRaw.map(x=>{
+        const detalle=objetivosDetalleGlobal.find(o=>String(o.id||'')===String(x.id||''));
+        return { ...x, nombre: detalle?.nombre || x.nombre };
+      });
+      objetivoAutorizadoIdsGlobal=asignados.map(x=>x.id).filter(Boolean);
+      const fecha=obtenerFechaLocalISO();
+      turnoProgramadoGlobal=await obtenerTurnoProgramadoParaFecha(personal.legajo,fecha);
+      let permitidos=asignados;
+      if(turnoProgramadoGlobal?.objetivoId){
+        const objetivoTurno = objetivosDetalleGlobal.find(o=>String(o.id||'')===String(turnoProgramadoGlobal.objetivoId));
+        permitidos = [{ id:String(turnoProgramadoGlobal.objetivoId), nombre:objetivoTurno?.nombre || turnoProgramadoGlobal.objetivoNombre || '' }];
+        objetivoAutorizadoIdsGlobal = permitidos.map(x=>x.id);
+      }
+      const select=document.getElementById('objetivo'); select.innerHTML='<option value="">Seleccione su puesto asignado</option>';
+      permitidos.forEach(o=>select.insertAdjacentHTML('beforeend',`<option value="${String(o.nombre||'').replace(/"/g,'&quot;')}" data-objetivo-id="${String(o.id||'')}">${String(o.nombre||o.id||'')}</option>`));
+      const objStatus=document.getElementById('objetivo-status'); const turnoStatus=document.getElementById('turno-status');
+      objStatus.className='text-[11px] mt-1 text-slate-500'; objStatus.innerText=permitidos.length ? `✓ ${permitidos.length} objetivo(s) autorizado(s) para este vigilador.` : '⚠️ No tiene objetivos autorizados. Debe configurarlos el administrador.';
+      turnoStatus.classList.remove('hidden'); turnoStatus.className='text-[11px] mt-1 '+(turnoProgramadoGlobal?'text-sky-300':'text-slate-400');
+      turnoStatus.innerText=turnoProgramadoGlobal ? `📅 Turno asignado para hoy: ${formatearHorarioTurno(turnoProgramadoGlobal.horaInicio,turnoProgramadoGlobal.horaFin)} · ${turnoProgramadoGlobal.objetivoNombre||''}` : (personal.horarioHabitual?.inicio&&personal.horarioHabitual?.fin ? `🕒 Horario habitual: ${formatearHorarioTurno(personal.horarioHabitual.inicio,personal.horarioHabitual.fin)}` : '⚠️ No hay horario programado para hoy.');
+      if(permitidos.length===1) select.value=permitidos[0].nombre||'';
+    }
+
+
+
+    function calcularDistanciaMetros(lat1, lon1, lat2, lon2) {
+      const R = 6371000;
+      const toRad = grados => grados * Math.PI / 180;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(a));
+    }
+
+    function mostrarErrorUbicacion(mensaje) {
+      const divResultado = document.getElementById('resultado');
+      divResultado.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
+      divResultado.innerText = mensaje;
+      divResultado.classList.remove('hidden');
+    }
+
+    function formatearDistanciaObjetivo(distanciaMetros) {
+      const metros = Math.max(0, Number(distanciaMetros) || 0);
+      if (metros < 1000) {
+        return `${Math.round(metros)} m`;
+      }
+      return `${(metros / 1000).toFixed(2).replace('.', ',')} km (${Math.round(metros).toLocaleString('es-AR')} m)`;
+    }
+
+    async function obtenerDatosObjetivoParaFichada(nombreObjetivo) {
+      let detalle = obtenerDatosObjetivoSeleccionado(nombreObjetivo);
+      const tieneCoordenadas = detalle &&
+        Number.isFinite(Number(detalle.latitud)) &&
+        Number.isFinite(Number(detalle.longitud)) &&
+        !(Number(detalle.latitud) === 0 && Number(detalle.longitud) === 0);
+
+      if (tieneCoordenadas) return detalle;
+
+      // Refresco puntual: evita depender de que la carga inicial haya terminado.
+      if (!navigator.onLine) return detalle;
+
+      try {
+        const res = await fetch(urlAuth(`${URL_FIREBASE}/objetivos.json?ts=${Date.now()}`), { cache: 'no-store' });
+        if (!res.ok) throw new Error(`Firebase respondió ${res.status}`);
+        const data = await res.json();
+        const buscado = String(nombreObjetivo || '').trim().toLowerCase();
+        const encontrado = Object.entries(data || {}).find(([id, item]) => {
+          const nombre = String(item?.nombre || item?.codigo || id || '').trim().toLowerCase();
+          return nombre === buscado;
+        });
+
+        if (encontrado) {
+          const [id, item] = encontrado;
+          detalle = {
+            id,
+            ...item,
+            nombre: item?.nombre || item?.codigo || id,
+            latitud: item?.latitud ?? item?.lat ?? item?.latitude ?? null,
+            longitud: item?.longitud ?? item?.lng ?? item?.lon ?? item?.longitude ?? null,
+            radioPermitido: normalizarRadioObjetivo(item)
+          };
+
+          // Actualizamos la caché para las siguientes fichadas.
+          const indice = objetivosDetalleGlobal.findIndex(o =>
+            String(o.nombre || o.codigo || '').trim().toLowerCase() === buscado
+          );
+          if (indice >= 0) objetivosDetalleGlobal[indice] = detalle;
+          else objetivosDetalleGlobal.push(detalle);
+          localStorage.setItem('demo_lista_objetivos', JSON.stringify(objetivosDetalleGlobal));
+          return detalle;
+        }
+      } catch (err) {
+        console.warn('No se pudieron recuperar las coordenadas del objetivo desde Firebase:', err);
+      }
+
+      return detalle;
+    }
+
+    async function validarUbicacionObjetivo(lat, lng, objetivo, contexto = {}) {
+      const detalle = await obtenerDatosObjetivoParaFichada(objetivo);
+      const latObjetivo = Number(detalle?.latitud);
+      const lngObjetivo = Number(detalle?.longitud);
+      const radioPermitido = normalizarRadioObjetivo(detalle);
+
+      if (!Number.isFinite(latObjetivo) || !Number.isFinite(lngObjetivo) ||
+          (latObjetivo === 0 && lngObjetivo === 0)) {
+        mostrarErrorUbicacion(
+          `❌ No se puede validar la ubicación de "${objetivo}". No se pudieron obtener sus coordenadas GPS desde Firebase.`
+        );
+        return null;
+      }
+
+      const distancia = calcularDistanciaMetros(lat, lng, latObjetivo, lngObjetivo);
+      const distanciaTexto = formatearDistanciaObjetivo(distancia);
+
+      if (distancia > radioPermitido) {
+        const alerta = {
+          tipoAlerta: "FICHADA_BLOQUEADA_UBICACION",
+          estado: "NUEVA",
+          legajo: contexto.legajo || "",
+          nombre: contexto.nombre || (contexto.legajo ? `Legajo ${contexto.legajo}` : "Sin nombre"),
+          objetivo: objetivo || "Sin objetivo",
+          tipoFichada: contexto.tipo || "",
+          distanciaMetros: Math.round(distancia),
+          distanciaTexto,
+          radioPermitidoMetros: Math.round(radioPermitido),
+          precisionGPSMetros: Number.isFinite(contexto.precisionGPS) ? Math.round(contexto.precisionGPS) : null,
+          latitud: lat,
+          longitud: lng,
+          latitudObjetivo: latObjetivo,
+          longitudObjetivo: lngObjetivo,
+          fechaHora: new Date().toISOString(),
+          mensaje: `Intento de fichada bloqueado: distancia ${distanciaTexto} del objetivo.`
+        };
+
+        registrarAlertaFichadaBloqueada(alerta);
+
+        mostrarErrorUbicacion(
+          `❌ FICHADA BLOQUEADA. Estás a ${distanciaTexto} del objetivo. Radio permitido: ${Math.round(radioPermitido)} m. Debes encontrarte dentro del radio del objetivo.`
+        );
+        return null;
+      }
+
+      return {
+        distanciaMetros: Math.round(distancia),
+        distanciaTexto,
+        radioPermitido: Math.round(radioPermitido),
+        latObjetivo,
+        lngObjetivo
+      };
+    }
+
+
+    async function registrarAlertaFichadaBloqueada(alerta) {
+      if (!alerta) return;
+
+      if (!navigator.onLine) {
+        const pendientes = JSON.parse(localStorage.getItem('alertas_fichadas_pendientes') || '[]');
+        pendientes.push(alerta);
+        localStorage.setItem('alertas_fichadas_pendientes', JSON.stringify(pendientes));
+        return;
+      }
+
+      try {
+        const res = await fetch(urlAuth(`${URL_FIREBASE}/alertasFichadas.json`), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(alerta)
+        });
+        if (!res.ok) throw new Error("No se pudo registrar la alerta de fichada.");
+      } catch (err) {
+        console.warn("No se pudo enviar la alerta de fichada. Se guardará para sincronizar luego.", err);
+        const pendientes = JSON.parse(localStorage.getItem('alertas_fichadas_pendientes') || '[]');
+        pendientes.push(alerta);
+        localStorage.setItem('alertas_fichadas_pendientes', JSON.stringify(pendientes));
+      }
+    }
+
+    function sincronizarAlertasFichadasPendientes() {
+      if (!navigator.onLine) return;
+      const pendientes = JSON.parse(localStorage.getItem('alertas_fichadas_pendientes') || '[]');
+      if (!pendientes.length) return;
+
+      const alerta = pendientes[0];
+      fetch(urlAuth(`${URL_FIREBASE}/alertasFichadas.json`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(alerta)
+      })
+      .then(res => {
+        if (!res.ok) throw new Error("Firebase rechazó la alerta pendiente.");
+        return res.json();
+      })
+      .then(() => {
+        const restantes = JSON.parse(localStorage.getItem('alertas_fichadas_pendientes') || '[]');
+        restantes.shift();
+        localStorage.setItem('alertas_fichadas_pendientes', JSON.stringify(restantes));
+        if (restantes.length) sincronizarAlertasFichadasPendientes();
+      })
+      .catch(err => console.warn("La alerta pendiente seguirá en cola:", err));
+    }
+
+    function validarLegajo() {
+      const legajoInput = (legajoSesion || document.getElementById('legajo').value).trim();
+      const statusLbl = document.getElementById('legajo-status');
+      const badgeEstado = document.getElementById('ultimo-estado-badge');
+      fotoMasterGuardada = null;
+      
+      if (!legajoInput) {
+        badgeEstado.classList.add('hidden');
+        ultimoTipoFichadaGlobal = "";
+        return;
+      }
+
+      if (!navigator.onLine) {
+        statusLbl.className = "text-xs mt-1 text-slate-400 block";
+        statusLbl.innerText = "Modo Offline: Verificación en servidor omitida.";
+        verificarUltimoEstadoLocal(legajoInput);
+        return;
+      }
+
+      statusLbl.className = "text-xs mt-1 text-amber-400 block";
+      statusLbl.innerText = "Buscando legajo y foto oficial...";
+
+      Promise.all([
+        fetchScoped('personal', legajoInput),
+        fetchScoped('fichadas', legajoInput)
+      ])
+      .then(([dataPersonal, dataFichadas]) => {
+        let encontrado = null;
+        if (dataPersonal) {
+          if (dataPersonal[legajoInput]) {
+            encontrado = dataPersonal[legajoInput];
+          } else {
+            Object.values(dataPersonal).forEach(personal => {
+              if (mismoLegajo(personal.legajo, legajoInput)) {
+                encontrado = personal;
+              }
+            });
+          }
+        }
+
+        if (encontrado) {
+          const estadoVigilador = String(encontrado.estado || 'ACTIVO').trim().toUpperCase();
+          vigiladorInactivoGlobal = (estadoVigilador !== 'ACTIVO');
+          document.getElementById('nombre').value = encontrado.nombre || "";
+          const lblNom = document.getElementById('lblSesionNombre'); if (lblNom) lblNom.innerText = encontrado.nombre || legajoInput;
+          fotoMasterGuardada = encontrado.fotoMaster || null;
+          if (vigiladorInactivoGlobal) {
+            statusLbl.className = "text-xs mt-1 text-rose-400 block";
+            statusLbl.innerText = `⛔ Legajo INACTIVO / dado de baja. No podés fichar. Contactá al administrador.`;
+          } else {
+            statusLbl.className = "text-xs mt-1 text-emerald-400 block";
+            statusLbl.innerText = `✓ ${encontrado.nombre || 'Legajo Encontrado'} ${fotoMasterGuardada ? '📸 (Foto Master OK)' : '⚠️ (Sin Foto Master)'}`;
+          }
+        } else {
+          vigiladorInactivoGlobal = false;
+          document.getElementById('nombre').value = "";
+          statusLbl.className = "text-xs mt-1 text-rose-400 block";
+          statusLbl.innerText = "❌ Legajo no encontrado en el sistema.";
+        }
+
+        if (encontrado && !vigiladorInactivoGlobal) { aplicarConfiguracionVigilador(encontrado); }
+        else { personalActualGlobal = null; turnoProgramadoGlobal = null; document.getElementById('objetivo').innerHTML = '<option value="">' + (vigiladorInactivoGlobal ? 'Legajo inactivo' : 'Legajo no autorizado') + '</option>'; document.getElementById('objetivo-status').innerText = ''; document.getElementById('turno-status').classList.add('hidden'); }
+
+        let ultimaFichadaTipo = "";
+        let timestampUltimo = 0;
+        let ultimaFichadaObj = null;
+
+        if (dataFichadas) {
+          Object.values(dataFichadas).forEach(f => {
+            if (mismoLegajo(f.legajo, legajoInput)) {
+              // Hora OFICIAL para determinar la ultima fichada (ENTRADA/SALIDA): sello del
+              // servidor Firebase unificado (timestampServidor, .sv=timestamp, NO manipulable)
+              // primero; 'timestamp' queda como compat de fichadas antiguas y el reloj del
+              // dispositivo SOLO como fallback final.
+              const refTiempo = f.timestampServidor || f.timestamp || f.fechaHoraDispositivo;
+              let tiempoFichada = refTiempo ? new Date(refTiempo).getTime() : 0;
+              if (tiempoFichada >= timestampUltimo) {
+                timestampUltimo = tiempoFichada;
+                ultimaFichadaTipo = String(f.tipo || "").trim().toUpperCase();
+                ultimaFichadaObj = f;
+              }
+            }
+          });
+        }
+
+        let pendientes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
+        pendientes.forEach(p => {
+          if (mismoLegajo(p.legajo, legajoInput)) {
+            let tiempoP = p.fechaHoraDispositivo ? new Date(p.fechaHoraDispositivo).getTime() : 0;
+            if (tiempoP >= timestampUltimo) {
+              timestampUltimo = tiempoP;
+              ultimaFichadaTipo = String(p.tipo || "").trim().toUpperCase();
+              ultimaFichadaObj = p;
+            }
+          }
+        });
+
+        ultimoTipoFichadaGlobal = ultimaFichadaTipo;
+        ultimaEntradaActivaGlobal = capturarEntradaActiva(ultimaFichadaTipo, ultimaFichadaObj);
+
+        if (ultimaFichadaTipo) {
+          badgeEstado.classList.remove('hidden');
+          if (ultimaFichadaTipo === 'ENTRADA') {
+            badgeEstado.className = "text-xs mt-1.5 font-semibold text-emerald-400 block";
+            badgeEstado.innerText = "ℹ️ Estado actual: Ya registraste una ENTRADA. Tu próxima acción debe ser SALIDA.";
+          } else {
+            badgeEstado.className = "text-xs mt-1.5 font-semibold text-slate-400 block";
+            badgeEstado.innerText = "ℹ️ Estado actual: Última fichada fue SALIDA. Puedes marcar ENTRADA.";
+          }
+        } else {
+          badgeEstado.classList.add('hidden');
+        }
+
+      })
+      .catch(() => {
+        statusLbl.className = "text-xs mt-1 text-slate-400 block";
+        statusLbl.innerText = "Error de conexión al validar legajo.";
+      });
+    }
+
+    // Devuelve el turno/horario de la ENTRADA activa para que la SALIDA lo
+    // herede (turnos nocturnos que cruzan la medianoche). null si no hay
+    // ENTRADA abierta.
+    function capturarEntradaActiva(tipo, obj) {
+      if (tipo !== 'ENTRADA' || !obj) return null;
+      return {
+        horarioProgramadoInicio: obj.horarioProgramadoInicio || null,
+        horarioProgramadoFin: obj.horarioProgramadoFin || null,
+        horarioProgramadoOrigen: obj.horarioProgramadoOrigen || null,
+        asignacionTurnoId: obj.asignacionTurnoId || null,
+        objetivo: obj.objetivo || null,
+        objetivoAutorizadoId: obj.objetivoAutorizadoId || null,
+        fechaHoraDispositivo: obj.fechaHoraDispositivo || null
+      };
+    }
+
+    function verificarUltimoEstadoLocal(legajoInput) {
+      let ultimaFichadaTipo = "";
+      let timestampUltimo = 0;
+      let ultimaFichadaObj = null;
+      let pendientes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
+      
+      pendientes.forEach(p => {
+        if (mismoLegajo(p.legajo, legajoInput)) {
+          let tiempoP = p.fechaHoraDispositivo ? new Date(p.fechaHoraDispositivo).getTime() : 0;
+          if (tiempoP >= timestampUltimo) {
+            timestampUltimo = tiempoP;
+            ultimaFichadaTipo = String(p.tipo || "").trim().toUpperCase();
+            ultimaFichadaObj = p;
+          }
+        }
+      });
+
+      ultimoTipoFichadaGlobal = ultimaFichadaTipo;
+      ultimaEntradaActivaGlobal = capturarEntradaActiva(ultimaFichadaTipo, ultimaFichadaObj);
+      const badgeEstado = document.getElementById('ultimo-estado-badge');
+
+      if (ultimaFichadaTipo) {
+        badgeEstado.classList.remove('hidden');
+        if (ultimaFichadaTipo === 'ENTRADA') {
+          badgeEstado.className = "text-xs mt-1.5 font-semibold text-emerald-400 block";
+          badgeEstado.innerText = "ℹ️ Estado actual (Offline): Tienes una ENTRADA pendiente.";
+        } else {
+          badgeEstado.className = "text-xs mt-1.5 font-semibold text-slate-400 block";
+          badgeEstado.innerText = "ℹ️ Estado actual (Offline): Última fichada fue SALIDA.";
+        }
+      } else {
+        badgeEstado.classList.add('hidden');
+      }
+    }
+
+    async function capturarFoto() {
+      const video = document.getElementById('webcam');
+      const canvas = document.getElementById('canvas');
+      const preview = document.getElementById('preview');
+      const status = document.getElementById('foto-status');
+      const btn = document.getElementById('btnCapturar');
+
+      if (!video.srcObject && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+          video.srcObject = stream;
+        } catch(err) {
+          alert("No se pudo acceder a la cámara. Verifique los permisos del navegador.");
+          return;
+        }
+      }
+
+      btn.disabled = true;
+      status.innerText = "🔍 Analizando rostro e identidad con IA...";
+      status.className = "text-xs text-amber-400 text-center font-semibold";
+
+      setTimeout(async () => {
+        await realizarCapturaIA(video, canvas, preview, status);
+        btn.disabled = false;
+      }, 200);
+    }
+
+    // INSPECCIÓN PRECISA DE TEXTURA PARA DETECTAR PANTALLAS HD
+    function analizarTexturaSuperficial(ctx, box) {
+      const margen = 15;
+      const x = Math.max(0, Math.floor(box.x - margen));
+      const y = Math.max(0, Math.floor(box.y - margen));
+      const w = Math.min(ctx.canvas.width - x, Math.floor(box.width + (margen * 2)));
+      const h = Math.min(ctx.canvas.height - y, Math.floor(box.height + (margen * 2)));
+
+      if (w <= 0 || h <= 0) return { esSospechoso: false, motivo: "" };
+
+      const imageData = ctx.getImageData(x, y, w, h);
+      const data = imageData.data;
+      
+      let sumaGris = 0;
+      let totalPixeles = data.length / 4;
+      let pixelesSaturadosBrillo = 0;
+
+      const valoresGris = new Uint8Array(totalPixeles);
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i+1];
+        const b = data[i+2];
+        
+        const gris = 0.299 * r + 0.587 * g + 0.114 * b;
+        valoresGris[i / 4] = gris;
+        sumaGris += gris;
+
+        if (r > 245 && g > 245 && b > 245) {
+          pixelesSaturadosBrillo++;
+        }
+      }
+
+      const promedio = sumaGris / totalPixeles;
+
+      let sumaDiferenciasCuadradas = 0;
+      for (let i = 0; i < totalPixeles; i++) {
+        sumaDiferenciasCuadradas += Math.pow(valoresGris[i] - promedio, 2);
+      }
+      
+      const desviacionEstandard = Math.sqrt(sumaDiferenciasCuadradas / totalPixeles);
+      const porcentajeBrillo = (pixelesSaturadosBrillo / totalPixeles) * 100;
+
+      if (desviacionEstandard < 8.0 && porcentajeBrillo > 12.0) {
+        return {
+          esSospechoso: true,
+          motivo: `Patrón liso detectado en segundo plano (Posible imagen en pantalla HD - Desv: ${desviacionEstandard.toFixed(1)}, Brillo: ${porcentajeBrillo.toFixed(1)}%)`
+        };
+      }
+
+      return { esSospechoso: false, motivo: "" };
+    }
+
+    async function realizarCapturaIA(video, canvas, preview, status) {
+      sospechaFraudeGlobal = false;
+      motivoSospechaGlobal = "";
+
+      const MAX_WIDTH = 320;
+      const originalWidth = video.videoWidth || 640;
+      const originalHeight = video.videoHeight || 480;
+
+      let targetWidth = MAX_WIDTH;
+      let targetHeight = Math.round((originalHeight * MAX_WIDTH) / originalWidth);
+
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+
+      if (!modelosCargados) {
+        fotoBase64Global = canvas.toDataURL('image/jpeg', 0.35);
+        preview.src = fotoBase64Global;
+        preview.classList.remove('hidden');
+        resultadoSimilitudGlobal = "IA_NO_DISPONIBLE";
+        status.innerText = "⚠️ Foto capturada sin análisis facial de IA.";
+        status.className = "text-xs text-amber-400 text-center font-semibold";
+        return;
+      }
+
+      // 1. DETECTAR ROSTRO Y EXTRAER VECTOR MATEMÁTICO DE LA SELFIE
+      const deteccionSelfie = await faceapi.detectSingleFace(canvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.25 }))
+                                          .withFaceLandmarks()
+                                          .withFaceDescriptor();
+
+      if (!deteccionSelfie) {
+        status.innerText = "❌ Rechazado: No se detecta un rostro humano claro.";
+        status.className = "text-xs text-rose-400 text-center font-semibold";
+        preview.classList.add('hidden');
+        fotoBase64Global = "";
+        return;
+      }
+
+      const box = deteccionSelfie.detection.box;
+
+      // 2. FILTRO DE TAMAÑO RELATIVO (Evita fotos lejanas/papeles en miniatura)
+      const altoRelativo = box.height / canvas.height;
+      if (altoRelativo < 0.25) {
+        status.innerText = "❌ Rechazado: Acerque la cara a la cámara (rostro muy pequeño).";
+        status.className = "text-xs text-rose-400 text-center font-semibold";
+        preview.classList.add('hidden');
+        fotoBase64Global = "";
+        return;
+      }
+
+      // 3. FILTRO ANÁLISIS BORDES DE PAPEL/HOJA SATURADA
+      const startX = Math.max(0, box.x - 20);
+      const startY = Math.max(0, box.y - 20);
+      const width = Math.min(canvas.width - startX, box.width + 40);
+      const height = Math.min(canvas.height - startY, box.height + 40);
+      
+      const imgData = ctx.getImageData(startX, startY, width, height);
+      let pixelesSaturados = 0;
+      for (let i = 0; i < imgData.data.length; i += 4) {
+        if (imgData.data[i] > 240 && imgData.data[i+1] > 240 && imgData.data[i+2] > 240) {
+          pixelesSaturados++;
+        }
+      }
+      if ((pixelesSaturados / (imgData.data.length / 4)) > 0.20) {
+        status.innerText = "❌ Rechazado: Se identificaron bordes de marco o papel alrededor del rostro.";
+        status.className = "text-xs text-rose-400 text-center font-semibold";
+        preview.classList.add('hidden');
+        fotoBase64Global = "";
+        return;
+      }
+
+      // 4. COMPARAR CON FOTO MASTER CON UMBRAL MÍNIMO DEL 55%
+      if (fotoMasterGuardada) {
+        try {
+          const imgMaster = new Image();
+          imgMaster.crossOrigin = "anonymous";
+          imgMaster.src = fotoMasterGuardada;
+          await imgMaster.decode();
+
+          const deteccionMaster = await faceapi.detectSingleFace(imgMaster, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.25 }))
+                                               .withFaceLandmarks()
+                                               .withFaceDescriptor();
+
+          if (deteccionMaster) {
+            const distancia = faceapi.euclideanDistance(deteccionSelfie.descriptor, deteccionMaster.descriptor);
+            const porcentajeSimilitud = Math.round((1 - distancia) * 100);
+
+            // UMBRAL DEL 55% COINCIDENCIA MÍNIMA (Distancia > 0.45 rechaza)
+            if (distancia > 0.45) {
+              status.innerText = `❌ Rechazado: Coincidencia insuficiente (${porcentajeSimilitud}%). Requerido: 55%.`;
+              status.className = "text-xs text-rose-400 text-center font-semibold";
+              preview.classList.add('hidden');
+              fotoBase64Global = "";
+              return;
+            }
+
+            // ANÁLISIS EN SEGUNDO PLANO DE TEXTURA PIEL VS PANTALLAS
+            const analisisTextura = analizarTexturaSuperficial(ctx, box);
+            if (analisisTextura.esSospechoso) {
+              sospechaFraudeGlobal = true;
+              motivoSospechaGlobal = analisisTextura.motivo;
+            }
+
+            resultadoSimilitudGlobal = `${porcentajeSimilitud}% COINCIDENCIA`;
+            status.innerText = `✓ Rostro Validado (${porcentajeSimilitud}% Coincidencia)`;
+            status.className = "text-xs text-emerald-400 text-center font-semibold";
+          } else {
+            resultadoSimilitudGlobal = "MASTER_SIN_ROSTRO";
+            status.innerText = "✓ Rostro Humano OK (Master ilegible)";
+            status.className = "text-xs text-emerald-400 text-center font-semibold";
+          }
+        } catch (e) {
+          console.warn("Error evaluando Foto Master:", e);
+          resultadoSimilitudGlobal = "ERROR_EVALUACION";
+        }
+      } else {
+        resultadoSimilitudGlobal = "SIN_MASTER";
+        status.innerText = "✓ Rostro Humano Detectado (Sin foto master de cotejo)";
+        status.className = "text-xs text-emerald-400 text-center font-semibold";
+      }
+
+      fotoBase64Global = canvas.toDataURL('image/jpeg', 0.35);
+      preview.src = fotoBase64Global;
+      preview.classList.remove('hidden');
+    }
+
+    async function procesarEnvio(tipoRecibido) {
+      const tipo = String(tipoRecibido).trim().toUpperCase();
+      const legajo = document.getElementById('legajo').value.trim();
+      const nombre = document.getElementById('nombre').value.trim();
+      const objetivo = document.getElementById('objetivo').value;
+
+      // Guarda de sesion: la identidad ya se valido en el login (Firebase Auth).
+      // Si por algun motivo se perdio el token, se obliga a re-loguear.
+      if (!idTokenVig || !legajoSesion) {
+        alert('Tu sesión expiró. Volvé a ingresar tu legajo y PIN.');
+        cerrarSesionVigilador();
+        return;
+      }
+
+      if (!legajo || !objetivo) {
+        alert("Por favor seleccione un Objetivo.");
+        return;
+      }
+
+      const opcionObjetivo = document.getElementById('objetivo').selectedOptions[0];
+      const objetivoIdSeleccionado = opcionObjetivo ? opcionObjetivo.dataset.objetivoId : '';
+      if (!personalActualGlobal || String(personalActualGlobal.legajo||'').trim() !== String(legajo).trim()) {
+        alert('❌ No se pudo validar la configuración del vigilador. Ingrese nuevamente su legajo.'); return;
+      }
+      // Bloqueo por estado: un legajo INACTIVO / dado de baja no puede fichar.
+      if (vigiladorInactivoGlobal) {
+        alert('⛔ FICHADA BLOQUEADA. Tu legajo figura como INACTIVO / dado de baja. Contactá al administrador.'); return;
+      }
+      // El PIN ya fue validado contra Firebase Auth al iniciar sesión; no se
+      // vuelve a pedir en cada fichada. La sesión autenticada (idToken) es la
+      // prueba de identidad para leer/escribir en la base.
+      if (!objetivoIdSeleccionado || !objetivoAutorizadoIdsGlobal.includes(String(objetivoIdSeleccionado))) {
+        alert('❌ FICHADA BLOQUEADA. Ese objetivo no está autorizado para este vigilador.'); return;
+      }
+      // Turno nocturno: una SALIDA que cierra una ENTRADA activa NO exige que
+      // haya un turno programado para HOY (la entrada pudo abrirse ayer y cruzar
+      // la medianoche). En ese caso el horario se hereda de la ENTRADA (ver mas
+      // abajo, override del payload). Para ENTRADA si se exige horario vigente.
+      const cerrandoEntradaActiva = (tipo === "SALIDA" && ultimoTipoFichadaGlobal === "ENTRADA");
+      if (!cerrandoEntradaActiva && !turnoProgramadoGlobal && (!personalActualGlobal.horarioHabitual?.inicio || !personalActualGlobal.horarioHabitual?.fin)) {
+        alert('❌ FICHADA BLOQUEADA. No hay un horario programado para este vigilador. El administrador debe asignar un horario.'); return;
+      }
+
+      if (ultimoTipoFichadaGlobal === "ENTRADA" && tipo === "ENTRADA") {
+        alert("⚠️ Acción bloqueada: Ya registraste una ENTRADA previa. No puedes volver a fichar entrada hasta registrar tu SALIDA.");
+        const divRes = document.getElementById('resultado');
+        divRes.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
+        divRes.innerText = "❌ Bloqueado: Ya registraste una entrada anterior.";
+        divRes.classList.remove('hidden');
+        return;
+      }
+
+      // Maquina de estados: SIN_SERVICIO -> ENTRADA -> SALIDA -> ENTRADA.
+      // Bloquea una SALIDA cuando no hay una ENTRADA activa (sin fichada previa
+      // o cuando la ultima fichada valida ya fue una SALIDA).
+      if (tipo === "SALIDA" && ultimoTipoFichadaGlobal !== "ENTRADA") {
+        const motivo = (ultimoTipoFichadaGlobal === "SALIDA")
+          ? "Tu última fichada válida ya fue una SALIDA. Tu próxima acción debe ser una ENTRADA."
+          : "No tenés una ENTRADA activa. Primero recordá tu ENTRADA antes de marcar SALIDA.";
+        alert("⚠️ Acción bloqueada: " + motivo);
+        const divRes = document.getElementById('resultado');
+        divRes.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
+        divRes.innerText = "❌ Bloqueado: SALIDA sin una ENTRADA activa.";
+        divRes.classList.remove('hidden');
+        return;
+      }
+
+      localStorage.setItem('demo_ultimo_objetivo', objetivo);
+
+      if (!fotoBase64Global) {
+        alert("Primero capture una selfie válida haciendo clic en 'CAPTURAR Y VALIDAR ROSTRO'.");
+        return;
+      }
+
+      // 🛡️ MODO BIOMÉTRICO ESTRICTO (fail-closed): si el Admin lo activó, solo se
+      // permite fichar cuando hubo una COINCIDENCIA facial real contra la Foto
+      // Master. Cualquier otro estado (IA no disponible, sin master, master
+      // ilegible, error o rostro no evaluado) BLOQUEA la fichada en vez de
+      // dejarla pasar marcada para revisión.
+      if (biometriaEstrictaGlobal && !/COINCIDENCIA/.test(String(resultadoSimilitudGlobal))) {
+        const divRes = document.getElementById('resultado');
+        divRes.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
+        divRes.innerText = "❌ FICHADA BLOQUEADA (modo estricto): no se validó tu rostro contra la Foto Master. Reintentá con buena luz y de frente; si no tenés Foto Master cargada, contactá al administrador.";
+        divRes.classList.remove('hidden');
+        return;
+      }
+
+      const divResultado = document.getElementById('resultado');
+      divResultado.className = "p-3 rounded-xl text-xs text-center bg-slate-700 text-white";
+      divResultado.innerText = "📍 Verificando ubicación GPS y distancia al objetivo...";
+      divResultado.classList.remove('hidden');
+
+      if (!navigator.geolocation) {
+        mostrarErrorUbicacion("❌ El dispositivo/navegador no soporta localización GPS.");
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          const precisionGPS = Number(pos.coords.accuracy);
+
+          if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat === 0 || lng === 0) {
+            mostrarErrorUbicacion("❌ No se obtuvo una coordenada GPS válida. Activa la ubicación para fichar.");
+            return;
+          }
+
+          // 🛡️ Detección de ubicación simulada / Fake GPS ANTES de permitir el guardado.
+          const esGpsFalso = (pos.coords.isFromMockProvider === true) || (pos.mocked === true);
+          const precisionSospechosa = (precisionGPS === 0);
+          if (esGpsFalso || precisionSospechosa) {
+            mostrarErrorUbicacion("❌ Se detectó una ubicación simulada o Fake GPS. La fichada fue bloqueada por seguridad.");
+            return;
+          }
+
+          // La validación ocurre ANTES de enviar/guardar la fichada.
+          validarUbicacionObjetivo(lat, lng, objetivo, { legajo, nombre, tipo, precisionGPS }).then(validacionUbicacion => {
+            if (!validacionUbicacion) return;
+
+            divResultado.className = "p-3 rounded-xl text-xs text-center bg-emerald-950 text-emerald-200 border border-emerald-500";
+            divResultado.innerText =
+              `✅ Ubicación verificada. Distancia al objetivo: ${validacionUbicacion.distanciaTexto}. ` +
+              `Radio permitido: ${validacionUbicacion.radioPermitido} m. ` +
+              `Precisión GPS: ${Number.isFinite(precisionGPS) ? Math.round(precisionGPS) + ' m' : 'no disponible'}.`;
+
+            ejecutarPeticionFichada(
+              tipo, lat, lng, legajo, '', nombre, objetivo,
+              validacionUbicacion, precisionGPS
+            );
+          }).catch(err => {
+            console.error('Error validando geocerca:', err);
+            mostrarErrorUbicacion('❌ No se pudo verificar la distancia al objetivo. La fichada fue bloqueada.');
+          });
+          return;
+        },
+        err => {
+          mostrarErrorUbicacion("❌ Permiso de GPS denegado o no disponible. Activa la ubicación en tu dispositivo.");
+        },
+        { timeout: 15000, enableHighAccuracy: true, maximumAge: 0 }
+      );
+    }
+
+    async function ejecutarPeticionFichada(tipo, lat, lng, legajo, pin, nombre, objetivo, validacionUbicacion, precisionGPS) {
+      const datos = {
+        // ID idempotente: identifica de forma única ESTA fichada. Se genera una
+        // sola vez acá y se reutiliza en cada reintento de guardado/sincronización,
+        // por lo que nunca se crea un duplicado (se guarda con PUT sobre esta clave).
+        fichadaId: generarIdFichada(),
+        // Legajo de la sesion autenticada (string): las Reglas exigen que coincida con /usuarios/<uid>/legajo.
+        legajo: String((typeof legajoSesion !== 'undefined' && legajoSesion) ? legajoSesion : legajo).trim(),
+        // El PIN ya se validó antes de fichar (Firebase Auth / hash con salt), así que
+        // NO se guarda dentro de la fichada: evitamos exponer PIN en /fichadas.
+        nombre: nombre || ("Legajo " + legajo),
+        objetivo: objetivo,
+        tipo: tipo,  
+        latitud: lat,
+        longitud: lng,
+        mapa: `https://www.google.com/maps?q=${lat},${lng}`,
+        fotoBase64: fotoBase64Global,
+        validacionFacial: resultadoSimilitudGlobal,
+        alertaFraude: sospechaFraudeGlobal,
+        motivoFraude: motivoSospechaGlobal,
+        fechaHoraDispositivo: new Date().toISOString(),
+        // Reloj local del dispositivo (solo referencia / uso offline). El sello oficial lo pone el servidor.
+        timestampLocal: Date.now(),
+
+        // Auditoría de geolocalización: solo se llega aquí si pasó el radio.
+        ubicacionValidada: true,
+        distanciaAlObjetivoMetros: validacionUbicacion ? validacionUbicacion.distanciaMetros : null,
+        radioPermitidoMetros: validacionUbicacion ? validacionUbicacion.radioPermitido : RADIO_OBJETIVO_DEFAULT_METROS,
+        precisionGPSMetros: Number.isFinite(precisionGPS) ? Math.round(precisionGPS) : null,
+        latitudObjetivo: validacionUbicacion ? validacionUbicacion.latObjetivo : null,
+        longitudObjetivo: validacionUbicacion ? validacionUbicacion.lngObjetivo : null,
+
+        // Configuración laboral vigente al momento de la fichada.
+        horarioProgramadoInicio: turnoProgramadoGlobal?.horaInicio || personalActualGlobal?.horarioHabitual?.inicio || null,
+        horarioProgramadoFin: turnoProgramadoGlobal?.horaFin || personalActualGlobal?.horarioHabitual?.fin || null,
+        horarioProgramadoOrigen: turnoProgramadoGlobal ? 'ASIGNACION_FECHA' : 'HORARIO_HABITUAL',
+        asignacionTurnoId: turnoProgramadoGlobal?.id || null,
+        objetivoAutorizadoId: document.getElementById('objetivo').selectedOptions[0]?.dataset?.objetivoId || null
+      };
+
+      // Turno nocturno: si es SALIDA y hay una ENTRADA activa (que pudo abrirse
+      // el dia anterior y cruzar la medianoche), la SALIDA hereda el turno/horario
+      // de esa ENTRADA en lugar del turno resuelto para la fecha de HOY.
+      if (tipo === 'SALIDA' && ultimaEntradaActivaGlobal) {
+        if (ultimaEntradaActivaGlobal.horarioProgramadoInicio) datos.horarioProgramadoInicio = ultimaEntradaActivaGlobal.horarioProgramadoInicio;
+        if (ultimaEntradaActivaGlobal.horarioProgramadoFin) datos.horarioProgramadoFin = ultimaEntradaActivaGlobal.horarioProgramadoFin;
+        if (ultimaEntradaActivaGlobal.horarioProgramadoOrigen) datos.horarioProgramadoOrigen = ultimaEntradaActivaGlobal.horarioProgramadoOrigen;
+        if (ultimaEntradaActivaGlobal.asignacionTurnoId) datos.asignacionTurnoId = ultimaEntradaActivaGlobal.asignacionTurnoId;
+
+        // Respaldo de integridad: si la ENTRADA no dejó guardado su horario, lo
+        // resolvemos por la FECHA en que se abrió esa entrada (no por la fecha de
+        // hoy), para que el turno nocturno quede íntegro en el registro de la SALIDA.
+        if ((!datos.horarioProgramadoInicio || !datos.horarioProgramadoFin) && ultimaEntradaActivaGlobal.fechaHoraDispositivo && navigator.onLine) {
+          try {
+            const fEntrada = new Date(ultimaEntradaActivaGlobal.fechaHoraDispositivo);
+            const claveEntrada = `${fEntrada.getFullYear()}-${String(fEntrada.getMonth()+1).padStart(2,'0')}-${String(fEntrada.getDate()).padStart(2,'0')}`;
+            const turnoEntrada = await obtenerTurnoProgramadoParaFecha(legajo, claveEntrada);
+            if (turnoEntrada) {
+              datos.horarioProgramadoInicio = turnoEntrada.horaInicio || datos.horarioProgramadoInicio;
+              datos.horarioProgramadoFin = turnoEntrada.horaFin || datos.horarioProgramadoFin;
+              datos.horarioProgramadoOrigen = 'ASIGNACION_FECHA_ENTRADA';
+              datos.asignacionTurnoId = turnoEntrada.id || datos.asignacionTurnoId;
+            }
+          } catch (e) { /* si no se puede resolver, se conserva el fallback previo */ }
+        }
+      }
+
+      const divResultado = document.getElementById('resultado');
+
+      if (!navigator.onLine) {
+        // Offline: no se puede validar contra el servidor en este momento. Se sella con
+        // la hora local disponible; al sincronizar, el servidor pone el sello oficial (.sv).
+        aplicarHoraServidor(datos, false);
+        guardarFichadaOffline(datos, tipo, legajo);
+        return;
+      }
+
+      // Sesion individual larga: renovar el idToken antes de las operaciones REST
+      // para no fichar con un token vencido (evita 401 y perdida de la fichada).
+      const tokenFresco = await refrescarTokenVigilador();
+      if (tokenFresco) idTokenVig = tokenFresco;
+
+      // VALIDACION DE HORA POR SERVIDOR: con el token recien renovado ya tenemos la
+      // hora oficial. Sellamos la fichada con esa hora y detectamos si el reloj del
+      // telefono esta manipulado (queda marcada para revision del admin).
+      aplicarHoraServidor(datos, !!tokenFresco);
+
+      divResultado.className = "p-3 rounded-xl text-xs text-center bg-slate-700 text-white";
+      divResultado.innerText = "Verificando duplicados...";
+      divResultado.classList.remove('hidden');
+
+      existeFichadaReciente(legajo, tipo).then(esDuplicada => {
+        if (esDuplicada) {
+          divResultado.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
+          divResultado.innerText = `❌ Ya registraste una fichada de ${tipo} hace instantes. Espera unos minutos antes de volver a fichar.`;
+          return;
+        }
+        divResultado.className = "p-3 rounded-xl text-xs text-center bg-slate-700 text-white";
+        divResultado.innerText = "Registrando fichada...";
+
+        fetch(urlAuth(`${URL_FIREBASE}/fichadas/${datos.fichadaId}.json`), {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(Object.assign({}, datos, { timestampServidor: { ".sv": "timestamp" } }))
+        })
+      .then(res => {
+        if (!res.ok) throw new Error("Error en la respuesta de Firebase");
+        return res.json();
+      })
+      .then(respuesta => {
+        // PUT devuelve el objeto guardado. Confirmamos que el servidor aceptó
+        // exactamente NUESTRA fichada (mismo fichadaId) antes de darla por buena.
+        if (respuesta && respuesta.fichadaId === datos.fichadaId) {
+          divResultado.className = "p-3 rounded-xl text-xs text-center bg-emerald-950 text-emerald-200 border border-emerald-500";
+          divResultado.innerText = `✓ ¡Fichada de ${tipo} registrada con éxito!`;
+          
+          ultimoTipoFichadaGlobal = tipo;
+          limpiarFormularioExitoso();
+          finalizarSesionTrasFichada();
+          return; // Guardado online confirmado: NO encolar copia offline.
+        }
+        // Respuesta inesperada: Firebase no confirmo NUESTRA fichada -> tratar como fallo real.
+        throw new Error("No se pudo confirmar el guardado en Firebase.");
+      })
+      .catch(err => {
+        console.warn("Fallo al conectar con Firebase. Guardando offline automáticamente...", err);
+        guardarFichadaOffline(datos, tipo, legajo);
+      });
+      });
+    }
+
+    function guardarFichadaOffline(datos, tipo, legajo) {
+      let pendientes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
+
+      if (pendientes.length > 0) {
+        let ultimaPendiente = pendientes[pendientes.length - 1];
+        if (ultimaPendiente.legajo === legajo && ultimaPendiente.tipo === tipo) {
+          const divResultado = document.getElementById('resultado');
+          divResultado.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
+          divResultado.innerText = `❌ Ya tienes una fichada de ${tipo} pendiente de sincronización. No puedes repetirla dos veces seguidas.`;
+          return; 
+        }
+      }
+
+      // 🛡️ SEGURIDAD ANTI-TRAMPA: Fuerza la alerta si se fichó sin cotejo de Foto Master
+      if (resultadoSimilitudGlobal === "SIN_MASTER" || resultadoSimilitudGlobal === "IA_NO_DISPONIBLE" || resultadoSimilitudGlobal === "NO_EVALUADO") {
+        datos.alertaFraude = true;
+        datos.motivoFraude = "⚠️ Fichada Offline: Requiere revisión manual (Rostro no cotejado en servidor)";
+        datos.validacionFacial = "OFFLINE_AUDITORIA_REQUERIDA";
+      }
+
+      pendientes.push(datos);
+      localStorage.setItem('fichadas_pendientes', JSON.stringify(pendientes));
+
+      ultimoTipoFichadaGlobal = tipo;
+      const divResultado = document.getElementById('resultado');
+      divResultado.className = "p-3 rounded-xl text-xs text-center bg-amber-950 text-amber-200 border border-amber-500";
+      divResultado.innerText = `⚠️ Registrada Offline. Al no haber conexión para verificar tu identidad, esta fichada requerirá REVISIÓN MANUAL por RRHH.`;
+
+      limpiarFormularioExitoso();
+      finalizarSesionTrasFichada();
+    }
+
+    // Tras una fichada exitosa: en modo COMPARTIDO se cierra la sesion (para
+    // que el proximo empleado deba loguearse); en modo INDIVIDUAL se mantiene
+    // la sesion y solo se reinicia el temporizador de inactividad.
+    function finalizarSesionTrasFichada() {
+      if (modoDispositivo === 'compartido') {
+        setTimeout(() => { cerrarSesionVigilador(); }, 1800);
+      } else {
+        reiniciarInactividad();
+      }
+    }
+
+    function limpiarFormularioExitoso() {
+      document.getElementById('legajo-status').className = "text-xs mt-1 hidden";
+      document.getElementById('legajo-status').innerText = "";
+      document.getElementById('ultimo-estado-badge').classList.add('hidden');
+      
+      fotoBase64Global = "";
+      fotoMasterGuardada = null;
+      resultadoSimilitudGlobal = "NO_EVALUADO";
+      sospechaFraudeGlobal = false;
+      motivoSospechaGlobal = "";
+      
+      const preview = document.getElementById('preview');
+      preview.src = "";
+      preview.classList.add('hidden');
+      
+      const statusFoto = document.getElementById('foto-status');
+      statusFoto.innerText = "⚠️ Foto no capturada";
+      statusFoto.className = "text-xs text-rose-400 text-center font-semibold";
+
+      iniciarCamaraSegura();
+    }
+
+    function sincronizarFichadasPendientes() {
+      if (estaSincronizando) return; 
+      if (!navigator.onLine) return;
+      // Seguridad ENFORCED server-side: las Reglas atan newData.legajo al legajo
+      // del uid autenticado. Por eso SOLO se puede sincronizar CON una sesion
+      // activa y SOLO las fichadas del propio legajo logueado; una fichada de
+      // otro legajo seria rechazada por las Reglas, asi que se conserva en la
+      // cola hasta que su verdadero dueno inicie sesion en este dispositivo.
+      if (!idTokenVig || !legajoSesion) return;
+      let pendientes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
+      if (pendientes.length === 0) return;
+
+      const idx = pendientes.findIndex(f => f && mismoLegajo(f.legajo, legajoSesion));
+      if (idx === -1) return; // ninguna pendiente es del vigilador logueado
+
+      estaSincronizando = true;
+      let datos = pendientes.splice(idx, 1)[0];
+      localStorage.setItem('fichadas_pendientes', JSON.stringify(pendientes));
+
+      // Retrocompatibilidad: si una fichada quedo en cola ANTES de esta version
+      // (sin fichadaId), le asignamos uno ahora para poder guardarla idempotente.
+      if (!datos.fichadaId) datos.fichadaId = generarIdFichada();
+
+      fetch(urlAuth(`${URL_FIREBASE}/fichadas/${datos.fichadaId}.json`), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(Object.assign({}, datos, { timestampServidor: { ".sv": "timestamp" }, sincronizadoDesdeOffline: true }))
+      })
+      .then(res => {
+        // Si el servidor RECHAZA (p. ej. permiso denegado por legajo), NO se
+        // debe dar por sincronizada: se lanza para devolverla a la cola.
+        if (!res.ok) throw new Error('Firebase rechazo la fichada pendiente (HTTP ' + res.status + ').');
+        return res.json();
+      })
+      .then(respuesta => {
+        estaSincronizando = false;
+        console.log("🔄 Fichada pendiente sincronizada con Firebase.");
+        
+        const restantes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
+        if (restantes.some(f => f && mismoLegajo(f.legajo, legajoSesion))) {
+          sincronizarFichadasPendientes();
+        }
+      })
+      .catch(err => {
+        console.error("Error al sincronizar fichada pendiente, devolviéndola a la cola...", err);
+        let actualizadas = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
+        actualizadas.unshift(datos);
+        localStorage.setItem('fichadas_pendientes', JSON.stringify(actualizadas));
+        estaSincronizando = false;
+      });
+    }
+
+// --- Cableado de eventos (antes onclick en el HTML) ---
+document.addEventListener("DOMContentLoaded", function(){
+  var b;
+  b=document.getElementById("btnCerrarSesionVig"); if(b) b.addEventListener("click", function(){ cerrarSesionVigilador(); });
+  b=document.getElementById("btnCapturar"); if(b) b.addEventListener("click", function(){ capturarFoto(); });
+  b=document.getElementById("btnEntrada"); if(b) b.addEventListener("click", function(){ procesarEnvio("ENTRADA"); });
+  b=document.getElementById("btnSalida"); if(b) b.addEventListener("click", function(){ procesarEnvio("SALIDA"); });
+});
