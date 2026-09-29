@@ -163,6 +163,9 @@
       <button id="tabBtnObjetivos" onclick="cambiarTab('objetivos')" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
         <i class="fa-solid fa-building"></i> Objetivos / Puestos
       </button>
+      <button id="tabBtnDispositivos" onclick="cambiarTab('dispositivos')" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
+        <i class="fa-solid fa-mobile-screen"></i> Dispositivos
+      </button>
       <button id="tabBtnConfiguracion" onclick="cambiarTab('configuracion')" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
         <i class="fa-solid fa-sliders"></i> Configurar
       </button>
@@ -580,6 +583,111 @@
     </div>
 
     <!-- TAB: CONFIGURAR (tolerancias y radio) -->
+    <!-- ============ TAB DISPOSITIVOS (Fase 3: fichaje offline opt-in) ============ -->
+    <div id="tabDispositivos" class="hidden space-y-6">
+
+      <!-- HABILITACION GLOBAL DEL MODO OFFLINE -->
+      <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl max-w-2xl">
+        <div class="flex items-center gap-3 mb-1">
+          <i class="fa-solid fa-cloud-arrow-up text-emerald-400 text-lg"></i>
+          <h3 class="font-bold text-white text-base">Fichaje sin conexión (offline)</h3>
+        </div>
+        <p class="text-xs text-slate-400 mb-5">Permite que los dispositivos registrados guarden fichadas cuando no hay señal y las sincronicen firmadas al recuperar internet. Está <b>desactivado por defecto</b>. Solo los dispositivos dados de alta abajo pueden fichar offline.</p>
+        <label class="flex items-start gap-3 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 cursor-pointer hover:border-emerald-500 transition">
+          <input type="checkbox" id="cfgOfflineHabilitado" class="mt-1 accent-emerald-500 w-4 h-4">
+          <span>
+            <span class="block text-sm font-semibold text-white">Habilitar fichaje offline en dispositivos registrados</span>
+            <span class="block text-[11px] text-slate-400 mt-0.5">Al desactivarlo, el servidor rechaza cualquier lote offline aunque el dispositivo esté activo. Todas las fichadas offline se revalidan server-side (objetivo, radio, GPS y firma HMAC del dispositivo).</span>
+          </span>
+        </label>
+        <div class="mt-4 max-w-xs">
+          <label class="block text-xs uppercase text-slate-400 mb-1">Ventana máx. del lote offline (horas)</label>
+          <input type="number" id="cfgVentanaLoteOffline" min="1" max="720" value="168" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+          <p class="text-[11px] text-slate-500 mt-1">Antigüedad máxima aceptada de un lote offline al sincronizar. Por defecto 168 h (7 días). Los lotes más viejos se rechazan.</p>
+        </div>
+        <div class="flex items-center gap-3 mt-5">
+          <button type="button" onclick="guardarConfigOffline()" id="btnGuardarOffline" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center gap-2">
+            <i class="fa-solid fa-floppy-disk"></i> Guardar
+          </button>
+          <span id="cfgEstadoOffline" class="text-xs"></span>
+        </div>
+      </div>
+
+      <!-- ALTA DE DISPOSITIVO -->
+      <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl max-w-2xl">
+        <div class="flex items-center gap-3 mb-1">
+          <i class="fa-solid fa-plus text-emerald-400 text-lg"></i>
+          <h3 class="font-bold text-white text-base">Dar de alta un dispositivo</h3>
+        </div>
+        <p class="text-xs text-slate-400 mb-5">El servidor genera un identificador y un secreto único. Copiá el <b>código de vinculación</b> en el dispositivo físico (pantalla de fichaje &gt; Vincular dispositivo). El secreto se muestra <b>una sola vez</b>.</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs uppercase text-slate-400 mb-1">Nombre / ubicación</label>
+            <input type="text" id="nuevoDispositivoNombre" placeholder="Ej: Tablet Puesto Norte" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+          </div>
+          <div>
+            <label class="block text-xs uppercase text-slate-400 mb-1">Legajos permitidos (opcional)</label>
+            <input type="text" id="nuevoDispositivoLegajos" placeholder="Ej: 0297, 0312 (vacío = todos)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+            <p class="text-[11px] text-slate-500 mt-1">Separá los legajos con coma. Si lo dejás vacío, cualquier legajo válido puede fichar desde este dispositivo.</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 mt-5">
+          <button type="button" onclick="crearDispositivo()" id="btnCrearDispositivo" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center gap-2">
+            <i class="fa-solid fa-mobile-screen-button"></i> Crear dispositivo
+          </button>
+          <span id="estadoCrearDispositivo" class="text-xs"></span>
+        </div>
+        <!-- Cuadro con el codigo de vinculacion (se muestra una sola vez) -->
+        <div id="boxCodigoVinculacion" class="hidden mt-5 border border-emerald-600/40 bg-emerald-950/30 rounded-xl p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <i class="fa-solid fa-key text-emerald-400"></i>
+            <span class="text-sm font-bold text-emerald-300">Código de vinculación (cópialo ahora)</span>
+          </div>
+          <p class="text-[11px] text-amber-300/90 mb-3"><i class="fa-solid fa-triangle-exclamation"></i> Este código contiene el secreto del dispositivo y <b>no se volverá a mostrar</b>. Pegalo en el dispositivo físico. Si lo perdés, rotá el secreto.</p>
+          <textarea id="codigoVinculacionTexto" readonly rows="3" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-emerald-200 break-all focus:outline-none"></textarea>
+          <div class="flex flex-wrap items-center gap-3 mt-3 text-[11px] text-slate-400">
+            <button type="button" onclick="copiarCodigoVinculacion()" class="bg-slate-700 hover:bg-slate-600 text-white font-semibold py-1.5 px-3 rounded-lg transition flex items-center gap-1.5">
+              <i class="fa-solid fa-copy"></i> Copiar código
+            </button>
+            <span id="copiadoAviso"></span>
+          </div>
+          <div class="mt-3 text-[11px] text-slate-400 font-mono break-all">
+            <div><span class="text-slate-500">deviceId:</span> <span id="codigoDeviceId" class="text-slate-200"></span></div>
+            <div><span class="text-slate-500">secreto:</span> <span id="codigoSecreto" class="text-slate-200"></span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LISTADO DE DISPOSITIVOS -->
+      <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
+        <div class="flex items-center justify-between gap-3 mb-4">
+          <div class="flex items-center gap-3">
+            <i class="fa-solid fa-list text-emerald-400 text-lg"></i>
+            <h3 class="font-bold text-white text-base">Dispositivos registrados</h3>
+          </div>
+          <button type="button" onclick="cargarDispositivos()" class="bg-slate-700 hover:bg-slate-600 text-white font-semibold py-1.5 px-3 rounded-lg text-xs transition flex items-center gap-1.5">
+            <i class="fa-solid fa-rotate"></i> Actualizar
+          </button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm text-left">
+            <thead class="text-xs uppercase text-slate-400 border-b border-slate-700">
+              <tr>
+                <th class="px-3 py-2">Nombre</th>
+                <th class="px-3 py-2">Estado</th>
+                <th class="px-3 py-2">Legajos</th>
+                <th class="px-3 py-2">Identificador</th>
+                <th class="px-3 py-2 text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="tablaDispositivos">
+              <tr><td colspan="5" class="px-3 py-6 text-center text-slate-500">Cargando…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <div id="tabConfiguracion" class="hidden space-y-6">
       <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl max-w-2xl">
         <div class="flex items-center gap-3 mb-1">
@@ -1010,7 +1118,7 @@
     let alertasFichadasConocidas = new Set();
     let alertasFichadasInicializadas = false;
     // Configuración global de reglas laborales y radio de fichaje (persistida en Firebase /configuracionGlobal).
-    let configGlobalAdmin = { toleranciaIngresoMin: 15, toleranciaEgresoMin: 30, radioFichajeMetros: 100, modoDispositivo: 'compartido', biometriaEstricta: false, precisionMaximaMetros: 0 };
+    let configGlobalAdmin = { toleranciaIngresoMin: 15, toleranciaEgresoMin: 30, radioFichajeMetros: 100, modoDispositivo: 'compartido', biometriaEstricta: false, precisionMaximaMetros: 0, offlineHabilitado: false, ventanaLoteOfflineHoras: 168 };
 
     function iniciarSonidoSirena() {
       if (audioCtxPanico) return; 
@@ -1375,6 +1483,7 @@
       document.getElementById('tabPanicos').classList.add('hidden');
       document.getElementById('tabPersonal').classList.add('hidden');
       document.getElementById('tabObjetivos').classList.add('hidden');
+      document.getElementById('tabDispositivos').classList.add('hidden');
       document.getElementById('tabConfiguracion').classList.add('hidden');
 
       document.getElementById('tabBtnMarcaciones').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
@@ -1384,6 +1493,7 @@
       document.getElementById('tabBtnPersonal').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
       document.getElementById('tabBtnObjetivos').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
 
+      document.getElementById('tabBtnDispositivos').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
       document.getElementById('tabBtnConfiguracion').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
       if (tab === 'marcaciones') {
         document.getElementById('tabMarcaciones').classList.remove('hidden');
@@ -1404,6 +1514,11 @@
       } else if (tab === 'objetivos') {
         document.getElementById('tabObjetivos').classList.remove('hidden');
         document.getElementById('tabBtnObjetivos').className = "px-5 py-3 font-semibold text-sm border-b-2 border-sky-500 text-sky-400 flex items-center gap-2 transition";
+      } else if (tab === 'dispositivos') {
+        document.getElementById('tabDispositivos').classList.remove('hidden');
+        document.getElementById('tabBtnDispositivos').className = "px-5 py-3 font-semibold text-sm border-b-2 border-emerald-500 text-emerald-400 flex items-center gap-2 transition";
+        aplicarConfigGlobalAInputs();
+        cargarDispositivos();
       } else if (tab === 'configuracion') {
         document.getElementById('tabConfiguracion').classList.remove('hidden');
         document.getElementById('tabBtnConfiguracion').className = "px-5 py-3 font-semibold text-sm border-b-2 border-emerald-500 text-emerald-400 flex items-center gap-2 transition";
@@ -1435,6 +1550,10 @@
       if (ri) ri.checked = (modo === 'individual');
       const be = document.getElementById('cfgBiometriaEstricta');
       if (be) be.checked = (configGlobalAdmin.biometriaEstricta === true);
+      const oh = document.getElementById('cfgOfflineHabilitado');
+      if (oh) oh.checked = (configGlobalAdmin.offlineHabilitado === true);
+      const vl = document.getElementById('cfgVentanaLoteOffline');
+      if (vl) vl.value = configGlobalAdmin.ventanaLoteOfflineHoras;
     }
 
     async function cargarConfiguracionGlobal() {
@@ -1448,6 +1567,8 @@
           if (Number.isFinite(Number(data.precisionMaximaMetros)) && Number(data.precisionMaximaMetros) >= 0) configGlobalAdmin.precisionMaximaMetros = Number(data.precisionMaximaMetros);
           configGlobalAdmin.modoDispositivo = (String(data.modoDispositivo || '').trim() === 'individual') ? 'individual' : 'compartido';
           configGlobalAdmin.biometriaEstricta = (data.biometriaEstricta === true);
+          configGlobalAdmin.offlineHabilitado = (data.offlineHabilitado === true);
+          if (Number.isFinite(Number(data.ventanaLoteOfflineHoras)) && Number(data.ventanaLoteOfflineHoras) > 0) configGlobalAdmin.ventanaLoteOfflineHoras = Number(data.ventanaLoteOfflineHoras);
         }
       } catch (err) {
         console.warn('No se pudo cargar la configuración global, se usan valores por defecto.', err);
@@ -1511,6 +1632,151 @@
       }
     }
     window.guardarModoDispositivo = guardarModoDispositivo;
+
+    // ====== FASE 3: FICHAJE OFFLINE + GESTION DE DISPOSITIVOS ======
+    // Persiste SOLO los flags de offline (PATCH, no pisa el resto de la config).
+    async function guardarConfigOffline() {
+      const estado = document.getElementById('cfgEstadoOffline');
+      const habilitado = !!document.getElementById('cfgOfflineHabilitado').checked;
+      const ventana = Math.max(1, Math.min(720, parseInt(document.getElementById('cfgVentanaLoteOffline').value, 10) || 168));
+      if (estado) { estado.className = 'text-xs text-slate-400'; estado.innerText = 'Guardando...'; }
+      try {
+        const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/configuracionGlobal.json`), {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ offlineHabilitado: habilitado, ventanaLoteOfflineHoras: ventana, offlineActualizado: new Date().toISOString() })
+        });
+        if (!res.ok) throw new Error('Respuesta no OK');
+        configGlobalAdmin.offlineHabilitado = habilitado;
+        configGlobalAdmin.ventanaLoteOfflineHoras = ventana;
+        if (estado) {
+          estado.className = 'text-xs text-emerald-400 font-semibold';
+          estado.innerText = habilitado ? '✓ Fichaje offline HABILITADO.' : '✓ Fichaje offline deshabilitado.';
+        }
+      } catch (err) {
+        console.error('Error al guardar configuración offline:', err);
+        if (estado) { estado.className = 'text-xs text-rose-400 font-semibold'; estado.innerText = '❌ No se pudo guardar. Reintentá.'; }
+      }
+    }
+    window.guardarConfigOffline = guardarConfigOffline;
+
+    function escaparHtml(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    // Lista los dispositivos registrados (via Worker, rol admin server-side).
+    async function cargarDispositivos() {
+      const tbody = document.getElementById('tablaDispositivos');
+      if (!tbody) return;
+      tbody.innerHTML = '<tr><td colspan="5" class="px-3 py-6 text-center text-slate-500">Cargando…</td></tr>';
+      try {
+        const data = await window.llamarWorkerAdmin({ accion: 'listarDispositivos' });
+        const lista = Array.isArray(data.dispositivos) ? data.dispositivos : [];
+        if (!lista.length) {
+          tbody.innerHTML = '<tr><td colspan="5" class="px-3 py-6 text-center text-slate-500">No hay dispositivos registrados todavía.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = lista.map(d => {
+          const id = escaparHtml(d.deviceId);
+          const idJs = JSON.stringify(d.deviceId);
+          const nombre = escaparHtml(d.nombre || '(sin nombre)');
+          const legajos = (Array.isArray(d.legajos) && d.legajos.length) ? escaparHtml(d.legajos.join(', ')) : '<span class="text-slate-500">Todos</span>';
+          const badge = d.activo
+            ? '<span class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[11px] font-bold px-2 py-0.5 rounded-full">Activo</span>'
+            : '<span class="bg-slate-600/30 text-slate-400 border border-slate-600/40 text-[11px] font-bold px-2 py-0.5 rounded-full">Inactivo</span>';
+          const toggleTxt = d.activo ? 'Desactivar' : 'Activar';
+          const toggleIcon = d.activo ? 'fa-ban' : 'fa-circle-check';
+          return `<tr class="border-b border-slate-700/60">
+            <td class="px-3 py-3 font-semibold text-white">${nombre}</td>
+            <td class="px-3 py-3">${badge}</td>
+            <td class="px-3 py-3 text-slate-300">${legajos}</td>
+            <td class="px-3 py-3 font-mono text-[11px] text-slate-500 break-all">${id}</td>
+            <td class="px-3 py-3 text-right whitespace-nowrap">
+              <button type="button" onclick='toggleDispositivo(${idJs}, ${d.activo ? 'false' : 'true'})' class="text-xs font-semibold text-sky-400 hover:text-sky-300 px-2 py-1"><i class="fa-solid ${toggleIcon}"></i> ${toggleTxt}</button>
+              <button type="button" onclick='rotarSecretoDispositivo(${idJs})' class="text-xs font-semibold text-amber-400 hover:text-amber-300 px-2 py-1"><i class="fa-solid fa-key"></i> Rotar secreto</button>
+              <button type="button" onclick='eliminarDispositivo(${idJs})' class="text-xs font-semibold text-rose-400 hover:text-rose-300 px-2 py-1"><i class="fa-solid fa-trash"></i> Eliminar</button>
+            </td>
+          </tr>`;
+        }).join('');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="5" class="px-3 py-6 text-center text-rose-400">No se pudieron cargar los dispositivos: ${escaparHtml(err.message)}</td></tr>`;
+      }
+    }
+    window.cargarDispositivos = cargarDispositivos;
+
+    // Convierte {deviceId, secreto} en un codigo compacto para pegar en el dispositivo.
+    function armarCodigoVinculacion(deviceId, secreto) {
+      try { return btoa(JSON.stringify({ v: 1, deviceId, secreto })); }
+      catch (_) { return JSON.stringify({ v: 1, deviceId, secreto }); }
+    }
+
+    async function crearDispositivo() {
+      const estado = document.getElementById('estadoCrearDispositivo');
+      const nombre = document.getElementById('nuevoDispositivoNombre').value.trim();
+      const legajosRaw = document.getElementById('nuevoDispositivoLegajos').value.trim();
+      if (!nombre) { if (estado) { estado.className = 'text-xs text-rose-400 font-semibold'; estado.innerText = 'Indicá un nombre.'; } return; }
+      const legajos = legajosRaw ? legajosRaw.split(',').map(x => x.trim()).filter(Boolean) : undefined;
+      if (estado) { estado.className = 'text-xs text-slate-400'; estado.innerText = 'Creando...'; }
+      try {
+        const payload = { accion: 'crearDispositivo', nombre };
+        if (legajos && legajos.length) payload.legajos = legajos;
+        const data = await window.llamarWorkerAdmin(payload);
+        const codigo = armarCodigoVinculacion(data.deviceId, data.secreto);
+        document.getElementById('codigoVinculacionTexto').value = codigo;
+        document.getElementById('codigoDeviceId').innerText = data.deviceId;
+        document.getElementById('codigoSecreto').innerText = data.secreto;
+        document.getElementById('boxCodigoVinculacion').classList.remove('hidden');
+        document.getElementById('nuevoDispositivoNombre').value = '';
+        document.getElementById('nuevoDispositivoLegajos').value = '';
+        if (estado) { estado.className = 'text-xs text-emerald-400 font-semibold'; estado.innerText = '✓ Dispositivo creado.'; }
+        cargarDispositivos();
+      } catch (err) {
+        if (estado) { estado.className = 'text-xs text-rose-400 font-semibold'; estado.innerText = '❌ ' + err.message; }
+      }
+    }
+    window.crearDispositivo = crearDispositivo;
+
+    function copiarCodigoVinculacion() {
+      const ta = document.getElementById('codigoVinculacionTexto');
+      const aviso = document.getElementById('copiadoAviso');
+      const ok = () => { if (aviso) { aviso.className = 'text-emerald-400 font-semibold'; aviso.innerText = '✓ Copiado'; setTimeout(() => { if (aviso) aviso.innerText = ''; }, 2500); } };
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(ta.value).then(ok, () => { ta.select(); document.execCommand('copy'); ok(); }); }
+        else { ta.select(); document.execCommand('copy'); ok(); }
+      } catch (_) { ta.select(); }
+    }
+    window.copiarCodigoVinculacion = copiarCodigoVinculacion;
+
+    async function toggleDispositivo(deviceId, activar) {
+      try {
+        await window.llamarWorkerAdmin({ accion: 'actualizarDispositivo', deviceId, activo: !!activar });
+        cargarDispositivos();
+      } catch (err) { alert('No se pudo actualizar el dispositivo: ' + err.message); }
+    }
+    window.toggleDispositivo = toggleDispositivo;
+
+    async function rotarSecretoDispositivo(deviceId) {
+      if (!confirm('Al rotar el secreto, el dispositivo dejará de fichar hasta que pegues el NUEVO código de vinculación. ¿Continuar?')) return;
+      try {
+        const data = await window.llamarWorkerAdmin({ accion: 'actualizarDispositivo', deviceId, rotarSecreto: true });
+        const codigo = armarCodigoVinculacion(deviceId, data.secreto);
+        document.getElementById('codigoVinculacionTexto').value = codigo;
+        document.getElementById('codigoDeviceId').innerText = deviceId;
+        document.getElementById('codigoSecreto').innerText = data.secreto;
+        document.getElementById('boxCodigoVinculacion').classList.remove('hidden');
+        document.getElementById('boxCodigoVinculacion').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        cargarDispositivos();
+      } catch (err) { alert('No se pudo rotar el secreto: ' + err.message); }
+    }
+    window.rotarSecretoDispositivo = rotarSecretoDispositivo;
+
+    async function eliminarDispositivo(deviceId) {
+      if (!confirm('¿Eliminar este dispositivo? No podrá volver a fichar offline salvo que lo des de alta de nuevo.')) return;
+      try {
+        await window.llamarWorkerAdmin({ accion: 'eliminarDispositivo', deviceId });
+        cargarDispositivos();
+      } catch (err) { alert('No se pudo eliminar el dispositivo: ' + err.message); }
+    }
+    window.eliminarDispositivo = eliminarDispositivo;
 
     // Clasifica una fichada según el horario programado y las tolerancias configuradas.
     // Devuelve null si no hay datos suficientes para evaluar.
