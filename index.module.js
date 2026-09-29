@@ -110,3 +110,4 @@
     window.loginVigilador = loginVigilador;
     window.logoutVigilador = logoutVigilador;
     window.refrescarTokenVigilador = refrescarTokenVigilador;
+    window.aplicarHoraServidor = aplicarHoraServidor;
