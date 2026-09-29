@@ -78,6 +78,7 @@
           <i class="fa-solid fa-mobile-screen"></i> <span id="lblVincular">Vincular dispositivo para fichaje offline</span>
         </button>
         <p id="estadoVincular" class="text-[11px] mt-1"></p>
+        <p id="estadoOfflinePend" class="text-[11px] mt-1 hidden"></p>
       </div>
     </div>
   </main>
@@ -403,6 +404,61 @@
     }
     window.vincularDispositivo = vincularDispositivo;
 
+    // Refleja en la pantalla de login si este telefono YA esta vinculado. Antes
+    // el texto no se restauraba al recargar, por lo que parecia que la vinculacion
+    // no se guardaba (en realidad si persiste en este navegador).
+    function refrescarEstadoVinculacion() {
+      const lbl = document.getElementById('lblVincular');
+      const estado = document.getElementById('estadoVincular');
+      const ya = obtenerCredencialDispositivo();
+      if (ya) {
+        if (lbl) lbl.innerText = 'Dispositivo vinculado — volver a vincular';
+        if (estado) { estado.className = 'text-[11px] mt-1 text-emerald-400 font-semibold'; estado.innerText = '✓ Dispositivo vinculado. Puede fichar sin conexión.'; }
+      } else {
+        if (lbl) lbl.innerText = 'Vincular dispositivo para fichaje offline';
+        if (estado) { estado.className = 'text-[11px] mt-1'; estado.innerText = ''; }
+      }
+    }
+    window.refrescarEstadoVinculacion = refrescarEstadoVinculacion;
+
+    // Muestra en la pantalla de login cuantas fichadas offline quedan por
+    // sincronizar y, si alguna fue rechazada por el servidor, el motivo. Asi el
+    // usuario ve claramente el estado (antes fallaba en silencio en la consola).
+    function refrescarEstadoOfflinePendientes() {
+      const el = document.getElementById('estadoOfflinePend');
+      if (!el) return;
+      let pend = [], rech = [];
+      try { pend = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]'); } catch (_) {}
+      try { rech = JSON.parse(localStorage.getItem('fichadas_rechazadas') || '[]'); } catch (_) {}
+      const offPend = (pend || []).filter(f => f && (f.creadaOffline === true || f.origenOffline === true));
+      if (offPend.length > 0) {
+        // Sin dispositivo vinculado no hay via firmada para subir el lote offline:
+        // este es el motivo mas comun por el que "la fichada no llega" al panel.
+        if (!obtenerCredencialDispositivo()) {
+          el.className = 'text-[11px] mt-1 text-rose-400 font-semibold';
+          el.innerText = '⚠️ ' + offPend.length + ' fichada(s) offline sin enviar: este teléfono no tiene un dispositivo vinculado. Volvé a vincularlo (botón de arriba) y conectate a internet.';
+          el.classList.remove('hidden');
+          return;
+        }
+        el.className = 'text-[11px] mt-1 text-amber-400 font-semibold';
+        el.innerText = '⏳ ' + offPend.length + ' fichada(s) offline pendiente(s) de sincronizar. Conectate a internet para enviarlas.';
+        el.classList.remove('hidden');
+        return;
+      }
+      // Sin pendientes: si hubo rechazos recientes por el servidor, avisar el motivo.
+      const recientes = (rech || []).filter(f => f && f.viaLoteOffline === true);
+      if (recientes.length > 0) {
+        const ultima = recientes[recientes.length - 1];
+        el.className = 'text-[11px] mt-1 text-rose-400 font-semibold';
+        el.innerText = '⚠️ Una fichada offline fue rechazada por el servidor: ' + (ultima.motivoRechazo || 'validación fallida') + '. Avisá al administrador.';
+        el.classList.remove('hidden');
+        return;
+      }
+      el.classList.add('hidden');
+      el.innerText = '';
+    }
+    window.refrescarEstadoOfflinePendientes = refrescarEstadoOfflinePendientes;
+
     // --- Credencial de login OFFLINE (hash PBKDF2 del PIN + snapshot del vigilador) ---
     function _leerCredsOffline() { try { return JSON.parse(localStorage.getItem(LS_CRED_OFFLINE) || '{}') || {}; } catch (_) { return {}; } }
     // Se llama tras un login ONLINE exitoso (solo si offline esta habilitado). Guarda
@@ -530,6 +586,7 @@
         console.warn('No se pudo sincronizar el lote offline (se reintentará):', err);
       } finally {
         estaSincronizandoLote = false;
+        try { if (typeof refrescarEstadoOfflinePendientes === 'function') refrescarEstadoOfflinePendientes(); } catch (_) {}
       }
     }
 
@@ -665,12 +722,16 @@
       const ll = document.getElementById('loginLegajo'); if (ll) ll.value = '';
       const lp = document.getElementById('loginPin'); if (lp) lp.value = '';
       const nom = document.getElementById('lblSesionNombre'); if (nom) nom.innerText = '—';
+      try { if (typeof refrescarEstadoVinculacion === 'function') refrescarEstadoVinculacion(); } catch (_) {}
+      try { if (typeof refrescarEstadoOfflinePendientes === 'function') refrescarEstadoOfflinePendientes(); } catch (_) {}
     }
     window.iniciarSesionVigilador = iniciarSesionVigilador;
     window.cerrarSesionVigilador = cerrarSesionVigilador;
 
     window.onload = async function() {
       actualizarEstadoRed();
+      refrescarEstadoVinculacion();
+      refrescarEstadoOfflinePendientes();
       const f = document.getElementById('formLogin');
       if (f) f.addEventListener('submit', iniciarSesionVigilador);
 
@@ -711,6 +772,7 @@
       sincronizarFichadasPendientes();
       sincronizarAlertasFichadasPendientes();
       sincronizarLoteOffline();
+      if (typeof refrescarEstadoOfflinePendientes === 'function') refrescarEstadoOfflinePendientes();
     });
     
     window.addEventListener('offline', actualizarEstadoRed);
