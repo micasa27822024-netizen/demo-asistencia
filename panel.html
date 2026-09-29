@@ -403,7 +403,23 @@
       if (typeof window.loginSupervisorReal === 'function') {
         const btnLogin = e.target ? e.target.querySelector('button[type="submit"]') : null;
         if (btnLogin) btnLogin.disabled = true;
+
+        // Red de seguridad (celulares): si el ingreso tarda demasiado (conexion
+        // lenta o storage restringido del navegador movil), reactivar el boton y
+        // avisar en vez de quedar trabado sin hacer nada. Aditivo.
+        let ingresoResuelto = false;
+        const watchdog = setTimeout(function () {
+          if (ingresoResuelto) return;
+          ingresoResuelto = true;
+          if (btnLogin) btnLogin.disabled = false;
+          errorMsg.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> La conexión está demorando. Verificá tu internet y reintentá.';
+          errorMsg.classList.remove('hidden');
+        }, 20000);
+
         window.loginSupervisorReal(email, input).then(function(res) {
+          if (ingresoResuelto) return;
+          ingresoResuelto = true;
+          clearTimeout(watchdog);
           if (btnLogin) btnLogin.disabled = false;
           if (res && res.ok) {
             sessionStorage.setItem('auth_supervisor', 'true');
@@ -416,6 +432,13 @@
             document.getElementById('inputPass').value = '';
             document.getElementById('inputPass').focus();
           }
+        }).catch(function () {
+          if (ingresoResuelto) return;
+          ingresoResuelto = true;
+          clearTimeout(watchdog);
+          if (btnLogin) btnLogin.disabled = false;
+          errorMsg.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> No se pudo completar el ingreso. Reintentá en unos segundos.';
+          errorMsg.classList.remove('hidden');
         });
         return;
       }
@@ -1518,6 +1541,20 @@
     const auth = getAuth(app);
     const db   = getDatabase(app);
 
+    // Helper: limita una promesa a un maximo de ms. Si se excede, resuelve con
+    // el valor de reserva en vez de quedar colgada (clave en navegadores moviles
+    // con storage/red restringidos). Aditivo, no altera la logica existente.
+    function conLimite(promesa, ms, reserva) {
+      return new Promise((resolve) => {
+        let listo = false;
+        const t = setTimeout(() => { if (!listo) { listo = true; resolve(reserva); } }, ms);
+        Promise.resolve(promesa).then(
+          (v) => { if (!listo) { listo = true; clearTimeout(t); resolve(v); } },
+          () => { if (!listo) { listo = true; clearTimeout(t); resolve(reserva); } }
+        );
+      });
+    }
+
     // --- Sesión lista: al recargar, Firebase Auth restaura la sesión de forma
     // asíncrona. Esta promesa se resuelve en el primer onAuthStateChanged, para
     // que cargarDatos() no pida datos SIN token (lo que la regla rechaza).
@@ -1545,10 +1582,17 @@
         const uid  = cred.user.uid;
 
         let rol = null;
+        let rolTimeout = false;
         try {
-          const snap = await get(ref(db, `usuarios/${uid}`));
-          if (snap.exists()) { rol = (snap.val() || {}).rol || null; }
+          const snap = await conLimite(get(ref(db, `usuarios/${uid}`)), 12000, '__TIMEOUT__');
+          if (snap === '__TIMEOUT__') { rolTimeout = true; }
+          else if (snap && snap.exists()) { rol = (snap.val() || {}).rol || null; }
         } catch (_) { /* si falla la lectura, se rechaza abajo */ }
+
+        if (rolTimeout) {
+          try { await signOut(auth); } catch (_) {}
+          return { ok: false, mensaje: 'La conexión está lenta y no se pudo verificar tu acceso. Reintentá en unos segundos.' };
+        }
 
         if (rol !== 'admin' && rol !== 'supervisor') {
           try { await signOut(auth); } catch (_) {}

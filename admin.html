@@ -1433,7 +1433,19 @@
       if (typeof window.loginAdminReal === 'function') {
         const btnLogin = e.target ? e.target.querySelector('button[type="submit"]') : null;
         if (btnLogin) btnLogin.disabled = true;
+        // Watchdog: si por algún motivo (conexión trabada en el celular) el login
+        // no responde, reactivamos el botón y avisamos, para que nunca quede
+        // "sin hacer nada" sin poder reintentar.
+        let resuelto = false;
+        const watchdog = setTimeout(function () {
+          if (resuelto) return;
+          if (btnLogin) btnLogin.disabled = false;
+          errorMsg.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> Está tardando más de lo normal. Revisá tu conexión y volvé a intentar.';
+          errorMsg.classList.remove('hidden');
+        }, 20000);
         window.loginAdminReal(email, input).then(function(res) {
+          resuelto = true;
+          clearTimeout(watchdog);
           if (btnLogin) btnLogin.disabled = false;
           if (res && res.ok) {
             sessionStorage.setItem('auth_admin', 'true');
@@ -1447,6 +1459,12 @@
             document.getElementById('inputPassAdmin').value = '';
             document.getElementById('inputPassAdmin').focus();
           }
+        }).catch(function () {
+          resuelto = true;
+          clearTimeout(watchdog);
+          if (btnLogin) btnLogin.disabled = false;
+          errorMsg.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> No se pudo completar el acceso. Revisá tu conexión y reintentá.';
+          errorMsg.classList.remove('hidden');
         });
         return;
       }
@@ -3697,7 +3715,7 @@
     // Con persistencia de SESION (no local), al salir y volver a entrar el panel
     // arranca limpio en la pantalla de login, sin quedar 'pegado' a una sesion
     // vieja (esto evita tener que borrar el historial para poder reingresar).
-    try { setPersistence(mainAuth, browserSessionPersistence); } catch (_) {}
+    try { setPersistence(mainAuth, browserSessionPersistence).catch(function () {}); } catch (_) {}
 
     /**
      * Login REAL de admin: valida credenciales en Firebase Auth
@@ -3705,23 +3723,40 @@
      * Solo se permite entrar con rol 'admin' (los supervisores quedan excluidos).
      * @returns {Promise<{ok:boolean, uid?:string, rol?:string, mensaje?:string}>}
      */
+    // Utilidad: limita el tiempo de una promesa. Si supera el tiempo, resuelve
+    // con un valor de reserva (nunca deja el login colgado). Clave en celulares,
+    // donde ciertas operaciones de almacenamiento/persistencia pueden trabarse.
+    function conLimite(promesa, ms, valorReserva) {
+      return Promise.race([
+        Promise.resolve(promesa).catch(function () { return valorReserva; }),
+        new Promise(function (res) { setTimeout(function () { res(valorReserva); }, ms); })
+      ]);
+    }
+
     async function loginAdminReal(email, password) {
       if (!email || !password) {
         return { ok: false, mensaje: 'Ingresá el correo y la contraseña.' };
       }
       try {
-        // Aseguramos persistencia de SESION antes de autenticar, para que la
-        // credencial quede en sessionStorage (se limpia al cerrar) y no en local.
-        try { await setPersistence(mainAuth, browserSessionPersistence); } catch (_) {}
+        // Persistencia de SESION: se intenta, pero NO debe bloquear el login. En
+        // algunos navegadores de celular esta operacion puede trabarse; por eso
+        // la limitamos en el tiempo y seguimos igual (login primero, todo lo demas
+        // es secundario).
+        await conLimite(setPersistence(mainAuth, browserSessionPersistence), 1500, null);
         const cred = await signInWithEmailAndPassword(mainAuth, email, password);
         const uid  = cred.user.uid;
 
-        // Leer el rol desde /usuarios/<uid>
+        // Leer el rol desde /usuarios/<uid> (con limite de tiempo: en celular la
+        // lectura puede colgarse y dejaria el boton "sin hacer nada").
         let rol = null, existeNodo = false, errorLectura = null;
         try {
-          const snap = await get(ref(mainDb, `usuarios/${uid}`));
-          existeNodo = snap.exists();
-          if (existeNodo) { rol = (snap.val() || {}).rol || null; }
+          const snap = await conLimite(get(ref(mainDb, `usuarios/${uid}`)), 12000, '__TIMEOUT__');
+          if (snap === '__TIMEOUT__') {
+            errorLectura = 'tiempo de espera agotado al leer el rol';
+          } else {
+            existeNodo = snap.exists();
+            if (existeNodo) { rol = (snap.val() || {}).rol || null; }
+          }
         } catch (e2) { errorLectura = (e2 && (e2.code || e2.message)) || 'desconocido'; }
 
         // Separación de roles: este panel es EXCLUSIVO de administradores.
