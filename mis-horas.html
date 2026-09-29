@@ -209,6 +209,8 @@
       <button onclick="enviarNovedadPortal()" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-2.5 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
         <i class="fa-solid fa-paper-plane"></i> Enviar Novedad a la Central
       </button>
+      <!-- Aviso de novedades que quedaron encoladas sin conexión -->
+      <p id="avisoNovedadesPendientes" class="hidden text-xs font-semibold text-amber-300 bg-amber-950/40 border border-amber-600/50 rounded-lg px-3 py-2"></p>
     </div>
 
   </main>
@@ -516,6 +518,9 @@
       // cola de pánicos por si quedó algo sin enviar en una sesión anterior.
       actualizarAvisoPanicosPendientes();
       reenviarPanicosPendientes();
+      // Idem para la cola de novedades (Punto 2).
+      actualizarAvisoNovedadesPendientes();
+      reenviarNovedadesPendientes();
     };
 
     function activarEscuchasInactividad() {
@@ -667,6 +672,8 @@
         reiniciarTemporizador();
         actualizarAvisoPanicosPendientes();
         reenviarPanicosPendientes();
+        actualizarAvisoNovedadesPendientes();
+        reenviarNovedadesPendientes();
       } catch (err) {
         console.error(err);
         alert("Ocurrió un error al consultar Firebase.");
@@ -1010,6 +1017,88 @@
     // Al recuperar conexión reintentamos automáticamente la cola de pánicos.
     window.addEventListener('online', reenviarPanicosPendientes);
 
+    // ---- Cola offline de novedades: espeja el patrón de pánicos (Punto 2) ----
+    // Misma decisión de diseño: POST con push-key + dedupe local por idEvento.
+    // Se prioriza "no perder la novedad" por sobre "no duplicar" (mismo tradeoff
+    // aceptado en pánicos). No usamos PUT-por-idEvento porque la regla de
+    // /novedades exige !data.exists() en la escritura: un reintento tras un
+    // éxito ambiguo daría 403 y quedaría encolado para siempre.
+    const CLAVE_NOVEDADES_PENDIENTES = 'novedades_pendientes';
+    let reenviandoNovedades = false;
+
+    // Guarda una novedad en la cola local (idempotente por idEvento). El foto
+    // en base64 puede ser grande (~MB): si localStorage se llena, el try/catch
+    // evita interrumpir la operatoria (no se rompe el flujo del usuario).
+    function encolarNovedadPendiente(payload) {
+      try {
+        let cola = JSON.parse(localStorage.getItem(CLAVE_NOVEDADES_PENDIENTES) || '[]');
+        if (!cola.some(n => n && n.idEvento === payload.idEvento)) {
+          cola.push(payload);
+          localStorage.setItem(CLAVE_NOVEDADES_PENDIENTES, JSON.stringify(cola));
+        }
+        actualizarAvisoNovedadesPendientes();
+      } catch (e) { /* si falla localStorage no interrumpimos la operatoria */ }
+    }
+
+    // Reenvía en orden todas las novedades encoladas. Solo elimina de la cola
+    // las que confirmó el servidor (res.ok + data.name); las que fallan quedan
+    // para el próximo intento. Requiere sesión activa (urlAuthFresca).
+    function reenviarNovedadesPendientes() {
+      if (reenviandoNovedades || !navigator.onLine) return;
+      let cola;
+      try { cola = JSON.parse(localStorage.getItem(CLAVE_NOVEDADES_PENDIENTES) || '[]'); }
+      catch (e) { cola = []; }
+      if (!cola.length) return;
+
+      reenviandoNovedades = true;
+      const pendientes = [...cola];
+
+      (async () => {
+        const sobrevivientes = [];
+        for (const payload of pendientes) {
+          try {
+            const res = await fetch(await urlAuthFresca(`${URL_FIREBASE}/novedades.json`), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            let data = null;
+            try { data = await res.json(); } catch (_) {}
+            if (!res.ok || !data || data.error || !data.name) throw new Error('rechazada');
+            if (payload.idEvento) eventosEnviados.add(payload.idEvento);
+          } catch (e) {
+            sobrevivientes.push(payload); // sigue pendiente para reintentar luego
+          }
+        }
+        try { localStorage.setItem(CLAVE_NOVEDADES_PENDIENTES, JSON.stringify(sobrevivientes)); }
+        catch (e) { /* noop */ }
+        reenviandoNovedades = false;
+        actualizarAvisoNovedadesPendientes();
+        const enviadas = pendientes.length - sobrevivientes.length;
+        if (enviadas > 0) {
+          alert(`📝 Se reenvi${enviadas === 1 ? 'ó' : 'eron'} ${enviadas} novedad${enviadas === 1 ? '' : 'es'} pendiente${enviadas === 1 ? '' : 's'} a la central.`);
+        }
+      })();
+    }
+
+    // Muestra/actualiza el aviso visible de novedades aún sin confirmar.
+    function actualizarAvisoNovedadesPendientes() {
+      let cola;
+      try { cola = JSON.parse(localStorage.getItem(CLAVE_NOVEDADES_PENDIENTES) || '[]'); }
+      catch (e) { cola = []; }
+      const aviso = document.getElementById('avisoNovedadesPendientes');
+      if (!aviso) return;
+      if (cola.length > 0) {
+        aviso.textContent = `⚠️ ${cola.length} novedad${cola.length === 1 ? '' : 'es'} pendiente${cola.length === 1 ? '' : 's'} de envío (se reintentará al recuperar internet).`;
+        aviso.classList.remove('hidden');
+      } else {
+        aviso.classList.add('hidden');
+      }
+    }
+
+    // Al recuperar conexión reintentamos automáticamente la cola de novedades.
+    window.addEventListener('online', reenviarNovedadesPendientes);
+
     // 📝 ENVÍO DE NOVEDAD A FIREBASE
     function enviarNovedadPortal() {
       const legajo = sessionStorage.getItem('vigilador_legajo');
@@ -1105,6 +1194,18 @@
       eventosEnviados.add(idEvento);
       novedadEnEnvio = true;
 
+      // SIN CONEXION (Punto 2): no se pierde la novedad. Se guarda en la cola
+      // local y se reintenta automaticamente al recuperar internet. La
+      // idempotencia por idEvento evita duplicar la MISMA novedad en la cola.
+      if (!navigator.onLine) {
+        encolarNovedadPendiente(payload);
+        novedadEnEnvio = false;
+        alert("📶 Sin conexión: la novedad quedó guardada y se enviará automáticamente al recuperar internet.");
+        document.getElementById('descNovedad').value = "";
+        document.getElementById('fotoNovedadInput').value = "";
+        return;
+      }
+
       // Token fresco antes de enviar la novedad (evita rechazo por token vencido).
       const urlNovedad = await urlAuthFresca(`${URL_FIREBASE}/novedades.json`);
       fetch(urlNovedad, {
@@ -1135,9 +1236,15 @@
         document.getElementById('fotoNovedadInput').value = "";
       })
       .catch(error => {
+        // FALLO DE RED/servidor: en vez de perder la novedad, la ENCOLAMOS para
+        // reintento automatico al volver la conexion (Punto 2). El idEvento se
+        // conserva en la cola; NO se libera de eventosEnviados para no duplicar
+        // en esta misma sesion.
         novedadEnEnvio = false;
-        eventosEnviados.delete(idEvento); // permitir reintento manual si fallo
-        alert("⚠️ No se pudo enviar la novedad (no quedó registrada): " + error.toString());
+        encolarNovedadPendiente(payload);
+        alert("⚠️ No se pudo contactar a la central. La novedad quedó guardada y se reintentará automáticamente al recuperar la conexión.");
+        document.getElementById('descNovedad').value = "";
+        document.getElementById('fotoNovedadInput').value = "";
       });
     }
 
