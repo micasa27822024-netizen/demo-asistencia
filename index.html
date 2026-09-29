@@ -366,11 +366,96 @@
       let h = ''; for (let i = 0; i < mac.length; i++) h += mac[i].toString(16).padStart(2, '0'); return h;
     }
 
+    // ===================================================================
+    //  ALMACEN SEGURO DE LA CLAVE HMAC DEL DISPOSITIVO (IndexedDB)
+    //  El secreto del dispositivo se importa como CryptoKey con
+    //  extractable:false: se puede USAR para firmar los lotes offline, pero
+    //  su material NUNCA se puede volver a leer desde JavaScript. Asi, aunque
+    //  un ataque XSS llegara a ejecutar codigo, no podria robar el secreto
+    //  (a diferencia de tenerlo en texto plano en localStorage).
+    // ===================================================================
+    const IDB_NOMBRE   = 'vigix_seguro';
+    const IDB_STORE    = 'claves';
+    const IDB_KEY_HMAC = 'hmac_dispositivo';
+    function _idbAbrir() {
+      return new Promise((resolve, reject) => {
+        let req;
+        try { req = indexedDB.open(IDB_NOMBRE, 1); } catch (e) { return reject(e); }
+        req.onupgradeneeded = () => { const db = req.result; if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE); };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+    function _idbGuardar(clave, valor) {
+      return _idbAbrir().then(db => new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        tx.objectStore(IDB_STORE).put(valor, clave);
+        tx.oncomplete = () => { db.close(); resolve(true); };
+        tx.onerror = () => { db.close(); reject(tx.error); };
+      }));
+    }
+    function _idbLeer(clave) {
+      return _idbAbrir().then(db => new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, 'readonly');
+        const rq = tx.objectStore(IDB_STORE).get(clave);
+        rq.onsuccess = () => { db.close(); resolve(rq.result || null); };
+        rq.onerror = () => { db.close(); reject(rq.error); };
+      }));
+    }
+    function _idbBorrar(clave) {
+      return _idbAbrir().then(db => new Promise((resolve) => {
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        tx.objectStore(IDB_STORE).delete(clave);
+        tx.oncomplete = () => { db.close(); resolve(true); };
+        tx.onerror = () => { db.close(); resolve(false); };
+      })).catch(() => false);
+    }
+    // Importa el secreto como clave HMAC NO extraible (solo permite 'sign').
+    async function _importarClaveHmacNoExtraible(secreto) {
+      return crypto.subtle.importKey('raw', new TextEncoder().encode(String(secreto)), { name: 'HMAC', hash: 'SHA-256' }, false /* NO extraible */, ['sign']);
+    }
+    // Persiste la clave HMAC (no extraible) en IndexedDB. Devuelve true si pudo.
+    async function _persistirClaveHmac(secreto) {
+      try { const key = await _importarClaveHmacNoExtraible(secreto); await _idbGuardar(IDB_KEY_HMAC, key); return true; }
+      catch (e) { console.warn('No se pudo guardar la clave del dispositivo de forma segura:', e); return false; }
+    }
+    // Devuelve la CryptoKey HMAC del dispositivo lista para firmar. Si todavia
+    // hay un secreto en texto plano (instalacion previa a esta mejora), lo MIGRA
+    // a clave no extraible y lo PURGA de localStorage de forma automatica.
+    async function _obtenerClaveHmacDispositivo() {
+      try { const k = await _idbLeer(IDB_KEY_HMAC); if (k) return k; } catch (_) {}
+      try {
+        const d = JSON.parse(localStorage.getItem(LS_DISPOSITIVO) || 'null');
+        if (d && d.deviceId && d.secreto) {
+          const ok = await _persistirClaveHmac(d.secreto);
+          if (ok) {
+            // Migrado: se conserva solo el identificador; el secreto se elimina.
+            localStorage.setItem(LS_DISPOSITIVO, JSON.stringify({ deviceId: d.deviceId, provisionado: true }));
+            const k2 = await _idbLeer(IDB_KEY_HMAC); if (k2) return k2;
+          }
+          // Respaldo: si IndexedDB no esta disponible, se firma con clave efimera.
+          return await _importarClaveHmacNoExtraible(d.secreto);
+        }
+      } catch (_) {}
+      return null;
+    }
+    // Firma HMAC-SHA256 de un lote usando la clave no extraible del dispositivo.
+    async function firmarLoteDispositivo(mensaje) {
+      const key = await _obtenerClaveHmacDispositivo();
+      if (!key) return null;
+      const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(mensaje)));
+      let h = ''; for (let i = 0; i < mac.length; i++) h += mac[i].toString(16).padStart(2, '0'); return h;
+    }
+
     // --- Credencial del dispositivo (deviceId + secreto HMAC) ---
     // La provisiona el Admin en Fase 3. Sin ella no hay via firmada: las fichadas
     // offline se conservan en cola hasta que el dispositivo quede provisionado.
     function obtenerCredencialDispositivo() {
-      try { const d = JSON.parse(localStorage.getItem(LS_DISPOSITIVO) || 'null'); return (d && d.deviceId && d.secreto) ? d : null; } catch (_) { return null; }
+      // Provisionado = deviceId presente y clave disponible. Tras la migracion a
+      // clave no extraible, el secreto YA NO vive en localStorage; queda el
+      // marcador { deviceId, provisionado:true }. Se acepta cualquiera de las dos
+      // formas para no romper instalaciones previas aun sin migrar.
+      try { const d = JSON.parse(localStorage.getItem(LS_DISPOSITIVO) || 'null'); return (d && d.deviceId && (d.secreto || d.provisionado)) ? d : null; } catch (_) { return null; }
     }
 
     // --- Vinculacion del dispositivo (Fase 3): el operador pega el codigo que
@@ -402,14 +487,25 @@
         if (estado) { estado.className = 'text-[11px] mt-1 text-rose-400 font-semibold'; estado.innerText = '❌ Código inválido. Verificá que lo hayas copiado completo.'; }
         return;
       }
+      (async () => {
       try {
-        localStorage.setItem(LS_DISPOSITIVO, JSON.stringify(cred));
+        // Se importa el secreto como clave NO extraible y se guarda en IndexedDB.
+        // En localStorage queda SOLO el identificador del dispositivo (sin secreto).
+        const guardado = await _persistirClaveHmac(cred.secreto);
+        if (guardado) {
+          localStorage.setItem(LS_DISPOSITIVO, JSON.stringify({ deviceId: cred.deviceId, provisionado: true }));
+        } else {
+          // Respaldo si el navegador no permite IndexedDB: se conserva el secreto
+          // en localStorage (se migrara solo en cuanto IndexedDB este disponible).
+          localStorage.setItem(LS_DISPOSITIVO, JSON.stringify({ deviceId: cred.deviceId, secreto: cred.secreto }));
+        }
         if (estado) { estado.className = 'text-[11px] mt-1 text-emerald-400 font-semibold'; estado.innerText = '✓ Dispositivo vinculado. Ya puede fichar sin conexión.'; }
         const lbl = document.getElementById('lblVincular');
         if (lbl) lbl.innerText = 'Dispositivo vinculado — volver a vincular';
       } catch (_) {
         if (estado) { estado.className = 'text-[11px] mt-1 text-rose-400 font-semibold'; estado.innerText = '❌ No se pudo guardar en este navegador.'; }
       }
+      })();
     }
     window.vincularDispositivo = vincularDispositivo;
 
@@ -588,7 +684,8 @@
         }));
         const fichadasStr = JSON.stringify(envio);
         const timestamp = Date.now();
-        const firma = await firmarHmacHex(disp.secreto, `${disp.deviceId}.${timestamp}.${fichadasStr}`);
+        const firma = await firmarLoteDispositivo(`${disp.deviceId}.${timestamp}.${fichadasStr}`);
+        if (!firma) return; // sin clave utilizable: se conserva la cola (finally resetea el flag)
         const resp = await fetchConLimite(URL_WORKER_FICHAJE, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ accion: 'ficharLoteOffline', deviceId: disp.deviceId, timestamp, fichadas: fichadasStr, firma })
@@ -743,6 +840,50 @@
       }
     }
 
+    // ===================================================================
+    //  CADUCIDAD Y LIMPIEZA DE DATOS SENSIBLES OFFLINE
+    //  La cache offline guarda datos delicados: hash del PIN (PBKDF2), la foto
+    //  biometrica de referencia y datos personales. Para reducir su exposicion:
+    //   - purgarCacheOfflineVencido(): elimina credenciales y turnos cacheados
+    //     mas antiguos que la ventana de retencion (se ejecuta al cargar y al
+    //     cerrar sesion).
+    //   - limpiarDatosSensiblesAlSalir(): al cerrar sesion, si el telefono NO
+    //     esta habilitado para offline, borra por completo la cache (no tiene
+    //     proposito conservarla) y limpia los secretos que hubiera en memoria.
+    // ===================================================================
+    const MAX_RETENCION_OFFLINE_MS = 30 * 24 * 3600 * 1000; // 30 dias
+    function _tsDesdeISO(iso) { const t = Date.parse(iso || ''); return Number.isFinite(t) ? t : 0; }
+    function purgarCacheOfflineVencido() {
+      const ahora = Date.now();
+      // 1) Credenciales offline por legajo.
+      try {
+        const creds = _leerCredsOffline(); let cambio = false;
+        for (const k of Object.keys(creds)) {
+          const g = _tsDesdeISO(creds[k] && creds[k].guardadoEn);
+          if (!g || (ahora - g) > MAX_RETENCION_OFFLINE_MS) { delete creds[k]; cambio = true; }
+        }
+        if (cambio) localStorage.setItem(LS_CRED_OFFLINE, JSON.stringify(creds));
+      } catch (_) {}
+      // 2) Turnos cacheados por legajo.
+      try {
+        const cache = JSON.parse(localStorage.getItem('vigix_turnos_cache') || '{}') || {}; let cambio = false;
+        for (const k of Object.keys(cache)) {
+          const g = _tsDesdeISO(cache[k] && cache[k].guardadoEn);
+          if (!g || (ahora - g) > MAX_RETENCION_OFFLINE_MS) { delete cache[k]; cambio = true; }
+        }
+        if (cambio) localStorage.setItem('vigix_turnos_cache', JSON.stringify(cache));
+      } catch (_) {}
+    }
+    function limpiarDatosSensiblesAlSalir() {
+      // Secretos transitorios en memoria (por si quedaron de la sesion).
+      try { fotoBase64Global = ''; fotoMasterGuardada = null; } catch (_) {}
+      // Si el telefono NO esta habilitado para offline, la cache de credenciales
+      // y fotos biometricas no cumple ninguna funcion: se elimina por completo.
+      const offlineActivo = offlineHabilitadoLocal() || !!obtenerCredencialDispositivo();
+      if (!offlineActivo) { try { localStorage.removeItem(LS_CRED_OFFLINE); } catch (_) {} }
+      purgarCacheOfflineVencido();
+    }
+
     async function cerrarSesionVigilador() {
       try { if (typeof window.logoutVigilador === 'function') await window.logoutVigilador(); } catch (_) {}
       idTokenVig = null; sesionEsOffline = false; legajoSesion = null; uidSesion = null;
@@ -765,12 +906,15 @@
       const nom = document.getElementById('lblSesionNombre'); if (nom) nom.innerText = '—';
       try { if (typeof refrescarEstadoVinculacion === 'function') refrescarEstadoVinculacion(); } catch (_) {}
       try { if (typeof refrescarEstadoOfflinePendientes === 'function') refrescarEstadoOfflinePendientes(); } catch (_) {}
+      // Higiene de datos sensibles: caducidad de cache y limpieza si no hay offline.
+      try { limpiarDatosSensiblesAlSalir(); } catch (_) {}
     }
     window.iniciarSesionVigilador = iniciarSesionVigilador;
     window.cerrarSesionVigilador = cerrarSesionVigilador;
 
     window.onload = async function() {
       actualizarEstadoRed();
+      try { purgarCacheOfflineVencido(); } catch (_) {}   // caducidad de datos sensibles offline
       refrescarEstadoVinculacion();
       refrescarEstadoOfflinePendientes();
       const f = document.getElementById('formLogin');
