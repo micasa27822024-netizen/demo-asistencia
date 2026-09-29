@@ -769,9 +769,8 @@
       if (f) f.addEventListener('submit', iniciarSesionVigilador);
 
       if (navigator.onLine) {
-        sincronizarFichadasPendientes();
-        sincronizarAlertasFichadasPendientes();
-        sincronizarLoteOffline();
+        // Al cargar con red disponible: orquestador (sonda real + paralelo).
+        sincronizarTodoPendiente('carga');
       }
     };
 
@@ -800,14 +799,100 @@
       }
     }
 
+    // === OPTIMIZACION DE SINCRONIZACION AL RECUPERAR LA RED (bloque aditivo) ===
+    // Objetivo: subir las fichadas/alertas offline pendientes lo mas RAPIDO y FIABLE
+    // posible al volver internet. Tres mejoras coordinadas:
+    //  1) SONDA de conectividad REAL: navigator.onLine miente (WiFi de portal cautivo
+    //     o sin salida a internet reporta 'online'). Antes de subir confirmamos con
+    //     una peticion ligera a la RTDB. Asi no vaciamos/tocamos la cola por nada.
+    //  2) PARALELO: las 3 vias (fichadas Worker, alertas, lote offline firmado) son
+    //     independientes -> se lanzan a la vez (Promise.allSettled) para minimizar el
+    //     tiempo total en vez de encadenarlas.
+    //  3) DEBOUNCE + mas disparadores: el evento 'online' puede llegar en rafaga; lo
+    //     agrupamos. Ademas reintentamos al volver la app al frente (visibilitychange
+    //     / focus), que es cuando el telefono suele restablecer la conexion real.
+    let _sincronizandoTodo = false;
+    let _debounceSyncTimer = null;
+
+    function hayPendientesPorSincronizar() {
+      try {
+        const a = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
+        const b = JSON.parse(localStorage.getItem('alertas_fichadas_pendientes') || '[]');
+        return (Array.isArray(a) && a.length > 0) || (Array.isArray(b) && b.length > 0);
+      } catch (_) { return false; }
+    }
+
+    // Sonda ligera: shallow GET a la RTDB con cache-buster y timeout corto.
+    // Cualquier respuesta HTTP (incluida 401/403 por reglas) prueba que HAY internet
+    // real; solo un fallo de red/timeout se considera "sin conexion efectiva".
+    async function sondearConectividadReal(msTimeout) {
+      if (!navigator.onLine) return false;
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), msTimeout || 4000);
+        const resp = await fetch(urlAuth(`${URL_FIREBASE}/.json?shallow=true&ts=${Date.now()}`), {
+          method: 'GET', cache: 'no-store', signal: ctrl.signal
+        }).finally(() => clearTimeout(t));
+        return !!resp; // llego respuesta HTTP => hay internet real
+      } catch (_) { return false; } // abort/red => sin salida real a internet
+    }
+
+    // Orquestador: confirma conectividad real y lanza las 3 sincronizaciones en paralelo.
+    async function sincronizarTodoPendiente(motivo) {
+      if (_sincronizandoTodo) return;
+      if (!navigator.onLine) return;
+      if (!hayPendientesPorSincronizar()) return;
+      _sincronizandoTodo = true;
+      try {
+        let conectado = await sondearConectividadReal(4000);
+        // Al reconectar la red suele tardar un instante en estabilizarse: reintento
+        // breve con backoff antes de rendirse (la cola se conserva intacta si falla).
+        for (let intento = 1; intento <= 2 && !conectado; intento++) {
+          if (!navigator.onLine) break;
+          await new Promise(r => setTimeout(r, 1200 * intento));
+          conectado = await sondearConectividadReal(4000);
+        }
+        if (!conectado) {
+          console.log(`⏳ Sincronizacion (${motivo || 'auto'}) pospuesta: sin internet real todavia. La cola se conserva.`);
+          return;
+        }
+        // Las 3 vias son independientes -> EN PARALELO para minimizar el tiempo total.
+        await Promise.allSettled([
+          Promise.resolve().then(() => sincronizarFichadasPendientes()),
+          Promise.resolve().then(() => sincronizarAlertasFichadasPendientes()),
+          Promise.resolve().then(() => sincronizarLoteOffline())
+        ]);
+        console.log(`🔄 Sincronizacion (${motivo || 'auto'}) disparada en paralelo tras confirmar internet real.`);
+      } finally {
+        _sincronizandoTodo = false;
+        try { if (typeof refrescarEstadoOfflinePendientes === 'function') refrescarEstadoOfflinePendientes(); } catch (_) {}
+      }
+    }
+
+    // Anti-rafaga: agrupa disparos muy seguidos del evento 'online'/'focus'.
+    function programarSincronizacion(motivo, msDebounce) {
+      if (_debounceSyncTimer) clearTimeout(_debounceSyncTimer);
+      _debounceSyncTimer = setTimeout(() => {
+        _debounceSyncTimer = null;
+        sincronizarTodoPendiente(motivo);
+      }, msDebounce != null ? msDebounce : 500);
+    }
+
     window.addEventListener('online', () => {
       actualizarEstadoRed();
-      sincronizarFichadasPendientes();
-      sincronizarAlertasFichadasPendientes();
-      sincronizarLoteOffline();
-      if (typeof refrescarEstadoOfflinePendientes === 'function') refrescarEstadoOfflinePendientes();
+      programarSincronizacion('online');
     });
-    
+
+    // La conexion real suele restablecerse cuando el usuario vuelve a la app.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && navigator.onLine) {
+        programarSincronizacion('visible', 800);
+      }
+    });
+    window.addEventListener('focus', () => {
+      if (navigator.onLine) programarSincronizacion('focus', 800);
+    });
+
     window.addEventListener('offline', actualizarEstadoRed);
 
     function iniciarCamaraSegura() {
@@ -939,11 +1024,12 @@
       } catch (_) { return []; }
     }
     // Resuelve el turno de una fecha desde la caché local (usado offline o cuando
-    // la consulta online falla puntualmente).
+    // la consulta online falla puntualmente). Marca el turno con _origenCache para
+    // que la interfaz pueda avisar al vigilador que se tomó de la copia guardada.
     function _resolverTurnoDesdeCache(legajo, fecha) {
       const lista = _leerTurnosCache(legajo).filter(d => mismoLegajo(d.legajo, legajo) && String(d.fecha||'')===String(fecha));
       lista.sort((a,b)=>String(b.actualizadoEn||'').localeCompare(String(a.actualizadoEn||'')));
-      return lista[0] || null;
+      return lista[0] ? Object.assign({}, lista[0], { _origenCache: true }) : null;
     }
 
     async function obtenerTurnoProgramadoParaFecha(legajo, fecha) {
@@ -995,8 +1081,9 @@
       permitidos.forEach(o=>select.insertAdjacentHTML('beforeend',`<option value="${escHtmlObj(o.nombre||'')}" data-objetivo-id="${escHtmlObj(o.id||'')}">${escHtmlObj(o.nombre||o.id||'')}</option>`));
       const objStatus=document.getElementById('objetivo-status'); const turnoStatus=document.getElementById('turno-status');
       objStatus.className='text-[11px] mt-1 text-slate-500'; objStatus.innerText=permitidos.length ? `✓ ${permitidos.length} objetivo(s) autorizado(s) para este vigilador.` : '⚠️ No tiene objetivos autorizados. Debe configurarlos el administrador.';
-      turnoStatus.classList.remove('hidden'); turnoStatus.className='text-[11px] mt-1 '+(turnoProgramadoGlobal?'text-sky-300':'text-slate-400');
-      turnoStatus.innerText=turnoProgramadoGlobal ? `📅 Turno asignado para hoy: ${formatearHorarioTurno(turnoProgramadoGlobal.horaInicio,turnoProgramadoGlobal.horaFin)} · ${turnoProgramadoGlobal.objetivoNombre||''}` : (personal.horarioHabitual?.inicio&&personal.horarioHabitual?.fin ? `🕒 Horario habitual: ${formatearHorarioTurno(personal.horarioHabitual.inicio,personal.horarioHabitual.fin)}` : '⚠️ No hay horario programado para hoy.');
+      turnoStatus.classList.remove('hidden'); turnoStatus.className='text-[11px] mt-1 '+(turnoProgramadoGlobal?(turnoProgramadoGlobal._origenCache?'text-amber-300':'text-sky-300'):'text-slate-400');
+      const avisoCopiaTurno = (turnoProgramadoGlobal && turnoProgramadoGlobal._origenCache) ? '  •  📥 Tomado de la copia guardada en este teléfono (sin conexión).' : '';
+      turnoStatus.innerText=(turnoProgramadoGlobal ? `📅 Turno asignado para hoy: ${formatearHorarioTurno(turnoProgramadoGlobal.horaInicio,turnoProgramadoGlobal.horaFin)} · ${turnoProgramadoGlobal.objetivoNombre||''}` : (personal.horarioHabitual?.inicio&&personal.horarioHabitual?.fin ? `🕒 Horario habitual: ${formatearHorarioTurno(personal.horarioHabitual.inicio,personal.horarioHabitual.fin)}` : '⚠️ No hay horario programado para hoy.')) + avisoCopiaTurno;
       if(permitidos.length===1) select.value=permitidos[0].nombre||'';
     }
 
@@ -2037,7 +2124,8 @@
       ultimoTipoFichadaGlobal = tipo;
       const divResultado = document.getElementById('resultado');
       divResultado.className = "p-3 rounded-xl text-xs text-center bg-amber-950 text-amber-200 border border-amber-500";
-      divResultado.innerText = `✅ Fichada de ${tipo} registrada sin conexión. Se sincronizará automáticamente al recuperar internet y quedará pendiente de verificación por RRHH.`;
+      const notaCopiaTurno = (typeof turnoProgramadoGlobal!=='undefined' && turnoProgramadoGlobal && turnoProgramadoGlobal._origenCache) ? ' Tu turno se tomó de la copia guardada en este teléfono.' : '';
+      divResultado.innerText = `✅ Fichada de ${tipo} registrada sin conexión.${notaCopiaTurno} Se sincronizará automáticamente al recuperar internet y quedará pendiente de verificación por RRHH.`;
 
       limpiarFormularioExitoso();
       finalizarSesionTrasFichada();
