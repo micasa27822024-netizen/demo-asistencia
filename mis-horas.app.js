@@ -510,11 +510,14 @@ function aplicarFiltros() {
   const mesFiltro = document.getElementById('filtroMes').value;
   const diaFiltro = document.getElementById('filtroDia').value;
 
-  let filtrados = datosVigiladorGlobal;
+  // Primero armamos los turnos completos (entrada + salida) sobre TODO el set,
+  // para que un turno que cruza la medianoche (ej. 19:00 -> 07:00) conserve su
+  // salida. Recién despues filtramos cada turno por la fecha de su ENTRADA.
+  let turnos = construirTurnos(datosVigiladorGlobal);
 
   if (mesFiltro !== 'todos') {
-    filtrados = filtrados.filter(f => {
-      const d = parseFechaSegura(f.fecha);
+    turnos = turnos.filter(t => {
+      const d = parseFechaSegura(t.entrada.fecha);
       if (isNaN(d.getTime())) return false;
       const anio = d.getFullYear();
       const mes = String(d.getMonth() + 1).padStart(2, '0');
@@ -523,8 +526,8 @@ function aplicarFiltros() {
   }
 
   if (diaFiltro) {
-    filtrados = filtrados.filter(f => {
-      const d = parseFechaSegura(f.fecha);
+    turnos = turnos.filter(t => {
+      const d = parseFechaSegura(t.entrada.fecha);
       if (isNaN(d.getTime())) return false;
       const anio = d.getFullYear();
       const mes = String(d.getMonth() + 1).padStart(2, '0');
@@ -533,7 +536,7 @@ function aplicarFiltros() {
     });
   }
 
-  procesarYRenderizar(filtrados);
+  renderizarTurnos(turnos);
 }
 
 function limpiarFiltros() {
@@ -542,17 +545,35 @@ function limpiarFiltros() {
   procesarYRenderizar(datosVigiladorGlobal);
 }
 
-function procesarYRenderizar(marcacionesVigilador) {
-  marcacionesVigilador.sort((a, b) => parseFechaSegura(a.fecha) - parseFechaSegura(b.fecha));
+// Empareja cada ENTRADA con su SALIDA adyacente usando SIEMPRE el set completo
+// de marcaciones (ordenado por fecha). De esta forma un turno que cruza la
+// medianoche (ej. 19:00 -> 07:00) mantiene su salida aunque luego se filtre por
+// dia/mes.
+function construirTurnos(marcaciones) {
+  const orden = [...marcaciones].sort((a, b) => parseFechaSegura(a.fecha) - parseFechaSegura(b.fecha));
+  const turnos = [];
+  for (let i = 0; i < orden.length; i++) {
+    if (orden[i].tipo === 'ENTRADA') {
+      const entrada = orden[i];
+      const salida = orden[i + 1] && orden[i + 1].tipo === 'SALIDA' ? orden[i + 1] : null;
+      turnos.push({ entrada, salida });
+    }
+  }
+  return turnos;
+}
 
+function procesarYRenderizar(marcacionesVigilador) {
+  renderizarTurnos(construirTurnos(marcacionesVigilador));
+}
+
+function renderizarTurnos(turnos) {
   let totalD = 0, totalN = 0, totalT = 0;
   const tabla = document.getElementById('cuerpoDetalle');
   tabla.innerHTML = "";
 
-  for (let i = 0; i < marcacionesVigilador.length; i++) {
-    if (marcacionesVigilador[i].tipo === 'ENTRADA') {
-      let entrada = marcacionesVigilador[i];
-      let salida = marcacionesVigilador[i + 1] && marcacionesVigilador[i + 1].tipo === 'SALIDA' ? marcacionesVigilador[i + 1] : null;
+  for (const turnoPar of turnos) {
+      let entrada = turnoPar.entrada;
+      let salida = turnoPar.salida;
 
       let objetivoNombre = entrada.objetivo || (salida && salida.objetivo) || '-';
       const horarioProgramado = obtenerHorarioProgramado(entrada.fecha, entrada.legajo, objetivoNombre);
@@ -588,7 +609,6 @@ function procesarYRenderizar(marcacionesVigilador) {
         <td class="p-4 text-center text-xs font-bold text-emerald-400">${formatearAHorasReloj(horas.t)}</td>
       `;
       tabla.appendChild(tr);
-    }
   }
 
   document.getElementById('horasDiurnas').innerText = formatearAHorasReloj(totalD);
