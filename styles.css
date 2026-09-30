@@ -429,3 +429,6 @@ a{color:inherit;text-decoration:inherit}
 .aspect-video{aspect-ratio:16 / 9}
 @keyframes girarSync{to{transform:rotate(360deg)}}
 #indicadorSync .icono-girando{display:inline-block;animation:girarSync 1s linear infinite}
+/* Alerta visual: objetivo incorrecto al marcar SALIDA (aditivo, no pisa estilos base del select) */
+@keyframes shakeObjetivo{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+.objetivo-error{border-color:rgb(244 63 94 / 1)!important;box-shadow:0 0 0 3px rgb(244 63 94 / 0.35)!important;animation:shakeObjetivo .4s ease-in-out}

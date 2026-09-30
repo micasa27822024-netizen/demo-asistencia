@@ -1534,6 +1534,22 @@
           divRes.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
           divRes.innerText = "❌ Bloqueado: la SALIDA debe ser en el mismo objetivo de la ENTRADA (" + nombreObjEntrada + ").";
           divRes.classList.remove('hidden');
+          // Alerta VISUAL: resaltamos el selector de objetivo en rojo con una
+          // sacudida breve y lo enfocamos, para que se vea claro cual hay que
+          // elegir. Es aditivo (clase 'objetivo-error' de styles.css): no cambia
+          // las clases base del select. La marca se quita sola a los 4 seg o en
+          // cuanto el vigilador cambia de opcion.
+          const selObjetivo = document.getElementById('objetivo');
+          if (selObjetivo) {
+            selObjetivo.classList.add('objetivo-error');
+            try { selObjetivo.focus(); selObjetivo.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+            setTimeout(() => selObjetivo.classList.remove('objetivo-error'), 4000);
+            const limpiarMarcaObjetivo = function () {
+              selObjetivo.classList.remove('objetivo-error');
+              selObjetivo.removeEventListener('change', limpiarMarcaObjetivo);
+            };
+            selObjetivo.addEventListener('change', limpiarMarcaObjetivo);
+          }
           return;
         }
       }
