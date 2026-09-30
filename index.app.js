@@ -6,6 +6,14 @@
     // coincidir con el connect-src del CSP de index.html.
     const URL_WORKER = "https://vigix-auth-admin.micasa27822024.workers.dev";
 
+    // Escapa texto para insertarlo de forma segura en HTML (evita XSS almacenado
+    // desde datos de terceros, p.ej. el nombre de un objetivo cargado por el
+    // admin). Cubre atributos y nodos de texto: & < > " '.
+    function escHtmlIdx(valor) {
+      return String(valor == null ? '' : valor).replace(/[&<>"']/g,
+        c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
     // Comparacion unificada de legajo (misma logica que mismoLegajoAdmin en
     // admin.html y mismoLegajoVig en mis-horas.html): normaliza con trim y, si
     // ambos son numericos, compara tambien por valor entero para tolerar ceros
@@ -806,7 +814,7 @@
         objetivoAutorizadoIdsGlobal = permitidos.map(x=>x.id);
       }
       const select=document.getElementById('objetivo'); select.innerHTML='<option value="">Seleccione su puesto asignado</option>';
-      permitidos.forEach(o=>select.insertAdjacentHTML('beforeend',`<option value="${String(o.nombre||'').replace(/"/g,'&quot;')}" data-objetivo-id="${String(o.id||'')}">${String(o.nombre||o.id||'')}</option>`));
+      permitidos.forEach(o=>select.insertAdjacentHTML('beforeend',`<option value="${escHtmlIdx(o.nombre||'')}" data-objetivo-id="${escHtmlIdx(o.id||'')}">${escHtmlIdx(o.nombre||o.id||'')}</option>`));
       const objStatus=document.getElementById('objetivo-status'); const turnoStatus=document.getElementById('turno-status');
       objStatus.className='text-[11px] mt-1 text-slate-500'; objStatus.innerText=permitidos.length ? `✓ ${permitidos.length} objetivo(s) autorizado(s) para este vigilador.` : '⚠️ No tiene objetivos autorizados. Debe configurarlos el administrador.';
       turnoStatus.classList.remove('hidden'); turnoStatus.className='text-[11px] mt-1 '+(turnoProgramadoGlobal?'text-sky-300':'text-slate-400');
