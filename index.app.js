@@ -335,10 +335,8 @@
     window.refrescarEstadoVinculacion = refrescarEstadoVinculacion;
 
     // Muestra cuantas fichadas offline quedan por sincronizar y, si alguna fue
-    // rechazada por el servidor, el motivo. El estado se calcula UNA vez y se
-    // refleja en dos lugares: la linea dentro de la tarjeta de login
-    // (#estadoOfflinePend) y un banner fijo global (#bannerOfflinePend) visible
-    // en CUALQUIER pantalla, incluido el panel de fichaje.
+    // rechazada por el servidor, el motivo. El estado se refleja en la linea
+    // dentro de la tarjeta de login (#estadoOfflinePend).
     function refrescarEstadoOfflinePendientes() {
       let pend = [], rech = [];
       try { pend = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]'); } catch (_) {}
@@ -363,7 +361,7 @@
         }
       }
 
-      // (1) Linea dentro de la tarjeta de login.
+      // Linea de estado dentro de la tarjeta de login (notificacion original).
       const el = document.getElementById('estadoOfflinePend');
       if (el) {
         if (tipo === 'oculto') { el.classList.add('hidden'); el.innerText = ''; }
@@ -371,18 +369,6 @@
           el.className = 'text-[11px] mt-1 font-semibold ' + (tipo === 'error' ? 'text-rose-400' : 'text-amber-400');
           el.innerText = texto;
           el.classList.remove('hidden');
-        }
-      }
-
-      // (2) Banner fijo global (visible tambien sobre el panel de fichaje).
-      const banner = document.getElementById('bannerOfflinePend');
-      if (banner) {
-        if (tipo === 'oculto') { banner.classList.add('hidden'); banner.innerText = ''; }
-        else {
-          banner.className = 'fixed bottom-0 inset-x-0 z-50 px-4 py-2 text-center text-xs font-semibold shadow-lg ' +
-            (tipo === 'error' ? 'bg-rose-950 text-rose-100 border-t border-rose-500/50' : 'bg-amber-950 text-amber-100 border-t border-amber-500/50');
-          banner.innerText = texto;
-          banner.classList.remove('hidden');
         }
       }
     }
@@ -475,9 +461,13 @@
       if (estaSincronizandoLote) return;
       if (!navigator.onLine) return;
       if (!URL_WORKER_FICHAJE) return;
-      if (!offlineHabilitadoLocal()) return;               // opt-in
       const disp = obtenerCredencialDispositivo();
       if (!disp) return;                                    // sin dispositivo provisionado no hay via firmada
+      // NO se bloquea por el flag local 'offlineHabilitado': es solo una cache y, si
+      // el ultimo login fue offline, puede faltar o estar desactualizada, lo que
+      // dejaria las fichadas VARADAS para siempre (pendientes que nunca se envian).
+      // El Worker es la autoridad: si el modo offline esta deshabilitado devuelve
+      // OFFLINE_DESHABILITADO (403) y se conserva la cola; si esta habilitado, sube.
       const pendientes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
       const loteItems = pendientes.filter(f => f && (f.creadaOffline === true || f.origenOffline === true));
       if (loteItems.length === 0) return;
