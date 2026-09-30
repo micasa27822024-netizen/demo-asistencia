@@ -421,3 +421,11 @@ a{color:inherit;text-decoration:inherit}
 }
 /* --- clases propias de la app (antes en bloques <style> en linea) --- */
 .no-select{-webkit-touch-callout:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none}
+
+/* --- Extras horneados para index.html (hardening #11) --- */
+.bg-black{background-color:rgb(0 0 0 / 1)}
+.pb-4{padding-bottom:1rem}
+.hover\:text-emerald-400:hover{color:rgb(52 211 153 / 1)}
+.aspect-video{aspect-ratio:16 / 9}
+@keyframes girarSync{to{transform:rotate(360deg)}}
+#indicadorSync .icono-girando{display:inline-block;animation:girarSync 1s linear infinite}

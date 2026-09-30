@@ -3,29 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Adelanta la conexion a los CDN criticos (reduce latencia de handshake). -->
-  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
-  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <!-- Blindaje CSP: solo se permiten los orígenes que la app realmente usa. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; font-src 'self' data: https://cdnjs.cloudflare.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://*.googleapis.com https://www.gstatic.com https://nominatim.openstreetmap.org https://vigix-auth-admin.micasa27822024.workers.dev; worker-src 'self' blob:; manifest-src 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' https://cdnjs.cloudflare.com; font-src 'self' data: https://cdnjs.cloudflare.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://*.googleapis.com https://www.gstatic.com https://nominatim.openstreetmap.org https://vigix-auth-admin.micasa27822024.workers.dev; worker-src 'self' blob:; manifest-src 'self'">
   <title>Demo Asistencia - Control de Asistencia</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="styles.css">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer">
 
   <!-- LIBRERÍA FACE-API.JS COMPLETA Y ESTABLE -->
-  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js" integrity="sha384-gzn2n++arkvyhdNLmUf1s6F5NZ8iAbZ7FhIt+Zw7Jlf1n/vNTmZ3+cYr7S4ogyco" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
 
   <!-- Indicador visual de sincronizacion (flotante, aparece solo al sincronizar) -->
   <div id="indicadorSync" class="hidden" role="status" aria-live="polite"></div>
 
-  <style>
-    @keyframes girarSync { to { transform: rotate(360deg); } }
-    #indicadorSync .icono-girando { display:inline-block; animation: girarSync 1s linear infinite; }
-  </style>
+  <!-- La animacion girarSync y .icono-girando se movieron a styles.css (hardening #11) -->
 
 
   <!-- ENCABEZADO Y MENÚ CORPORATIVO -->
@@ -171,7 +163,7 @@
   </main>
 
   <!-- Logica de la app (script clasico) y modulo de sesion Firebase (ESM) -->
-  <script defer src="index.app.js"></script>
+  <script src="index.app.js"></script>
   <script type="module" src="index.module.js"></script>
 </body>
 </html>
