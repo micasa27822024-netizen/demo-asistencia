@@ -1,0 +1,10 @@
+/* Estilos de mis-horas (extraidos de mis-horas.html, sin cambios). */
+/* Desactivar selección de texto en el botón de pánico para evitar interferencias al mantener presionado */
+.no-select {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
