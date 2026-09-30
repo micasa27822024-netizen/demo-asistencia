@@ -344,6 +344,7 @@ function notificarNuevaAlertaFichada(alerta) {
 
 window.onload = function() {
   generarPinEmpleado();
+  initInlineHandlers();
   // La restauracion de sesion la decide Firebase Auth (onAuthStateChanged),
   // NO un flag editable en sessionStorage. Ver listener en el modulo Firebase.
 };
@@ -2751,4 +2752,71 @@ function exportarPDFNovedades() {
   });
 
   doc.save(`Reporte_Novedades_${new Date().toISOString().slice(0,10)}.pdf`);
+}
+
+// ========== Inline Handler Migration (CSP hardening) ==========
+// All former inline event handlers (onclick/onsubmit/onkeyup/onchange)
+// moved here as addEventListener calls to allow removing 'unsafe-inline' from CSP.
+
+function initInlineHandlers() {
+  document.getElementById("formValidarPass").addEventListener("submit", function(e) { validarPasswordAdmin(e) });
+  document.getElementById("btnRecargar").addEventListener("click", function(e) { recargarDatosEfectivo() });
+  document.getElementById("btnAlertasFichadas").addEventListener("click", function(e) { abrirModalAlertasFichadas() });
+  document.getElementById("btnCerrarSesion").addEventListener("click", function(e) { cerrarSesionAdmin() });
+  document.getElementById("tabBtnMarcaciones").addEventListener("click", function(e) { cambiarTab('marcaciones') });
+  document.getElementById("tabBtnAlertasUbicacion").addEventListener("click", function(e) { cambiarTab('alertasUbicacion') });
+  document.getElementById("tabBtnNovedades").addEventListener("click", function(e) { cambiarTab('novedades') });
+  document.getElementById("tabBtnPanicos").addEventListener("click", function(e) { cambiarTab('panicos') });
+  document.getElementById("tabBtnPersonal").addEventListener("click", function(e) { cambiarTab('personal') });
+  document.getElementById("tabBtnObjetivos").addEventListener("click", function(e) { cambiarTab('objetivos') });
+  document.getElementById("tabBtnDispositivos").addEventListener("click", function(e) { cambiarTab('dispositivos') });
+  document.getElementById("tabBtnConfiguracion").addEventListener("click", function(e) { cambiarTab('configuracion') });
+  document.getElementById("inputBusqueda").addEventListener("keyup", function(e) { filtrarTablaMarcaciones() });
+  document.getElementById("filtroAuditoria").addEventListener("change", function(e) { filtrarTablaMarcaciones() });
+  document.getElementById("filtroTipo").addEventListener("change", function(e) { filtrarTablaMarcaciones() });
+  document.getElementById("btnExcelMarc").addEventListener("click", function(e) { exportarExcel() });
+  document.getElementById("btnPDFMarc").addEventListener("click", function(e) { exportarPDF() });
+  document.getElementById("btnPDFCumpl").addEventListener("click", function(e) { exportarPDFCumplimientoMensual() });
+  document.getElementById("selectFilasPorPagina").addEventListener("change", function(e) { cambiarFilasPorPagina() });
+  document.getElementById("btnPagAnt").addEventListener("click", function(e) { irPaginaMarcaciones(-1) });
+  document.getElementById("btnPagSig").addEventListener("click", function(e) { irPaginaMarcaciones(1) });
+  document.getElementById("inputBusquedaNovedades").addEventListener("keyup", function(e) { filtrarTablaNovedades() });
+  document.getElementById("btnExcelNov").addEventListener("click", function(e) { exportarExcelNovedades() });
+  document.getElementById("btnPDFNov").addEventListener("click", function(e) { exportarPDFNovedades() });
+  document.getElementById("btnCargarAlertas").addEventListener("click", function(e) { cargarAlertasFichadas(false) });
+  document.getElementById("btnMarcarVistas").addEventListener("click", function(e) { marcarTodasAlertasFichadasVistas() });
+  document.getElementById("btnGenPin").addEventListener("click", function(e) { generarPinEmpleado() });
+  document.getElementById("formGuardarObj").addEventListener("submit", function(e) { guardarObjetivo(e) });
+  document.getElementById("btnBuscarDireccionNuevo").addEventListener("click", function(e) { buscarDireccionObjetivo('nuevo') });
+  document.getElementById("btnbuscarDirGogObj_nuevo").addEventListener("click", function(e) { buscarDireccionGoogleObjetivo('nuevo') });
+  document.getElementById("btnaplicarCoordObj_nuevo").addEventListener("click", function(e) { aplicarCoordenadasManualesObjetivo('nuevo') });
+  document.getElementById("btnGPSNuevo").addEventListener("click", function(e) { usarGPSObjetivo('nuevo') });
+  document.getElementById("btnGuardarOffline").addEventListener("click", function(e) { guardarConfigOffline() });
+  document.getElementById("btnCrearDispositivo").addEventListener("click", function(e) { crearDispositivo() });
+  document.getElementById("btnCopiarVinc").addEventListener("click", function(e) { copiarCodigoVinculacion() });
+  document.getElementById("btnCargarDisp").addEventListener("click", function(e) { cargarDispositivos() });
+  document.getElementById("btnGuardarConfig").addEventListener("click", function(e) { guardarConfiguracionGlobal() });
+  document.getElementById("btnGuardarModo").addEventListener("click", function(e) { guardarModoDispositivo() });
+  document.getElementById("btnApagarPanico").addEventListener("click", function(e) { apagarAlertaPanico() });
+  document.getElementById("btnCerrarModal").addEventListener("click", function(e) { cerrarModal() });
+  document.getElementById("btnCerrarFraude").addEventListener("click", function(e) { cerrarModalAccionFraude() });
+  document.getElementById("btnAprobarFichada").addEventListener("click", function(e) { aprobarFraudeManual() });
+  document.getElementById("btnAnularFichada").addEventListener("click", function(e) { eliminarFraudeMarca() });
+  document.getElementById("btnCotejarFichada").addEventListener("click", function(e) { verAuditoriaDesdeAccion() });
+  document.getElementById("btnCerrarAud").addEventListener("click", function(e) { cerrarModalAuditoria() });
+  document.getElementById("btnCerrarAud2").addEventListener("click", function(e) { cerrarModalAuditoria() });
+  document.getElementById("btnCerrarEdit").addEventListener("click", function(e) { cerrarModalEditar() });
+  document.getElementById("btnCerrarEdit2").addEventListener("click", function(e) { cerrarModalEditar() });
+  document.getElementById("btnGuardarEdicion").addEventListener("click", function(e) { guardarEdicionPersonal() });
+  document.getElementById("btnCerrarTurnos").addEventListener("click", function(e) { cerrarModalTurnosPersonal() });
+  document.getElementById("formGuardarTurno").addEventListener("submit", function(e) { guardarAsignacionTurno(e) });
+  document.getElementById("btnCerrarObj").addEventListener("click", function(e) { cerrarModalEditarObjetivo() });
+  document.getElementById("btnBuscarDireccionEditar").addEventListener("click", function(e) { buscarDireccionObjetivo('editar') });
+  document.getElementById("btnaplicarCoordObj_editar").addEventListener("click", function(e) { aplicarCoordenadasManualesObjetivo('editar') });
+  document.getElementById("btnGPSEditar").addEventListener("click", function(e) { usarGPSObjetivo('editar') });
+  document.getElementById("btnCerrarObj2").addEventListener("click", function(e) { cerrarModalEditarObjetivo() });
+  document.getElementById("btnGuardarEdicionObjetivo").addEventListener("click", function(e) { guardarEdicionObjetivo() });
+  document.getElementById("btnCerrarAlertas").addEventListener("click", function(e) { cerrarModalAlertasFichadas() });
+  document.getElementById("btnNotifNav").addEventListener("click", function(e) { solicitarNotificacionesNavegador() });
+  document.getElementById("btnMarcarVistas2").addEventListener("click", function(e) { marcarTodasAlertasFichadasVistas() });
 }

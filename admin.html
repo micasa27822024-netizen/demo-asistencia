@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- Blindaje CSP: solo se permiten los orígenes que la app realmente usa. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; font-src 'self' data: https://cdnjs.cloudflare.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://*.googleapis.com https://www.gstatic.com https://nominatim.openstreetmap.org https://vigix-auth-admin.micasa27822024.workers.dev; worker-src 'self' blob:; manifest-src 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' 'unsafe-eval' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://unpkg.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; font-src 'self' data: https://cdnjs.cloudflare.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://*.googleapis.com https://www.gstatic.com https://nominatim.openstreetmap.org https://vigix-auth-admin.micasa27822024.workers.dev; worker-src 'self' blob:; manifest-src 'self'">
   <title>Demo Asistencia - Panel de Control</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.tailwindcss.com" integrity="sha384-igm5BeiBt36UU4gqwWS7imYmelpTsZlQ45FZf+XBn9MuJbn4nQr7yx1yFydocC/K" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer">
   <!-- MAPA GRATUITO: Leaflet + OpenStreetMap -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha512-Zcn6bjR/8RZbLEpLIeOwNtzREBAJnUKESxces60Mpoj+2okopSAcSUIUOseddDm0cxnGQzxIR7vJgsLZbdLE3w==" crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -72,7 +72,7 @@
         <h2 class="text-xl font-bold text-white">Acceso Administrador</h2>
         <p class="text-xs text-slate-400 mt-1">Ingresa tu correo y contraseña para acceder al panel admin</p>
       </div>
-      <form onsubmit="validarPasswordAdmin(event)" class="space-y-4">
+      <form id="formValidarPass" class="space-y-4">
         <div class="relative">
           <i class="fa-solid fa-envelope absolute left-3 top-3.5 text-slate-400 text-sm"></i>
           <input type="email" id="inputEmailAdmin" placeholder="Correo (ej: admin@vigix.com)" required autocomplete="username" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500 text-center text-sm">
@@ -102,14 +102,14 @@
         <p class="text-xs text-slate-400 mt-1">Gestión de asistencia, auditoría de IA en segundo plano y puestos</p>
       </div>
       <div class="flex items-center gap-3">
-        <button onclick="recargarDatosEfectivo()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
+        <button id="btnRecargar" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg">
           <i class="fa-solid fa-rotate-right" id="icono-reload"></i> Actualizar Datos
         </button>
-        <button onclick="abrirModalAlertasFichadas()" id="btnAlertasFichadas" class="relative bg-rose-600/15 hover:bg-rose-600/30 text-rose-300 font-bold px-3 py-2 rounded-xl text-sm transition border border-rose-500/30" title="Alertas de fichadas bloqueadas">
+        <button id="btnAlertasFichadas" class="relative bg-rose-600/15 hover:bg-rose-600/30 text-rose-300 font-bold px-3 py-2 rounded-xl text-sm transition border border-rose-500/30" title="Alertas de fichadas bloqueadas">
           <i class="fa-solid fa-bell"></i>
           <span id="badgeAlertasFichadas" class="hidden absolute -top-2 -right-2 min-w-[20px] h-5 px-1.5 rounded-full bg-rose-600 text-white text-[10px] font-black items-center justify-center border-2 border-slate-900">0</span>
         </button>
-        <button onclick="cerrarSesionAdmin()" class="bg-slate-700 hover:bg-rose-600 text-slate-300 hover:text-white font-semibold px-3 py-2 rounded-xl text-sm transition border border-slate-600" title="Cerrar Sesión">
+        <button id="btnCerrarSesion" class="bg-slate-700 hover:bg-rose-600 text-slate-300 hover:text-white font-semibold px-3 py-2 rounded-xl text-sm transition border border-slate-600" title="Cerrar Sesión">
           <i class="fa-solid fa-right-from-bracket"></i>
         </button>
       </div>
@@ -117,29 +117,29 @@
 
     <!-- PESTAÑAS -->
     <div class="flex flex-wrap border-b border-slate-700 gap-2">
-      <button id="tabBtnMarcaciones" onclick="cambiarTab('marcaciones')" class="px-5 py-3 font-semibold text-sm border-b-2 border-emerald-500 text-emerald-400 flex items-center gap-2 transition">
+      <button id="tabBtnMarcaciones" class="px-5 py-3 font-semibold text-sm border-b-2 border-emerald-500 text-emerald-400 flex items-center gap-2 transition">
         <i class="fa-solid fa-clipboard-user"></i> Marcaciones
       </button>
-      <button id="tabBtnAlertasUbicacion" onclick="cambiarTab('alertasUbicacion')" class="relative px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
+      <button id="tabBtnAlertasUbicacion" class="relative px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
         <i class="fa-solid fa-location-crosshairs text-rose-400"></i> Alertas de ubicación
         <span id="badgeAlertasTab" class="hidden min-w-[18px] h-5 px-1.5 rounded-full bg-rose-600 text-white text-[10px] font-black items-center justify-center">0</span>
       </button>
-      <button id="tabBtnNovedades" onclick="cambiarTab('novedades')" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
+      <button id="tabBtnNovedades" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
         <i class="fa-solid fa-triangle-exclamation"></i> Novedades / Incidencias
       </button>
-      <button id="tabBtnPanicos" onclick="cambiarTab('panicos')" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
+      <button id="tabBtnPanicos" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
         <i class="fa-solid fa-bell text-rose-400"></i> Pánicos
       </button>
-      <button id="tabBtnPersonal" onclick="cambiarTab('personal')" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
+      <button id="tabBtnPersonal" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
         <i class="fa-solid fa-id-card"></i> Personal / PINs
       </button>
-      <button id="tabBtnObjetivos" onclick="cambiarTab('objetivos')" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
+      <button id="tabBtnObjetivos" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
         <i class="fa-solid fa-building"></i> Objetivos / Puestos
       </button>
-      <button id="tabBtnDispositivos" onclick="cambiarTab('dispositivos')" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
+      <button id="tabBtnDispositivos" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
         <i class="fa-solid fa-mobile-screen"></i> Dispositivos
       </button>
-      <button id="tabBtnConfiguracion" onclick="cambiarTab('configuracion')" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
+      <button id="tabBtnConfiguracion" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
         <i class="fa-solid fa-sliders"></i> Configurar
       </button>
     </div>
@@ -149,32 +149,32 @@
       <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 flex flex-col md:flex-row gap-4 justify-between items-center">
         <div class="flex-1 relative w-full">
           <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
-          <input type="text" id="inputBusqueda" onkeyup="filtrarTablaMarcaciones()" placeholder="Buscar por Nombre, Legajo u Objetivo..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+          <input type="text" id="inputBusqueda" placeholder="Buscar por Nombre, Legajo u Objetivo..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
         </div>
         
         <div class="flex flex-wrap md:flex-nowrap items-center gap-3 w-full md:w-auto">
           <!-- Filtro de Alertas IA -->
-          <select id="filtroAuditoria" onchange="filtrarTablaMarcaciones()" class="w-full md:w-auto bg-slate-900 border border-slate-700 text-amber-400 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-500">
+          <select id="filtroAuditoria" class="w-full md:w-auto bg-slate-900 border border-slate-700 text-amber-400 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-amber-500">
             <option value="TODOS">Todas las auditorías</option>
             <option value="FRAUDE">🚨 Solo Fraude / Sospechosos</option>
             <option value="PENDIENTE">🕒 Pendientes de verificación (offline)</option>
             <option value="OK">✅ Solo Verificados</option>
           </select>
 
-          <select id="filtroTipo" onchange="filtrarTablaMarcaciones()" class="w-full md:w-auto bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+          <select id="filtroTipo" class="w-full md:w-auto bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
             <option value="TODOS">Todos los tipos</option>
             <option value="ENTRADA">Solo Entradas</option>
             <option value="SALIDA">Solo Salidas</option>
           </select>
 
-          <button onclick="exportarExcel()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md w-full md:w-auto">
+          <button id="btnExcelMarc" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md w-full md:w-auto">
             <i class="fa-solid fa-file-excel"></i> Excel
           </button>
-          <button onclick="exportarPDF()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md w-full md:w-auto">
+          <button id="btnPDFMarc" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md w-full md:w-auto">
             <i class="fa-solid fa-file-pdf"></i> PDF
           </button>
           <input type="month" id="mesReporteCumpl" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 w-full md:w-auto" title="Mes del reporte mensual de cumplimiento">
-          <button onclick="exportarPDFCumplimientoMensual()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md w-full md:w-auto">
+          <button id="btnPDFCumpl" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md w-full md:w-auto">
             <i class="fa-solid fa-calendar-check"></i> PDF Cumplimiento
           </button>
         </div>
@@ -234,7 +234,7 @@
         <div id="paginacionMarcaciones" class="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 border-t border-slate-700 bg-slate-950/40">
           <div class="flex items-center gap-2 text-xs text-slate-400">
             <span>Filas por página</span>
-            <select id="selectFilasPorPagina" onchange="cambiarFilasPorPagina()" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white focus:outline-none focus:border-emerald-500">
+            <select id="selectFilasPorPagina" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white focus:outline-none focus:border-emerald-500">
               <option value="10">10</option>
               <option value="25" selected>25</option>
               <option value="50">50</option>
@@ -243,9 +243,9 @@
             <span id="infoRangoMarcaciones" class="ml-2"></span>
           </div>
           <div class="flex items-center gap-2">
-            <button onclick="irPaginaMarcaciones(-1)" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 transition"><i class="fa-solid fa-chevron-left"></i> Anterior</button>
+            <button id="btnPagAnt" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 transition"><i class="fa-solid fa-chevron-left"></i> Anterior</button>
             <span id="infoPaginaMarcaciones" class="text-xs text-slate-300 font-semibold px-2">1 / 1</span>
-            <button onclick="irPaginaMarcaciones(1)" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 transition">Siguiente <i class="fa-solid fa-chevron-right"></i></button>
+            <button id="btnPagSig" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 transition">Siguiente <i class="fa-solid fa-chevron-right"></i></button>
           </div>
         </div>
       </div>
@@ -256,13 +256,13 @@
       <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 flex flex-col md:flex-row gap-4 justify-between items-center">
         <div class="flex-1 relative w-full">
           <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
-          <input type="text" id="inputBusquedaNovedades" onkeyup="filtrarTablaNovedades()" placeholder="Buscar por Novedad, Objetivo o Personal..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
+          <input type="text" id="inputBusquedaNovedades" placeholder="Buscar por Novedad, Objetivo o Personal..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
         </div>
         <div class="flex flex-wrap md:flex-nowrap items-center gap-3 w-full md:w-auto">
-          <button onclick="exportarExcelNovedades()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md w-full md:w-auto">
+          <button id="btnExcelNov" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md w-full md:w-auto">
             <i class="fa-solid fa-file-excel"></i> Excel
           </button>
-          <button onclick="exportarPDFNovedades()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md w-full md:w-auto">
+          <button id="btnPDFNov" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md w-full md:w-auto">
             <i class="fa-solid fa-file-pdf"></i> PDF
           </button>
         </div>
@@ -334,10 +334,10 @@
             <p class="text-xs text-slate-400 mt-1">Acá quedan guardados los intentos realizados fuera del radio permitido, incluso después de cerrar la notificación.</p>
           </div>
           <div class="flex gap-2">
-            <button onclick="cargarAlertasFichadas(false)" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-lg text-xs font-semibold transition">
+            <button id="btnCargarAlertas" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-lg text-xs font-semibold transition">
               <i class="fa-solid fa-rotate"></i> Actualizar
             </button>
-            <button onclick="marcarTodasAlertasFichadasVistas()" class="bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 px-3 py-2 rounded-lg text-xs font-semibold transition">
+            <button id="btnMarcarVistas" class="bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 px-3 py-2 rounded-lg text-xs font-semibold transition">
               <i class="fa-solid fa-check-double"></i> Marcar vistas
             </button>
           </div>
@@ -369,7 +369,7 @@
             <label class="block text-xs uppercase text-slate-400 mb-1">PIN Generado</label>
             <div class="flex gap-2">
               <input type="text" id="altaPin" readonly required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm text-emerald-400 font-mono font-bold tracking-widest text-center cursor-not-allowed">
-              <button type="button" onclick="generarPinEmpleado()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 p-2 rounded-xl text-sm transition" title="Generar nuevo PIN">
+              <button id="btnGenPin" type="button" class="bg-slate-700 hover:bg-slate-600 text-slate-200 p-2 rounded-xl text-sm transition" title="Generar nuevo PIN">
                 <i class="fa-solid fa-arrows-rotate"></i>
               </button>
             </div>
@@ -479,7 +479,7 @@
           <p class="text-xs text-slate-400 mt-1">Escribí la dirección exacta. Podés buscarla en OpenStreetMap o abrirla directamente en Google Maps. Si Google Maps encuentra el domicilio, copiá sus coordenadas y pegálas abajo; también podés mover el marcador del mapa o cargar las coordenadas manualmente.</p>
         </div>
 
-        <form onsubmit="guardarObjetivo(event)" class="space-y-4">
+        <form id="formGuardarObj" class="space-y-4">
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <div>
               <label class="block text-xs uppercase text-slate-400 mb-1">Nombre del Objetivo</label>
@@ -489,10 +489,10 @@
               <label class="block text-xs uppercase text-slate-400 mb-1">Dirección exacta</label>
               <div class="flex flex-col sm:flex-row gap-2">
                 <input type="text" id="newDireccionObjetivo" required placeholder="Ej: Americo Vespucio 651, Bella Vista, San Miguel, Buenos Aires" class="flex-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500">
-                <button type="button" onclick="buscarDireccionObjetivo('nuevo')" id="btnBuscarDireccionNuevo" class="bg-sky-600 hover:bg-sky-500 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 whitespace-nowrap">
+                <button type="button" id="btnBuscarDireccionNuevo" class="bg-sky-600 hover:bg-sky-500 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 whitespace-nowrap">
                   <i class="fa-solid fa-magnifying-glass"></i> Buscar dirección
                 </button>
-                <button type="button" onclick="buscarDireccionGoogleObjetivo('nuevo')" class="bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 whitespace-nowrap">
+                <button id="btnbuscarDirGogObj_nuevo" type="button" class="bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 whitespace-nowrap">
                   <i class="fa-brands fa-google"></i> Google Maps
                 </button>
               </div>
@@ -518,10 +518,10 @@
               <input type="text" id="newLongitudObjetivo" inputmode="decimal" placeholder="Ej: -58.712345" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-emerald-300 font-mono focus:outline-none">
             </div>
             <div class="flex flex-col gap-2">
-              <button type="button" onclick="aplicarCoordenadasManualesObjetivo('nuevo')" class="bg-sky-700 hover:bg-sky-600 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2">
+              <button id="btnaplicarCoordObj_nuevo" type="button" class="bg-sky-700 hover:bg-sky-600 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2">
                 <i class="fa-solid fa-map-pin"></i> Aplicar coordenadas manuales
               </button>
-              <button type="button" onclick="usarGPSObjetivo('nuevo')" id="btnGPSNuevo" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2">
+              <button type="button" id="btnGPSNuevo" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition flex items-center justify-center gap-2">
                 <i class="fa-solid fa-location-crosshairs"></i> Usar GPS actual
               </button>
             </div>
@@ -580,7 +580,7 @@
           <p class="text-[11px] text-slate-500 mt-1">Antigüedad máxima aceptada de un lote offline al sincronizar. Por defecto 168 h (7 días). Los lotes más viejos se rechazan.</p>
         </div>
         <div class="flex items-center gap-3 mt-5">
-          <button type="button" onclick="guardarConfigOffline()" id="btnGuardarOffline" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center gap-2">
+          <button type="button" id="btnGuardarOffline" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center gap-2">
             <i class="fa-solid fa-floppy-disk"></i> Guardar
           </button>
           <span id="cfgEstadoOffline" class="text-xs"></span>
@@ -606,7 +606,7 @@
           </div>
         </div>
         <div class="flex items-center gap-3 mt-5">
-          <button type="button" onclick="crearDispositivo()" id="btnCrearDispositivo" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center gap-2">
+          <button type="button" id="btnCrearDispositivo" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center gap-2">
             <i class="fa-solid fa-mobile-screen-button"></i> Crear dispositivo
           </button>
           <span id="estadoCrearDispositivo" class="text-xs"></span>
@@ -620,7 +620,7 @@
           <p class="text-[11px] text-amber-300/90 mb-3"><i class="fa-solid fa-triangle-exclamation"></i> Este código contiene el secreto del dispositivo y <b>no se volverá a mostrar</b>. Pegalo en el dispositivo físico. Si lo perdés, rotá el secreto.</p>
           <textarea id="codigoVinculacionTexto" readonly rows="3" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-emerald-200 break-all focus:outline-none"></textarea>
           <div class="flex flex-wrap items-center gap-3 mt-3 text-[11px] text-slate-400">
-            <button type="button" onclick="copiarCodigoVinculacion()" class="bg-slate-700 hover:bg-slate-600 text-white font-semibold py-1.5 px-3 rounded-lg transition flex items-center gap-1.5">
+            <button id="btnCopiarVinc" type="button" class="bg-slate-700 hover:bg-slate-600 text-white font-semibold py-1.5 px-3 rounded-lg transition flex items-center gap-1.5">
               <i class="fa-solid fa-copy"></i> Copiar código
             </button>
             <span id="copiadoAviso"></span>
@@ -639,7 +639,7 @@
             <i class="fa-solid fa-list text-emerald-400 text-lg"></i>
             <h3 class="font-bold text-white text-base">Dispositivos registrados</h3>
           </div>
-          <button type="button" onclick="cargarDispositivos()" class="bg-slate-700 hover:bg-slate-600 text-white font-semibold py-1.5 px-3 rounded-lg text-xs transition flex items-center gap-1.5">
+          <button id="btnCargarDisp" type="button" class="bg-slate-700 hover:bg-slate-600 text-white font-semibold py-1.5 px-3 rounded-lg text-xs transition flex items-center gap-1.5">
             <i class="fa-solid fa-rotate"></i> Actualizar
           </button>
         </div>
@@ -703,7 +703,7 @@
         </div>
 
         <div class="flex items-center gap-3 mt-5">
-          <button type="button" onclick="guardarConfiguracionGlobal()" id="btnGuardarConfig" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center gap-2">
+          <button type="button" id="btnGuardarConfig" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center gap-2">
             <i class="fa-solid fa-floppy-disk"></i> Guardar configuración
           </button>
           <span id="cfgEstadoGuardado" class="text-xs"></span>
@@ -734,7 +734,7 @@
           </label>
         </div>
         <div class="flex items-center gap-3 mt-5">
-          <button type="button" onclick="guardarModoDispositivo()" id="btnGuardarModo" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center gap-2">
+          <button type="button" id="btnGuardarModo" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center gap-2">
             <i class="fa-solid fa-floppy-disk"></i> Guardar modo
           </button>
           <span id="cfgEstadoModo" class="text-xs"></span>
@@ -763,7 +763,7 @@
         </a>
       </div>
 
-      <button onclick="apagarAlertaPanico()" class="w-full bg-rose-600 hover:bg-rose-500 text-white font-black py-3.5 rounded-xl text-base transition shadow-xl flex items-center justify-center gap-2 cursor-pointer">
+      <button id="btnApagarPanico" class="w-full bg-rose-600 hover:bg-rose-500 text-white font-black py-3.5 rounded-xl text-base transition shadow-xl flex items-center justify-center gap-2 cursor-pointer">
         <i class="fa-solid fa-volume-xmark text-xl"></i> APAGAR ALARMA / ATENDER
       </button>
     </div>
@@ -772,7 +772,7 @@
   <!-- MODAL VER FOTO SIMPLE -->
   <div id="modalFoto" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
     <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4 max-w-lg w-full relative space-y-4">
-      <button onclick="cerrarModal()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
+      <button id="btnCerrarModal" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
         <i class="fa-solid fa-xmark"></i>
       </button>
       <h3 class="font-bold text-white text-base">Archivo Adjunto / Foto</h3>
@@ -785,7 +785,7 @@
   <!-- MODAL ACCION DE GESTION DE FRAUDE -->
   <div id="modalAccionFraude" class="fixed inset-0 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-50">
     <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full relative space-y-5">
-      <button onclick="cerrarModalAccionFraude()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
+      <button id="btnCerrarFraude" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
         <i class="fa-solid fa-xmark"></i>
       </button>
 
@@ -803,13 +803,13 @@
       <div id="fraudeDetalleFichada" class="p-3 bg-slate-900 border border-slate-700 rounded-xl text-xs space-y-1 text-slate-300"></div>
 
       <div class="space-y-2">
-        <button id="btnAprobarFichada" onclick="aprobarFraudeManual()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-md">
+        <button id="btnAprobarFichada" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-md">
           <i class="fa-solid fa-circle-check"></i> Aceptar y validar la fichada
         </button>
-        <button id="btnAnularFichada" onclick="eliminarFraudeMarca()" class="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-md">
+        <button id="btnAnularFichada" class="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-md">
           <i class="fa-solid fa-ban"></i> Anular la fichada
         </button>
-        <button id="btnCotejarFichada" onclick="verAuditoriaDesdeAccion()" class="w-full bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold py-2 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2">
+        <button id="btnCotejarFichada" class="w-full bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold py-2 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2">
           <i class="fa-solid fa-images text-amber-400"></i> Cotejar / Ver evidencia
         </button>
       </div>
@@ -819,7 +819,7 @@
   <!-- MODAL AUDITORÍA IA COMPARATIVO DE FOTOS -->
   <div id="modalAuditoriaIA" class="fixed inset-0 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-50">
     <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-2xl w-full relative space-y-5">
-      <button onclick="cerrarModalAuditoria()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
+      <button id="btnCerrarAud" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
         <i class="fa-solid fa-xmark"></i>
       </button>
 
@@ -855,7 +855,7 @@
       </div>
 
       <div class="flex justify-end pt-2">
-        <button onclick="cerrarModalAuditoria()" class="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-4 py-2 rounded-xl text-sm transition">
+        <button id="btnCerrarAud2" class="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-4 py-2 rounded-xl text-sm transition">
           Cerrar Detalle
         </button>
       </div>
@@ -865,7 +865,7 @@
   <!-- MODAL EDITAR PERSONAL -->
   <div id="modalEditarPersonal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
     <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full relative space-y-4">
-      <button onclick="cerrarModalEditar()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
+      <button id="btnCerrarEdit" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
         <i class="fa-solid fa-xmark"></i>
       </button>
       <h3 class="font-bold text-white text-lg flex items-center gap-2">
@@ -911,8 +911,8 @@
       </div>
 
       <div class="flex justify-end gap-2 pt-2">
-        <button type="button" onclick="cerrarModalEditar()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2 rounded-xl text-sm font-semibold transition">Cancelar</button>
-        <button type="button" onclick="guardarEdicionPersonal()" id="btnGuardarEdicion" class="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-xl text-sm font-bold transition">Guardar Cambios</button>
+        <button id="btnCerrarEdit2" type="button" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2 rounded-xl text-sm font-semibold transition">Cancelar</button>
+        <button type="button" id="btnGuardarEdicion" class="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-xl text-sm font-bold transition">Guardar Cambios</button>
       </div>
     </div>
   </div>
@@ -920,12 +920,12 @@
   <!-- MODAL GESTIONAR TURNOS POR FECHA -->
   <div id="modalTurnosPersonal" class="fixed inset-0 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-[70] overflow-y-auto">
     <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-4xl w-full relative space-y-5 my-6 shadow-2xl">
-      <button type="button" onclick="cerrarModalTurnosPersonal()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+      <button id="btnCerrarTurnos" type="button" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
       <div class="pr-8">
         <h3 class="font-bold text-white text-lg flex items-center gap-2"><i class="fa-solid fa-calendar-days text-sky-400"></i> Turnos y cambios por fecha</h3>
         <p id="turnosPersonalSubtitulo" class="text-xs text-slate-400 mt-1"></p>
       </div>
-      <form onsubmit="guardarAsignacionTurno(event)" class="grid grid-cols-1 md:grid-cols-5 gap-3 items-end bg-slate-900/60 border border-slate-700 rounded-xl p-4">
+      <form id="formGuardarTurno" class="grid grid-cols-1 md:grid-cols-5 gap-3 items-end bg-slate-900/60 border border-slate-700 rounded-xl p-4">
         <input type="hidden" id="turnoFirebaseId">
         <div><label class="block text-xs uppercase text-slate-400 mb-1">Fecha</label><input type="date" id="turnoFecha" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"></div>
         <div><label class="block text-xs uppercase text-slate-400 mb-1">Objetivo</label><select id="turnoObjetivo" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"><option value="">Cargando...</option></select></div>
@@ -943,7 +943,7 @@
   <!-- MODAL EDITAR OBJETIVO -->
   <div id="modalEditarObjetivo" class="fixed inset-0 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-[60] overflow-y-auto">
     <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-3xl w-full relative space-y-5 my-6 shadow-2xl">
-      <button type="button" onclick="cerrarModalEditarObjetivo()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
+      <button id="btnCerrarObj" type="button" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
         <i class="fa-solid fa-xmark"></i>
       </button>
       <div class="flex items-center gap-3 border-b border-slate-700 pb-3 pr-8">
@@ -965,7 +965,7 @@
           <label class="block text-xs uppercase text-slate-400 mb-1">Dirección exacta</label>
           <div class="flex gap-2">
             <input type="text" id="editDireccionObjetivo" class="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500">
-            <button type="button" onclick="buscarDireccionObjetivo('editar')" id="btnBuscarDireccionEditar" class="bg-sky-600 hover:bg-sky-500 text-white font-bold px-4 rounded-xl text-sm transition" title="Buscar dirección">
+            <button type="button" id="btnBuscarDireccionEditar" class="bg-sky-600 hover:bg-sky-500 text-white font-bold px-4 rounded-xl text-sm transition" title="Buscar dirección">
               <i class="fa-solid fa-magnifying-glass"></i>
             </button>
           </div>
@@ -983,18 +983,18 @@
           <input type="text" id="editLongitudObjetivo" inputmode="decimal" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-emerald-300 font-mono">
         </div>
         <div class="flex flex-col gap-2">
-          <button type="button" onclick="aplicarCoordenadasManualesObjetivo('editar')" class="bg-sky-700 hover:bg-sky-600 text-white font-bold px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 py-2.5">
+          <button id="btnaplicarCoordObj_editar" type="button" class="bg-sky-700 hover:bg-sky-600 text-white font-bold px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 py-2.5">
             <i class="fa-solid fa-map-pin"></i> Aplicar coordenadas manuales
           </button>
-          <button type="button" onclick="usarGPSObjetivo('editar')" id="btnGPSEditar" class="bg-slate-700 hover:bg-slate-600 text-white font-bold px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 self-end py-2.5">
+          <button type="button" id="btnGPSEditar" class="bg-slate-700 hover:bg-slate-600 text-white font-bold px-4 rounded-xl text-sm transition flex items-center justify-center gap-2 self-end py-2.5">
             <i class="fa-solid fa-location-crosshairs"></i> Usar GPS actual
           </button>
         </div>
       </div>
       <div id="infoUbicacionEditar" class="hidden bg-sky-500/10 border border-sky-500/20 rounded-xl p-3 text-xs text-sky-200"></div>
       <div class="flex justify-end gap-2 pt-2 border-t border-slate-700">
-        <button type="button" onclick="cerrarModalEditarObjetivo()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2.5 rounded-xl text-sm font-semibold transition">Cancelar</button>
-        <button type="button" onclick="guardarEdicionObjetivo()" id="btnGuardarEdicionObjetivo" class="bg-sky-600 hover:bg-sky-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition">Guardar Cambios</button>
+        <button id="btnCerrarObj2" type="button" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2.5 rounded-xl text-sm font-semibold transition">Cancelar</button>
+        <button type="button" id="btnGuardarEdicionObjetivo" class="bg-sky-600 hover:bg-sky-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition">Guardar Cambios</button>
       </div>
     </div>
   </div>
@@ -1002,7 +1002,7 @@
   <!-- MODAL DE ALERTAS DE FICHADAS BLOQUEADAS -->
   <div id="modalAlertasFichadas" class="fixed inset-0 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-[60]">
     <div class="bg-slate-900 border border-rose-500/40 rounded-2xl p-5 md:p-6 max-w-2xl w-full relative shadow-2xl space-y-4 max-h-[85vh] overflow-hidden flex flex-col">
-      <button onclick="cerrarModalAlertasFichadas()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
+      <button id="btnCerrarAlertas" class="absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
         <i class="fa-solid fa-xmark"></i>
       </button>
       <div class="flex items-center gap-3 border-b border-slate-700 pb-3 pr-8">
@@ -1015,10 +1015,10 @@
         </div>
       </div>
       <div class="flex flex-wrap gap-2">
-        <button onclick="solicitarNotificacionesNavegador()" class="bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 px-3 py-2 rounded-lg text-xs font-semibold transition">
+        <button id="btnNotifNav" class="bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 px-3 py-2 rounded-lg text-xs font-semibold transition">
           <i class="fa-solid fa-desktop"></i> Activar avisos del navegador
         </button>
-        <button onclick="marcarTodasAlertasFichadasVistas()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-lg text-xs font-semibold transition">
+        <button id="btnMarcarVistas2" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-lg text-xs font-semibold transition">
           <i class="fa-solid fa-check-double"></i> Marcar todas como vistas
         </button>
       </div>
