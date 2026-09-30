@@ -84,6 +84,9 @@ async function loginAdminReal(email, password) {
       }
       return { ok: false, mensaje: detalle };
     }
+    // Marcar la hora del token recién emitido e iniciar renovación automática
+    _tokenTimestamp = Date.now();
+    _iniciarRenovacionToken();
     return { ok: true, uid, rol };
   } catch (e) {
     let mensaje = 'Correo o contraseña incorrectos.';
@@ -131,14 +134,85 @@ onAuthStateChanged(mainAuth, async (user) => {
   sessionStorage.setItem('rol_admin', rol);
   sessionStorage.setItem('uid_admin', user.uid);
   if (user.email) sessionStorage.setItem('email_admin', user.email);
+  // Iniciar la renovación automática del token (se refresca cada 50 min)
+  _tokenTimestamp = Date.now();
+  _iniciarRenovacionToken();
   if (!yaVisible() && typeof window.mostrarAdmin === 'function') window.mostrarAdmin();
 });
 
 // --- Token del admin/supervisor para autenticar escrituras REST (reglas .write endurecidas) ---
 // Aditivo: no modifica ninguna lógica existente. Devuelve la URL con ?auth=<idToken> si hay sesión.
+// ─────────────────────────────────────────────────────────────────────────────
+//  RENOVACIÓN AUTOMÁTICA DEL TOKEN
+//  Firebase Auth emite tokens de ~1h. El SDK los refresca solo si está
+//  "activo", pero en una pestaña abierta sin tocar, el token se queda
+//  vencido y la próxima lectura/escritura falla con 401.
+//  Solución: refrescar proactivamente cada 50 min y también antes de
+//  cada operación si el token tiene más de 50 min de antigüedad.
+// ─────────────────────────────────────────────────────────────────────────────
+const TOKEN_MAX_ANTIGUEDAD_MS = 50 * 60 * 1000; // 50 minutos
+let _tokenTimestamp = 0;    // cuándo se emitió el último token (ms)
+let _tokenRefreshing = null; // Promise en curso (evita refreshes simultáneos)
+
+// Renueva el token del admin forzando la petición al servidor.
+// Si ya hay un refresh en curso, espera ese en vez de lanzar otro.
+async function _forzarRefreshToken() {
+  if (_tokenRefreshing) return _tokenRefreshing;
+  _tokenRefreshing = (async () => {
+    try {
+      const u = mainAuth.currentUser;
+      if (!u) return null;
+      const token = await u.getIdToken(true); // fuerza refresh contra Google
+      _tokenTimestamp = Date.now();
+      return token;
+    } catch (e) {
+      // Si falla el refresh, puede ser que la sesión se perdió
+      console.warn('[Token Admin] Error al renovar:', e && (e.code || e.message));
+      _tokenTimestamp = 0;
+      return null;
+    } finally {
+      _tokenRefreshing = null;
+    }
+  })();
+  return _tokenRefreshing;
+}
+
+// Arranca el timer que renueva el token cada 50 minutos, mientras haya sesión.
+// Se apaga automáticamente si el usuario cierra sesión.
+let _timerRenovacion = null;
+function _iniciarRenovacionToken() {
+  if (_timerRenovacion) return; // ya está corriendo
+  _timerRenovacion = setInterval(() => {
+    if (mainAuth.currentUser) {
+      _forzarRefreshToken().catch(() => {});
+    } else {
+      // No hay sesión: detener el timer
+      clearInterval(_timerRenovacion);
+      _timerRenovacion = null;
+    }
+  }, TOKEN_MAX_ANTIGUEDAD_MS);
+}
+function _detenerRenovacionToken() {
+  if (_timerRenovacion) { clearInterval(_timerRenovacion); _timerRenovacion = null; }
+}
+
+// Devuelve un idToken válido. Si el token tiene >50 min, lo renueva antes.
+// Si no hay sesión, devuelve null.
 window.obtenerTokenAdmin = async () => {
-  try { const u = mainAuth.currentUser; return u ? await u.getIdToken() : null; } catch (_) { return null; }
+  try {
+    const u = mainAuth.currentUser;
+    if (!u) return null;
+    // ¿El token actual tiene más de 50 minutos? Renovar primero.
+    if (Date.now() - _tokenTimestamp > TOKEN_MAX_ANTIGUEDAD_MS) {
+      const fresco = await _forzarRefreshToken();
+      if (fresco) return fresco;
+    }
+    // Token dentro de la ventana de validez: usar cacheado.
+    return await u.getIdToken();
+  } catch (_) { return null; }
 };
+// Construye la URL con ?auth=<idToken>. Si el token puede estar
+// vencido, obtenerTokenAdmin lo renueva automáticamente.
 window.urlConAuthAdmin = async (url) => {
   let token = null;
   try { token = await window.obtenerTokenAdmin(); } catch (_) {}
@@ -151,26 +225,45 @@ window.urlConAuthAdmin = async (url) => {
 // AUDITORIA con la service account (las reglas de Firebase ya NO permiten
 // escritura directa desde el panel para estas operaciones). Devuelve el JSON
 // de respuesta o lanza Error con el mensaje del Worker.
+// Llama al Worker con reintentos automáticos: si el token estaba
+// vencido (401), lo renueva y reintenta UNA vez antes de fallar.
 window.llamarWorkerAdmin = async (payload) => {
   const base = String(URL_WORKER_AUTH || '').trim();
   if (!base) throw new Error('El Worker de autenticacion no esta configurado (URL_WORKER_AUTH vacio).');
   const idToken = await window.obtenerTokenAdmin();
   if (!idToken) throw new Error('No hay sesion de administrador activa (falta idToken).');
-  const res = await fetch(base, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...payload, idToken })
-  });
-  let data = null;
-  try { data = await res.json(); } catch (_) {}
-  if (!res.ok || !data || data.error) {
-    const msg = (data && data.error) ? data.error : ('HTTP ' + res.status);
-    throw new Error(msg);
+
+  const hacerPeticion = async (token) => {
+    const res = await fetch(base, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, idToken: token })
+    });
+    let data = null;
+    try { data = await res.json(); } catch (_) {}
+    if (!res.ok || !data || data.error) {
+      const msg = (data && data.error) ? data.error : ('HTTP ' + res.status);
+      throw new Error(msg);
+    }
+    return data;
+  };
+
+  try {
+    return await hacerPeticion(idToken);
+  } catch (e1) {
+    // Si fue error de auth (401/token vencido), renovar y reintentar UNA vez
+    if (e1 && /401|Permission denied|token|auth/i.test(e1.message)) {
+      const tokenFresco = await _forzarRefreshToken();
+      if (tokenFresco) return await hacerPeticion(tokenFresco);
+    }
+    throw e1;
   }
-  return data;
 };
 
-async function logoutAdminReal() { try { await signOut(mainAuth); } catch (_) {} }
+async function logoutAdminReal() {
+  _detenerRenovacionToken();
+  try { await signOut(mainAuth); } catch (_) {}
+}
 window.logoutAdminReal = logoutAdminReal;
 
 // ---- App SECUNDARIA (crea empleados SIN cerrar la sesión del admin) ----

@@ -172,18 +172,12 @@ async function cargarDatos() {
     // y disparar las 4 lecturas en un único Promise.all, para que la config
     // global viaje junto con fichadas/personal/turnos en vez de esperar una
     // segunda vuelta secuencial (una round-trip menos en cada polling de 30s).
-    const [urlFichadas, urlPersonal, urlTurnos, urlCfg] = await Promise.all([
-      window.urlConAuthPanel(URL_FIREBASE),
-      window.urlConAuthPanel(`${URL_PERSONAL}?ts=${Date.now()}`),
-      window.urlConAuthPanel(`${URL_TURNOS}?ts=${Date.now()}`),
-      window.urlConAuthPanel(`${URL_BASE_FIREBASE}/configuracionGlobal.json?ts=${Date.now()}`)
-    ]);
     const [res, resPersonal, resTurnos, resCfg] = await Promise.all([
-      fetch(urlFichadas),
-      fetch(urlPersonal, { cache: 'no-store' }),
-      fetch(urlTurnos, { cache: 'no-store' }),
+      window.fetchConAuthPanel(URL_FIREBASE),
+      window.fetchConAuthPanel(`${URL_PERSONAL}?ts=${Date.now()}`, { cache: 'no-store' }),
+      window.fetchConAuthPanel(`${URL_TURNOS}?ts=${Date.now()}`, { cache: 'no-store' }),
       // La config es opcional: si falla, no debe tumbar el resto del panel.
-      fetch(urlCfg, { cache: 'no-store' }).catch(() => null)
+      window.fetchConAuthPanel(`${URL_BASE_FIREBASE}/configuracionGlobal.json?ts=${Date.now()}`, { cache: 'no-store' }).catch(() => null)
     ]);
     const resFirebase = res.ok ? await res.json() : null;
     const resPersonalData = resPersonal.ok ? await resPersonal.json() : null;
@@ -334,8 +328,8 @@ async function generarAlertasSupervision(registros) {
   // otros dispositivos) y sube SOLO las nuevas que aún no existen.
   try {
     const [rt, rs] = await Promise.all([
-      fetch(await window.urlConAuthPanel(`${URL_BASE_FIREBASE}/${NODO_ALERTA.LLEGADA_TARDE}.json?ts=${Date.now()}`), { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch(await window.urlConAuthPanel(`${URL_BASE_FIREBASE}/${NODO_ALERTA.SALIDA_ANTICIPADA}.json?ts=${Date.now()}`), { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null)
+      window.fetchConAuthPanel(`${URL_BASE_FIREBASE}/${NODO_ALERTA.LLEGADA_TARDE}.json?ts=${Date.now()}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
+      window.fetchConAuthPanel(`${URL_BASE_FIREBASE}/${NODO_ALERTA.SALIDA_ANTICIPADA}.json?ts=${Date.now()}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null)
     ]);
     const existentes = Object.assign({}, rt || {}, rs || {});
     // Merge de archivadas del server hacia el respaldo local (multi-dispositivo).
@@ -354,7 +348,7 @@ async function generarAlertasSupervision(registros) {
         registradoEnMs: Date.now()
       };
       try {
-        await fetch(await window.urlConAuthPanel(`${URL_BASE_FIREBASE}/${NODO_ALERTA[a.tipoAlerta]}/${a.clave}.json`), {
+        await window.fetchConAuthPanel(`${URL_BASE_FIREBASE}/${NODO_ALERTA[a.tipoAlerta]}/${a.clave}.json`, {
           method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
         });
       } catch (_) { /* si falla el guardado, igual se muestra localmente */ }
@@ -427,7 +421,7 @@ async function archivarAlertaSupervision(clave) {
   const nodos = a ? [NODO_ALERTA[a.tipoAlerta]] : Object.values(NODO_ALERTA);
   for (const nodo of nodos) {
     try {
-      await fetch(await window.urlConAuthPanel(`${URL_BASE_FIREBASE}/${nodo}/${clave}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+      await window.fetchConAuthPanel(`${URL_BASE_FIREBASE}/${nodo}/${clave}.json`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
     } catch (_) {}
   }
 }
@@ -442,7 +436,7 @@ async function desarchivarAlertaSupervision(clave) {
   const nodos = a ? [NODO_ALERTA[a.tipoAlerta]] : Object.values(NODO_ALERTA);
   for (const nodo of nodos) {
     try {
-      await fetch(await window.urlConAuthPanel(`${URL_BASE_FIREBASE}/${nodo}/${clave}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+      await window.fetchConAuthPanel(`${URL_BASE_FIREBASE}/${nodo}/${clave}.json`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
     } catch (_) {}
   }
 }

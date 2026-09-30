@@ -124,6 +124,10 @@
 
     // Agrega ?auth=<idToken> a una URL de la RTDB si hay sesion activa.
     function urlAuth(url) {
+      // Antes de construir la URL, actualizar idTokenVig si el timer lo renovó
+      if (window._getIdTokenGlobal && window._getIdTokenGlobal()) {
+        idTokenVig = window._getIdTokenGlobal();
+      }
       if (!idTokenVig) return url;
       return url + (url.includes('?') ? '&' : '?') + 'auth=' + encodeURIComponent(idTokenVig);
     }
@@ -615,6 +619,7 @@
     }
 
     async function cerrarSesionVigilador() {
+      try { if (typeof window._detenerRenovacionToken === 'function') window._detenerRenovacionToken(); } catch (_) {}
       try { if (typeof window.logoutVigilador === 'function') await window.logoutVigilador(); } catch (_) {}
       idTokenVig = null; sesionEsOffline = false; legajoSesion = null; uidSesion = null;
       if (timerInactividad) { clearTimeout(timerInactividad); timerInactividad = null; }
@@ -1762,6 +1767,13 @@
             let data = {};
             try { data = await resp.json(); } catch (_) {}
 
+            // 401 = token vencido: renovar y reintentar con el token fresco
+            if (resp.status === 401) {
+              const fresco = await (window._forzarRefreshTokenVig ? window._forzarRefreshTokenVig() : window.refrescarTokenVigilador());
+              if (fresco) { idTokenVig = fresco; if (window._setIdTokenGlobal) window._setIdTokenGlobal(fresco); }
+              throw new Error('Token vencido (401), reintentando con token renovado');
+            }
+
             // Exito: el Worker confirma ok:true (fichada creada o duplicada idempotente).
             if (resp.ok && data && data.ok) {
               if (data.fichadaId) datos.fichadaId = data.fichadaId;
@@ -1952,6 +1964,10 @@
       // las Reglas SA-ONLY no permiten crear /fichadas por REST, asi que la cola
       // offline tambien se sube por el Worker (accion 'fichar'), que revalida todo
       // server-side. Si el servidor la RECHAZA, se devuelve a la cola.
+      // Antes de sincronizar, asegurar que el token no esté vencido
+      if (window._getIdTokenGlobal && window._getIdTokenGlobal()) {
+        idTokenVig = window._getIdTokenGlobal();
+      }
       fetch(URL_WORKER, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1977,6 +1993,31 @@
           localStorage.setItem('fichadas_rechazadas', JSON.stringify(rechazadas));
           console.warn("⛔ Fichada pendiente RECHAZADA por el servidor y archivada:", (cuerpo && cuerpo.error));
           return { _rechazada: true };
+        }
+        // 401 = token vencido: renovar y reintentar una vez
+        if (res.status === 401) {
+          const fresco = await (window._forzarRefreshTokenVig ? window._forzarRefreshTokenVig() : window.refrescarTokenVigilador());
+          if (fresco) { idTokenVig = fresco; if (window._setIdTokenGlobal) window._setIdTokenGlobal(fresco); }
+          // Reintentar con token fresco
+          try {
+            const res2 = await fetch(URL_WORKER, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ accion: "fichar", idToken: fresco, fichada: Object.assign({}, datos, { idEvento: datos.fichadaId, sincronizadoDesdeOffline: true }) })
+            });
+            const cuerpo2 = await res2.json().catch(() => null);
+            if (res2.ok && cuerpo2 && cuerpo2.ok) return { ok: true };
+            if (res2.status === 403 || res2.status === 422 || (cuerpo2 && cuerpo2.bloqueado)) {
+              // Rechazo de validación en reintento: archivar
+              const rechazadas = JSON.parse(localStorage.getItem('fichadas_rechazadas') || '[]');
+              rechazadas.push(Object.assign({}, datos, { motivoRechazo: (cuerpo2 && (cuerpo2.error || cuerpo2.motivo)) || 'validacion del servidor fallida', rechazadaEn: new Date().toISOString() }));
+              localStorage.setItem('fichadas_rechazadas', JSON.stringify(rechazadas));
+              return { _rechazada: true };
+            }
+            throw new Error((cuerpo2 && cuerpo2.error) || ('HTTP ' + res2.status));
+          } catch (retryErr) {
+            throw new Error('Token renovado pero reintento falló: ' + retryErr.message);
+          }
         }
         // Solo se da por sincronizada si el Worker confirma ok:true (creada o
         // duplicada idempotente). Cualquier otro estado (red/5xx) la devuelve a la cola.

@@ -24,6 +24,10 @@ function mismoLegajoVig(a, b) {
 }
 
 function urlAuth(url) {
+  // Si el timer renovó el token, sincronizar antes de armar la URL
+  if (window._forzarRefreshTokenMisHoras) {
+    // nothing needed here, urlAuthFresca handles the refresh
+  }
   if (!idTokenVig) return url;
   return url + (url.includes('?') ? '&' : '?') + 'auth=' + encodeURIComponent(idTokenVig);
 }
@@ -35,7 +39,8 @@ function urlAuth(url) {
 async function urlAuthFresca(url) {
   try {
     if (typeof window.obtenerTokenVigilador === 'function') {
-      const t = await window.obtenerTokenVigilador();
+      // obtenerTokenVigilador ya fuerza refresh si el token tiene >50 min
+      const t = await window.obtenerTokenVigilador(true);
       if (t) idTokenVig = t;
     }
   } catch (_) {}
@@ -795,7 +800,8 @@ function reenviarPanicosPendientes() {
     const sobrevivientes = [];
     for (const payload of pendientes) {
       try {
-        const res = await fetch(await urlAuthFresca(`${URL_FIREBASE}/panicos.json`), {
+        const urlP = await urlAuthFresca(`${URL_FIREBASE}/panicos.json`);
+        let res = await fetch(urlP, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
@@ -876,7 +882,8 @@ function reenviarNovedadesPendientes() {
     const sobrevivientes = [];
     for (const payload of pendientes) {
       try {
-        const res = await fetch(await urlAuthFresca(`${URL_FIREBASE}/novedades.json`), {
+        const urlN = await urlAuthFresca(`${URL_FIREBASE}/novedades.json`);
+        let res = await fetch(urlN, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
@@ -1069,6 +1076,7 @@ async function enviarDatosFirebase(legajo, nombre, objetivo, tipoIncidencia, des
 
 function cerrarSesionVigilador() {
   clearTimeout(temporizadorInactividad);
+  if (typeof window._detenerRenovacionToken === 'function') window._detenerRenovacionToken();
   sessionStorage.removeItem('vigilador_legajo');
   sessionStorage.removeItem('vigilador_nombre');
   sessionStorage.removeItem('vigilador_token');

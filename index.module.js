@@ -34,6 +34,9 @@
       try {
         const cred = await signInWithEmailAndPassword(vigAuth, email, password);
         const idToken = await cred.user.getIdToken();
+        _tokenTimestamp = Date.now();
+        idTokenGlobal = idToken;
+        _iniciarRenovacionToken();
         sincronizarRelojDesdeToken(idToken); // fijamos la hora oficial del servidor al iniciar sesion
         return { ok: true, idToken, uid: cred.user.uid };
       } catch (e) {
@@ -43,6 +46,8 @@
 
     // Cierra la sesión activa del vigilador (dispositivo compartido / logout).
     async function logoutVigilador() {
+      _detenerRenovacionToken();
+      idTokenGlobal = null;
       try { await signOut(vigAuth); } catch (_) {}
     }
 
@@ -94,20 +99,83 @@
       return datos;
     }
 
-    // Devuelve un idToken fresco de la sesión activa (o null). Útil para
-    // renovar el token antes de operaciones tras varios minutos de uso.
-    async function refrescarTokenVigilador() {
-      try {
-        if (vigAuth.currentUser) {
-          const t = await vigAuth.currentUser.getIdToken(true);
-          sincronizarRelojDesdeToken(t); // aprovechamos el token fresco para tomar la hora oficial
-          return t;
+    // ─────────────────────────────────────────────────────────────────────────────
+    //  RENOVACIÓN AUTOMÁTICA DEL TOKEN (igual que admin/panel.module.js)
+    //  Cada 50 min se renueva proactivamente; si una lectura falla por token
+    //  vencido, se refresca y reintenta automáticamente.
+    // ─────────────────────────────────────────────────────────────────────────────
+    const TOKEN_MAX_ANTIGUEDAD_MS = 50 * 60 * 1000;
+    let _tokenTimestamp = 0;
+    let _tokenRefreshing = null;
+
+    async function _forzarRefreshToken() {
+      if (_tokenRefreshing) return _tokenRefreshing;
+      _tokenRefreshing = (async () => {
+        try {
+          if (vigAuth.currentUser) {
+            const t = await vigAuth.currentUser.getIdToken(true);
+            sincronizarRelojDesdeToken(t);
+            _tokenTimestamp = Date.now();
+            return t;
+          }
+        } catch (e) {
+          console.warn('[Token Vigilador] Error al renovar:', e && (e.code || e.message));
+          _tokenTimestamp = 0;
+        } finally {
+          _tokenRefreshing = null;
         }
-      } catch (_) {}
-      return null;
+        return null;
+      })();
+      return _tokenRefreshing;
+    }
+
+    let _timerRenovacion = null;
+    function _iniciarRenovacionToken() {
+      if (_timerRenovacion) return;
+      _timerRenovacion = setInterval(() => {
+        if (vigAuth.currentUser) {
+          _forzarRefreshToken().then(t => { if (t) idTokenGlobal = t; }).catch(() => {});
+        } else {
+          clearInterval(_timerRenovacion);
+          _timerRenovacion = null;
+        }
+      }, TOKEN_MAX_ANTIGUEDAD_MS);
+    }
+    function _detenerRenovacionToken() {
+      if (_timerRenovacion) { clearInterval(_timerRenovacion); _timerRenovacion = null; }
+    }
+
+    // idToken global del vigilador: se actualiza automáticamente con el timer
+    let idTokenGlobal = null;
+
+    // Devuelve un idToken válido. Si el token tiene >50 min, lo renueva antes.
+    async function obtenerTokenVigilador(forzar = false) {
+      try {
+        if (!vigAuth.currentUser) return null;
+        if (forzar || Date.now() - _tokenTimestamp > TOKEN_MAX_ANTIGUEDAD_MS) {
+          const fresco = await _forzarRefreshToken();
+          if (fresco) { idTokenGlobal = fresco; return fresco; }
+        }
+        const cacheado = await vigAuth.currentUser.getIdToken();
+        if (cacheado) idTokenGlobal = cacheado;
+        return cacheado;
+      } catch (_) { return null; }
+    }
+
+    // Compatibilidad: refrescarTokenVigilador() fuerza refresh (igual que antes)
+    async function refrescarTokenVigilador() {
+      const t = await _forzarRefreshToken();
+      if (t) idTokenGlobal = t;
+      return t;
     }
 
     window.loginVigilador = loginVigilador;
     window.logoutVigilador = logoutVigilador;
     window.refrescarTokenVigilador = refrescarTokenVigilador;
+    window.obtenerTokenVigilador = obtenerTokenVigilador;
+    window._forzarRefreshTokenVig = _forzarRefreshToken;
+    window._iniciarRenovacionToken = _iniciarRenovacionToken;
+    window._detenerRenovacionToken = _detenerRenovacionToken;
+    window._getIdTokenGlobal = () => idTokenGlobal;
+    window._setIdTokenGlobal = (t) => { idTokenGlobal = t; };
     window.aplicarHoraServidor = aplicarHoraServidor;

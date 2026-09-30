@@ -73,6 +73,8 @@ async function loginSupervisorReal(email, password) {
       try { await signOut(auth); } catch (_) {}
       return { ok: false, mensaje: 'Tu usuario no tiene permisos para este panel.' };
     }
+    _tokenTimestamp = Date.now();
+    _iniciarRenovacionToken();
     return { ok: true, uid, rol };
   } catch (e) {
     let mensaje = 'Correo o contraseña incorrectos.';
@@ -115,20 +117,94 @@ onAuthStateChanged(auth, async (user) => {
   sessionStorage.setItem('auth_supervisor', 'true');
   sessionStorage.setItem('rol_supervisor', rol);
   sessionStorage.setItem('uid_supervisor', user.uid);
+  _tokenTimestamp = Date.now();
+  _iniciarRenovacionToken();
   if (!yaVisible() && typeof window.mostrarPanel === 'function') window.mostrarPanel();
 });
 
-async function logoutSupervisorReal() { try { await signOut(auth); } catch (_) {} }
+async function logoutSupervisorReal() {
+  _detenerRenovacionToken();
+  try { await signOut(auth); } catch (_) {}
+}
 window.logoutSupervisorReal = logoutSupervisorReal;
 
 // --- Token del supervisor para autenticar escrituras REST (reglas .write endurecidas) ---
 // Aditivo: no modifica ninguna lógica existente. Devuelve la URL con ?auth=<idToken> si hay sesión.
+// ─────────────────────────────────────────────────────────────────────────────
+//  RENOVACIÓN AUTOMÁTICA DEL TOKEN (igual que admin.module.js)
+//  Cada 50 min se renueva proactivamente; si una lectura falla por token
+//  vencido, se refresca y reintenta automáticamente.
+// ─────────────────────────────────────────────────────────────────────────────
+const TOKEN_MAX_ANTIGUEDAD_MS = 50 * 60 * 1000;
+let _tokenTimestamp = 0;
+let _tokenRefreshing = null;
+
+async function _forzarRefreshToken() {
+  if (_tokenRefreshing) return _tokenRefreshing;
+  _tokenRefreshing = (async () => {
+    try {
+      const u = auth.currentUser;
+      if (!u) return null;
+      const token = await u.getIdToken(true);
+      _tokenTimestamp = Date.now();
+      return token;
+    } catch (e) {
+      console.warn('[Token Panel] Error al renovar:', e && (e.code || e.message));
+      _tokenTimestamp = 0;
+      return null;
+    } finally {
+      _tokenRefreshing = null;
+    }
+  })();
+  return _tokenRefreshing;
+}
+window._forzarRefreshTokenPanel = _forzarRefreshToken;
+
+let _timerRenovacion = null;
+function _iniciarRenovacionToken() {
+  if (_timerRenovacion) return;
+  _timerRenovacion = setInterval(() => {
+    if (auth.currentUser) {
+      _forzarRefreshToken().catch(() => {});
+    } else {
+      clearInterval(_timerRenovacion);
+      _timerRenovacion = null;
+    }
+  }, TOKEN_MAX_ANTIGUEDAD_MS);
+}
+function _detenerRenovacionToken() {
+  if (_timerRenovacion) { clearInterval(_timerRenovacion); _timerRenovacion = null; }
+}
+
 window.obtenerTokenSupervisor = async () => {
-  try { const u = auth.currentUser; return u ? await u.getIdToken() : null; } catch (_) { return null; }
+  try {
+    const u = auth.currentUser;
+    if (!u) return null;
+    if (Date.now() - _tokenTimestamp > TOKEN_MAX_ANTIGUEDAD_MS) {
+      const fresco = await _forzarRefreshToken();
+      if (fresco) return fresco;
+    }
+    return await u.getIdToken();
+  } catch (_) { return null; }
 };
 window.urlConAuthPanel = async (url) => {
   let token = null;
   try { token = await window.obtenerTokenSupervisor(); } catch (_) {}
   if (!token) return url;
   return url + (url.includes('?') ? '&' : '?') + 'auth=' + encodeURIComponent(token);
+};
+
+// fetch con reintento automático en 401: renueva el token y reintenta UNA vez.
+window.fetchConAuthPanel = async (url, options = {}) => {
+  const urlConAuth = await window.urlConAuthPanel(url);
+  const res1 = await fetch(urlConAuth, options);
+  if (res1.status === 401) {
+    // Token vencido: renovar y reintentar
+    const tokenFresco = await _forzarRefreshToken();
+    if (tokenFresco) {
+      const urlFresca = url + (url.includes('?') ? '&' : '?') + 'auth=' + encodeURIComponent(tokenFresco);
+      return fetch(urlFresca, options);
+    }
+  }
+  return res1;
 };
