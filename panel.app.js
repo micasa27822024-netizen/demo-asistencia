@@ -374,8 +374,8 @@ function renderAlertasSupervision() {
       </div>
       <div class="flex-shrink-0">
         ${estaArch
-          ? `<button onclick="desarchivarAlertaSupervision('${escaparHtml(a.clave)}')" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 px-3 py-1.5 rounded-lg transition flex items-center gap-1.5"><i class="fa-solid fa-rotate-left"></i> Restaurar</button>`
-          : `<button onclick="archivarAlertaSupervision('${escaparHtml(a.clave)}')" class="text-xs bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/40 px-3 py-1.5 rounded-lg transition flex items-center gap-1.5"><i class="fa-solid fa-box-archive"></i> Archivar</button>`}
+          ? `<button type="button" data-accion-alerta="desarchivar" data-clave="${escaparHtml(a.clave)}" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 px-3 py-1.5 rounded-lg transition flex items-center gap-1.5"><i class="fa-solid fa-rotate-left"></i> Restaurar</button>`
+          : `<button type="button" data-accion-alerta="archivar" data-clave="${escaparHtml(a.clave)}" class="text-xs bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/40 px-3 py-1.5 rounded-lg transition flex items-center gap-1.5"><i class="fa-solid fa-box-archive"></i> Archivar</button>`}
       </div>`;
     cont.appendChild(div);
   });
@@ -474,7 +474,7 @@ function renderizarTabla(registros) {
       : `<span class="text-xs text-slate-500">Sin GPS</span>`;
 
     const btnFoto = (urlFoto && (urlFoto.includes('http') || urlFoto.includes('data:image')))
-      ? `<button onclick="abrirFoto('${escaparHtml(urlFoto)}')" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
+      ? `<button type="button" data-accion="ver-foto" data-url="${escaparHtml(urlFoto)}" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
           <i class="fa-solid fa-image"></i> Ver Foto
          </button>`
       : `<span class="text-xs text-slate-500">Sin Foto</span>`;
@@ -484,7 +484,7 @@ function renderizarTabla(registros) {
     // reservado al rol admin (ademas de estar bloqueado por las Reglas de Firebase).
     const esAdminPanel = sessionStorage.getItem('rol_supervisor') === 'admin';
     const btnBorrar = (firebaseKey && esAdminPanel)
-      ? `<button onclick="eliminarFichadaFirebase('${firebaseKey}')" class="bg-rose-600/20 hover:bg-rose-600/40 text-rose-400 border border-rose-500/30 px-2.5 py-1 rounded-lg text-xs font-semibold transition" title="Anular registro (se conserva como evidencia)">
+      ? `<button type="button" data-accion="eliminar-fichada" data-key="${escaparHtml(firebaseKey)}" class="bg-rose-600/20 hover:bg-rose-600/40 text-rose-400 border border-rose-500/30 px-2.5 py-1 rounded-lg text-xs font-semibold transition" title="Anular registro (se conserva como evidencia)">
           <i class="fa-solid fa-ban"></i>
          </button>`
       : `<span class="text-[10px] text-slate-500">-</span>`;
@@ -1180,3 +1180,77 @@ function exportarPDF() {
 
   doc.save(`Reporte_Marcaciones_${new Date().toISOString().slice(0,10)}.pdf`);
 }
+
+// =============================================================================
+//  CABLEADO DE EVENTOS (CSP estricta: sin handlers inline en el HTML)
+//  Reemplaza los antiguos onclick/onchange/onkeyup del panel.html por
+//  addEventListener, y usa delegacion para los botones que se generan
+//  dinamicamente dentro de las tablas / listas.
+// =============================================================================
+document.addEventListener('DOMContentLoaded', function () {
+  const on = (id, evento, fn) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener(evento, fn);
+  };
+
+  // --- Login supervisor ---
+  const form = document.getElementById('formLoginSupervisor');
+  if (form) form.addEventListener('submit', validarPassword);
+
+  // --- Encabezado del panel ---
+  on('btnActualizar', 'click', function () { cargarDatos(); });
+  on('btnCerrarSesion', 'click', function () { cerrarSesion(); });
+
+  // --- Alertas de supervision ---
+  on('chkMostrarArchivadasSup', 'change', function () { renderAlertasSupervision(); });
+  on('btnRefrescarAlertas', 'click', function () { cargarDatos(); });
+
+  // --- Auditoria de horas por empleado ---
+  on('supFiltroMes', 'change', function () { aplicarFiltrosSupervisor(); });
+  on('supFechaDesde', 'change', function () { aplicarFiltrosSupervisor(); });
+  on('supFechaHasta', 'change', function () { aplicarFiltrosSupervisor(); });
+  on('btnConsultarHoras', 'click', function () { consultarHorasSupervisor(); });
+  on('btnExcelSupervisor', 'click', function () { exportarExcelSupervisor(); });
+  on('btnPdfSupervisor', 'click', function () { exportarPdfSupervisor(); });
+
+  // --- Filtros y exportacion general ---
+  on('inputBusqueda', 'keyup', function () { filtrarTabla(); });
+  on('fechaDesde', 'change', function () { filtrarTabla(); });
+  on('fechaHasta', 'change', function () { filtrarTabla(); });
+  on('filtroTipo', 'change', function () { filtrarTabla(); });
+  on('btnExcelGeneral', 'click', function () { exportarExcel(); });
+  on('btnPdfGeneral', 'click', function () { exportarPDF(); });
+
+  // --- Modal de foto ---
+  on('btnCerrarModalFoto', 'click', function () { cerrarModal(); });
+
+  // --- Delegacion: botones Archivar / Restaurar de las alertas ---
+  const listaAlertas = document.getElementById('listaAlertasSupervision');
+  if (listaAlertas) {
+    listaAlertas.addEventListener('click', function (ev) {
+      const btn = ev.target.closest('[data-accion-alerta]');
+      if (!btn) return;
+      const clave = btn.getAttribute('data-clave');
+      if (btn.getAttribute('data-accion-alerta') === 'desarchivar') {
+        desarchivarAlertaSupervision(clave);
+      } else {
+        archivarAlertaSupervision(clave);
+      }
+    });
+  }
+
+  // --- Delegacion: botones Ver Foto / Anular de la tabla de registros ---
+  const cuerpoTabla = document.getElementById('cuerpoTabla');
+  if (cuerpoTabla) {
+    cuerpoTabla.addEventListener('click', function (ev) {
+      const btn = ev.target.closest('[data-accion]');
+      if (!btn) return;
+      const accion = btn.getAttribute('data-accion');
+      if (accion === 'ver-foto') {
+        abrirFoto(btn.getAttribute('data-url'));
+      } else if (accion === 'eliminar-fichada') {
+        eliminarFichadaFirebase(btn.getAttribute('data-key'));
+      }
+    });
+  }
+});
