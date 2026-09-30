@@ -634,8 +634,18 @@ function calcularCumplimientoFichada(tipo, fechaFichadaStr, horarioProgramado) {
 
   if (t === 'SALIDA') {
     const fin = minutosDesdeMedianoche(horarioProgramado.fin);
+    const ini = minutosDesdeMedianoche(horarioProgramado.inicio);
     if (fin === null) return null;
-    const diff = normalizar(minFichada - fin);
+    // Turno nocturno: el fin del turno cae del dia siguiente (fin < inicio).
+    // Si la fichada de SALIDA ocurrio de dia (minFichada >= fin) pero antes de
+    // que termine el turno (minFichada < inicio), el fin real es fin+1440.
+    // Ej. turno 19-07, salida 15:45: fin real = 420+1440 = 1860, diff = 945-1860 = -915
+    //   -> "Salida anticipada". Sin este ajuste diff quedaba +525 -> "Horas extra".
+    let finReal = fin;
+    if (ini !== null && fin < ini && minFichada >= fin && minFichada < ini) {
+      finReal = fin + 1440;
+    }
+    const diff = normalizar(minFichada - finReal);
     if (diff < 0) return { texto: `Salida anticipada (${Math.abs(diff)} min antes)`, clase: 'bg-rose-500/15 text-rose-300 border-rose-500/40' };
     if (diff <= tolEgr) return { texto: 'Salida en horario', clase: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25' };
     // REGLA DE NEGOCIO (Opcion B, ajustada): al superar la tolerancia se computan
