@@ -335,36 +335,56 @@
     window.refrescarEstadoVinculacion = refrescarEstadoVinculacion;
 
     // Muestra cuantas fichadas offline quedan por sincronizar y, si alguna fue
-    // rechazada por el servidor, el motivo.
+    // rechazada por el servidor, el motivo. El estado se calcula UNA vez y se
+    // refleja en dos lugares: la linea dentro de la tarjeta de login
+    // (#estadoOfflinePend) y un banner fijo global (#bannerOfflinePend) visible
+    // en CUALQUIER pantalla, incluido el panel de fichaje.
     function refrescarEstadoOfflinePendientes() {
-      const el = document.getElementById('estadoOfflinePend');
-      if (!el) return;
       let pend = [], rech = [];
       try { pend = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]'); } catch (_) {}
       try { rech = JSON.parse(localStorage.getItem('fichadas_rechazadas') || '[]'); } catch (_) {}
       const offPend = (pend || []).filter(f => f && (f.creadaOffline === true || f.origenOffline === true));
+
+      let tipo = 'oculto', texto = '';
       if (offPend.length > 0) {
         if (!obtenerCredencialDispositivo()) {
-          el.className = 'text-[11px] mt-1 text-rose-400 font-semibold';
-          el.innerText = '⚠️ ' + offPend.length + ' fichada(s) offline sin enviar: este teléfono no tiene un dispositivo vinculado. Volvé a vincularlo (botón de arriba) y conectate a internet.';
-          el.classList.remove('hidden');
-          return;
+          tipo = 'error';
+          texto = '⚠️ ' + offPend.length + ' fichada(s) offline sin enviar: este teléfono no tiene un dispositivo vinculado. Volvé a vincularlo y conectate a internet.';
+        } else {
+          tipo = 'pendiente';
+          texto = '⏳ ' + offPend.length + ' fichada(s) offline pendiente(s) de sincronizar. Conectate a internet para enviarlas.';
         }
-        el.className = 'text-[11px] mt-1 text-amber-400 font-semibold';
-        el.innerText = '⏳ ' + offPend.length + ' fichada(s) offline pendiente(s) de sincronizar. Conectate a internet para enviarlas.';
-        el.classList.remove('hidden');
-        return;
+      } else {
+        const recientes = (rech || []).filter(f => f && f.viaLoteOffline === true);
+        if (recientes.length > 0) {
+          const ultima = recientes[recientes.length - 1];
+          tipo = 'error';
+          texto = '⚠️ Una fichada offline fue rechazada por el servidor: ' + (ultima.motivoRechazo || 'validación fallida') + '. Avisá al administrador.';
+        }
       }
-      const recientes = (rech || []).filter(f => f && f.viaLoteOffline === true);
-      if (recientes.length > 0) {
-        const ultima = recientes[recientes.length - 1];
-        el.className = 'text-[11px] mt-1 text-rose-400 font-semibold';
-        el.innerText = '⚠️ Una fichada offline fue rechazada por el servidor: ' + (ultima.motivoRechazo || 'validación fallida') + '. Avisá al administrador.';
-        el.classList.remove('hidden');
-        return;
+
+      // (1) Linea dentro de la tarjeta de login.
+      const el = document.getElementById('estadoOfflinePend');
+      if (el) {
+        if (tipo === 'oculto') { el.classList.add('hidden'); el.innerText = ''; }
+        else {
+          el.className = 'text-[11px] mt-1 font-semibold ' + (tipo === 'error' ? 'text-rose-400' : 'text-amber-400');
+          el.innerText = texto;
+          el.classList.remove('hidden');
+        }
       }
-      el.classList.add('hidden');
-      el.innerText = '';
+
+      // (2) Banner fijo global (visible tambien sobre el panel de fichaje).
+      const banner = document.getElementById('bannerOfflinePend');
+      if (banner) {
+        if (tipo === 'oculto') { banner.classList.add('hidden'); banner.innerText = ''; }
+        else {
+          banner.className = 'fixed bottom-0 inset-x-0 z-50 px-4 py-2 text-center text-xs font-semibold shadow-lg ' +
+            (tipo === 'error' ? 'bg-rose-950 text-rose-100 border-t border-rose-500/50' : 'bg-amber-950 text-amber-100 border-t border-amber-500/50');
+          banner.innerText = texto;
+          banner.classList.remove('hidden');
+        }
+      }
     }
     window.refrescarEstadoOfflinePendientes = refrescarEstadoOfflinePendientes;
 
@@ -1586,7 +1606,12 @@
 
       const divResultado = document.getElementById('resultado');
 
-      if (!navigator.onLine) {
+      // Enrutado por TIPO DE SESION, no por navigator.onLine (poco fiable): una
+      // sesion OFFLINE no tiene idToken, por lo que la via online (Worker 'fichar')
+      // la rechazaria y la fichada quedaria en un limbo (ni online ni lote firmado).
+      // Toda sesion offline -o falta real de conexion- va a la cola offline firmada
+      // por el dispositivo, que se sincroniza luego via 'ficharLoteOffline'.
+      if (sesionEsOffline || !idTokenVig || !navigator.onLine) {
         // Offline: no se puede validar contra el servidor en este momento. Se sella con
         // la hora local disponible; al sincronizar, el servidor pone el sello oficial (.sv).
         aplicarHoraServidor(datos, false);
@@ -1736,7 +1761,10 @@
 
       // Fase 2: marca de origen. Solo las creadas REALMENTE sin conexion viajan por
       // la via firmada por dispositivo (lote offline), que no depende del idToken.
-      datos.creadaOffline = !navigator.onLine;
+      // Se marca por TIPO DE SESION (sin idToken) y no solo por navigator.onLine:
+      // si la sesion es offline y la red reaparecio, la fichada IGUAL debe viajar
+      // por el lote firmado (no por la via online, que exige idToken).
+      datos.creadaOffline = (sesionEsOffline || !idTokenVig || !navigator.onLine);
       // authUid de la sesion (online u offline desde cache): el Worker lo exige para
       // atar la fichada a un legajo real al sincronizar el lote.
       if (!datos.authUid && typeof uidSesion !== 'undefined' && uidSesion) datos.authUid = uidSesion;
@@ -1752,6 +1780,9 @@
 
       limpiarFormularioExitoso();
       finalizarSesionTrasFichada();
+      // Aviso visual inmediato: refleja la nueva fichada pendiente en el banner
+      // global y en la tarjeta de login (aunque la sesion se cierre en modo compartido).
+      try { refrescarEstadoOfflinePendientes(); } catch (_) {}
       // Si en este momento hay conexion (fallo puntual del Worker/RTDB), se intenta
       // subir de inmediato por el lote firmado; si estamos offline, quedara para el
       // evento 'online'. Solo actua sobre fichadas creadas offline.
