@@ -1,4 +1,10 @@
     const URL_FIREBASE = "https://fir-asistencia-fad12-default-rtdb.firebaseio.com";
+    // Endpoint del Cloudflare Worker (fichaje AUTORITATIVO con service account).
+    // Las Reglas endurecidas (SA-ONLY) impiden que el vigilador cree /fichadas por
+    // REST; la fichada se envia al Worker (accion 'fichar'), que revalida objetivo
+    // + geocerca GPS y persiste con la service account (bypassa Reglas). Debe
+    // coincidir con el connect-src del CSP de index.html.
+    const URL_WORKER = "https://vigix-auth-admin.micasa27822024.workers.dev";
 
     // Comparacion unificada de legajo (misma logica que mismoLegajoAdmin en
     // admin.html y mismoLegajoVig en mis-horas.html): normaliza con trim y, si
@@ -1170,7 +1176,7 @@
       divResultado.innerText = "Verificando duplicados...";
       divResultado.classList.remove('hidden');
 
-      existeFichadaReciente(legajo, tipo).then(esDuplicada => {
+      existeFichadaReciente(legajo, tipo).then(async esDuplicada => {
         if (esDuplicada) {
           divResultado.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
           divResultado.innerText = `❌ Ya registraste una fichada de ${tipo} hace instantes. Espera unos minutos antes de volver a fichar.`;
@@ -1179,41 +1185,96 @@
         divResultado.className = "p-3 rounded-xl text-xs text-center bg-slate-700 text-white";
         divResultado.innerText = "Registrando fichada...";
 
-        fetch(urlAuth(`${URL_FIREBASE}/fichadas/${datos.fichadaId}.json`), {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(Object.assign({}, datos, { timestampServidor: { ".sv": "timestamp" } }))
-        })
-      .then(async res => {
-        if (!res.ok) {
-          const cuerpo = await res.text().catch(() => '');
-          throw new Error("HTTP " + res.status + " " + (res.statusText || '') + " :: " + cuerpo);
+        // FICHAJE AUTORITATIVO VIA WORKER (service account) con REINTENTO acotado.
+        // Reglas SA-ONLY: el PUT directo del vigilador esta DENEGADO (401 Permission
+        // denied). La unica via valida es el Worker (accion 'fichar'), que verifica el
+        // idToken, revalida objetivo + geocerca GPS y escribe con la service account.
+        // Ante un fallo TRANSITORIO (red/5xx) se reintenta una vez antes de encolar;
+        // un rechazo de VALIDACION (403/422/bloqueado) NO se reintenta.
+        const MAX_INTENTOS_WORKER = 2;
+        for (let intento = 1; intento <= MAX_INTENTOS_WORKER; intento++) {
+          const ctrl = new AbortController();
+          const tAbort = setTimeout(() => ctrl.abort(), 20000);
+          try {
+            const resp = await fetch(URL_WORKER, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                accion: "fichar",
+                idToken: idTokenVig,
+                fichada: Object.assign({}, datos, { idEvento: datos.fichadaId })
+              }),
+              signal: ctrl.signal
+            });
+            clearTimeout(tAbort);
+            let data = {};
+            try { data = await resp.json(); } catch (_) {}
+
+            // Exito: el Worker confirma ok:true (fichada creada o duplicada idempotente).
+            if (resp.ok && data && data.ok) {
+              if (data.fichadaId) datos.fichadaId = data.fichadaId;
+              divResultado.className = "p-3 rounded-xl text-xs text-center bg-emerald-950 text-emerald-200 border border-emerald-500";
+              divResultado.innerText = `✓ ¡Fichada de ${tipo} registrada y validada por el servidor!`;
+              ultimoTipoFichadaGlobal = tipo;
+              limpiarFormularioExitoso();
+              finalizarSesionTrasFichada();
+              return; // Guardado online confirmado: NO encolar copia offline.
+            }
+
+            // Rechazo de VALIDACION (no de red): fail-closed. No se encola ni se
+            // reintenta (el resultado seria el mismo). Se muestra el motivo real.
+            if (resp.status === 403 || resp.status === 422 || (data && data.bloqueado)) {
+              const detalle = (data && data.distanciaMetros != null)
+                ? ` Estás a ${data.distanciaMetros} m del objetivo (radio permitido: ${data.radioPermitidoMetros} m).`
+                : '';
+              divResultado.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
+              divResultado.innerText = `❌ FICHADA BLOQUEADA por el servidor: ${(data && (data.error || data.motivo)) || 'validación fallida'}.${detalle}`;
+              return;
+            }
+
+            // Cualquier otro estado (500/502/token) -> fallo transitorio: reintentar.
+            throw new Error('El servidor respondió ' + resp.status);
+          } catch (err) {
+            clearTimeout(tAbort);
+            console.warn(`Worker de fichaje no disponible (intento ${intento}/${MAX_INTENTOS_WORKER}):`, err);
+            if (intento < MAX_INTENTOS_WORKER) {
+              await new Promise(r => setTimeout(r, 1500)); // pausa corta antes de reintentar
+              continue;
+            }
+            // Agotados los reintentos: la fichada YA se valido online (rostro cotejado)
+            // pero el Worker no respondio por un fallo transitorio. Se encola SIN la
+            // bandera de fraude/revision manual y se reintenta por la via autoritativa.
+            encolarParaReintentoWorker(datos, tipo, legajo, divResultado);
+            return;
+          }
         }
-        return res.json();
-      })
-      .then(respuesta => {
-        // PUT devuelve el objeto guardado. Confirmamos que el servidor aceptó
-        // exactamente NUESTRA fichada (mismo fichadaId) antes de darla por buena.
-        if (respuesta && respuesta.fichadaId === datos.fichadaId) {
-          divResultado.className = "p-3 rounded-xl text-xs text-center bg-emerald-950 text-emerald-200 border border-emerald-500";
-          divResultado.innerText = `✓ ¡Fichada de ${tipo} registrada con éxito!`;
-          
-          ultimoTipoFichadaGlobal = tipo;
-          limpiarFormularioExitoso();
-          finalizarSesionTrasFichada();
-          return; // Guardado online confirmado: NO encolar copia offline.
-        }
-        // Respuesta inesperada: Firebase no confirmo NUESTRA fichada -> tratar como fallo real.
-        throw new Error("No se pudo confirmar el guardado en Firebase.");
-      })
-      .catch(err => {
-        console.warn("Fallo al conectar con Firebase. Guardando offline automáticamente...", err);
-        // DIAGNÓSTICO TEMPORAL: mostrar el motivo real del fallo del guardado online
-        // (se quita una vez resuelto). Permite ver por qué cae a modo offline.
-        try { alert("DIAGNÓSTICO FICHADA (sacale captura y mandámela):\n\n" + (err && err.message ? err.message : String(err))); } catch (_) {}
-        guardarFichadaOffline(datos, tipo, legajo);
       });
-      });
+    }
+
+    // Encola una fichada YA VALIDADA online cuando el Worker tuvo un fallo
+    // TRANSITORIO (red/5xx) tras agotar los reintentos. A diferencia de la cola
+    // offline "pura", NO fuerza la bandera de fraude/revision manual (el rostro SI
+    // se cotejo online); marca la fichada como generada online y dispara de
+    // inmediato la sincronizacion por la via autoritativa (Worker).
+    function encolarParaReintentoWorker(datos, tipo, legajo, divResultado) {
+      let pendientes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
+      // Anti-duplicado: no encolar dos veces el mismo evento (misma fichadaId).
+      const yaEnCola = datos.fichadaId && pendientes.some(f => f && f.fichadaId === datos.fichadaId);
+      if (!yaEnCola) {
+        datos.creadaOffline = false; // se genero ONLINE: sincroniza por Worker con idToken
+        pendientes.push(datos);
+        localStorage.setItem('fichadas_pendientes', JSON.stringify(pendientes));
+      }
+      ultimoTipoFichadaGlobal = tipo;
+      const div = divResultado || document.getElementById('resultado');
+      if (div) {
+        div.className = "p-3 rounded-xl text-xs text-center bg-amber-950 text-amber-200 border border-amber-500";
+        div.innerText = `⏳ Fichada de ${tipo} registrada. El servidor no respondió en este momento; se sincronizará automáticamente en cuanto se restablezca la conexión.`;
+      }
+      limpiarFormularioExitoso();
+      finalizarSesionTrasFichada();
+      // Reintento inmediato por la via autoritativa (Worker).
+      if (navigator.onLine) sincronizarFichadasPendientes();
     }
 
     function guardarFichadaOffline(datos, tipo, legajo) {
@@ -1304,16 +1365,27 @@
       // (sin fichadaId), le asignamos uno ahora para poder guardarla idempotente.
       if (!datos.fichadaId) datos.fichadaId = generarIdFichada();
 
-      fetch(urlAuth(`${URL_FIREBASE}/fichadas/${datos.fichadaId}.json`), {
-        method: "PUT",
+      // Sincronizacion VIA WORKER (service account). Igual que el fichaje online:
+      // las Reglas SA-ONLY no permiten crear /fichadas por REST, asi que la cola
+      // offline tambien se sube por el Worker (accion 'fichar'), que revalida todo
+      // server-side. Si el servidor la RECHAZA, se devuelve a la cola.
+      fetch(URL_WORKER, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(Object.assign({}, datos, { timestampServidor: { ".sv": "timestamp" }, sincronizadoDesdeOffline: true }))
+        body: JSON.stringify({
+          accion: "fichar",
+          idToken: idTokenVig,
+          fichada: Object.assign({}, datos, { idEvento: datos.fichadaId, sincronizadoDesdeOffline: true })
+        })
       })
-      .then(res => {
-        // Si el servidor RECHAZA (p. ej. permiso denegado por legajo), NO se
-        // debe dar por sincronizada: se lanza para devolverla a la cola.
-        if (!res.ok) throw new Error('Firebase rechazo la fichada pendiente (HTTP ' + res.status + ').');
-        return res.json();
+      .then(async res => {
+        const cuerpo = await res.json().catch(() => null);
+        // Solo se da por sincronizada si el Worker confirma ok:true (creada o
+        // duplicada idempotente). Cualquier rechazo la devuelve a la cola.
+        if (!res.ok || !cuerpo || !cuerpo.ok) {
+          throw new Error((cuerpo && cuerpo.error) || ('El servidor rechazo la fichada pendiente (HTTP ' + res.status + ').'));
+        }
+        return cuerpo;
       })
       .then(respuesta => {
         estaSincronizando = false;
