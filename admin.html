@@ -2011,10 +2011,14 @@
               // se pudo cotejar la identidad en el momento. Se detecta por el origen
               // offline o el marcador de revisión; se incluye compatibilidad con
               // fichadas offline antiguas que usaban la leyenda previa de "fraude".
-              const esOfflinePendiente = requiereRevisionManual || origenOffline
+              const esOfflinePendiente = (requiereRevisionManual || origenOffline
                 || d.validacionFacial === 'OFFLINE_PENDIENTE_VERIFICACION'
                 || d.validacionFacial === 'OFFLINE_AUDITORIA_REQUERIDA'
-                || /offline/i.test(motivoFraude);
+                || /offline/i.test(motivoFraude))
+                // ...salvo que el admin YA la haya validado manualmente. El origen
+                // offline es un hecho permanente y no se borra; esta marca de
+                // resolucion es lo que saca la fichada del estado "pendiente".
+                && d.verificacionOfflineResuelta !== true;
               const fotoMaster = mapaFotosMaster[legajoStr] || '';
 
               datosMarcaciones.push([
@@ -2379,11 +2383,15 @@
       if (!id) return;
 
       try {
-        await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/fichadas/${id}.json`), {
+        const resAprob = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/fichadas/${id}.json`), {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ alertaFraude: false, requiereRevisionManual: false, motivoFraude: "Validada manualmente por el administrador", motivoRevision: "Validada manualmente por el administrador" })
+          // 'verificacionOfflineResuelta' es la marca que saca la fichada del estado
+          // "Pendiente de verificacion": el origen offline NO se borra (queda como
+          // evidencia del hecho), pero la deteccion la respeta y deja de listarla.
+          body: JSON.stringify({ alertaFraude: false, requiereRevisionManual: false, verificacionOfflineResuelta: true, validacionFacial: 'VALIDADA_MANUAL', motivoFraude: "Validada manualmente por el administrador", motivoRevision: "Validada manualmente por el administrador" })
         });
+        if (!resAprob.ok) { const t = await resAprob.text().catch(() => ''); throw new Error('HTTP ' + resAprob.status + ' ' + t); }
         registrarAuditoria('FICHADA_APROBADA', `fichadas/${id}`, { motivo: 'Validada manualmente por el administrador' });
         alert("Fichada validada correctamente.");
         cerrarModalAccionFraude();
