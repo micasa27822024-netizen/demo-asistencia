@@ -1103,6 +1103,9 @@
 
         ultimoTipoFichadaGlobal = ultimaFichadaTipo;
         ultimaEntradaActivaGlobal = capturarEntradaActiva(ultimaFichadaTipo, ultimaFichadaObj);
+        // Persistimos el estado REAL leido del servidor para que, si despues se
+        // corta internet, el modo offline conozca la ultima ENTRADA/SALIDA.
+        guardarUltimoEstadoConocido(legajoInput, ultimaFichadaTipo, timestampUltimo, ultimaEntradaActivaGlobal);
 
         if (ultimaFichadaTipo) {
           badgeEstado.classList.remove('hidden');
@@ -1140,12 +1143,62 @@
       };
     }
 
+    // ===================================================================
+    //  ULTIMO ESTADO CONOCIDO (snapshot local del estado ENTRADA/SALIDA)
+    // ===================================================================
+    // Cuando se ficha CON internet, el estado real (ultima ENTRADA/SALIDA) vive
+    // en Firebase, pero el telefono no lo recordaba. Al quedarse sin conexion no
+    // "veia" la ENTRADA hecha online y bloqueaba la SALIDA offline. Aca cacheamos
+    // el ultimo estado conocido por legajo para que el modo offline lo respete.
+    // Es SOLO logica de cliente: el servidor sigue siendo la autoridad final.
+    const LS_ULTIMO_ESTADO = 'vigix_ultimo_estado';
+    function guardarUltimoEstadoConocido(legajo, tipo, tsMs, entradaActiva) {
+      try {
+        const k = String(legajo || '').trim();
+        if (!k) return;
+        const all = JSON.parse(localStorage.getItem(LS_ULTIMO_ESTADO) || '{}') || {};
+        all[k] = {
+          tipo: String(tipo || '').trim().toUpperCase(),
+          ts: Number(tsMs) || Date.now(),
+          entradaActiva: entradaActiva || null,
+          guardadoEn: new Date().toISOString()
+        };
+        localStorage.setItem(LS_ULTIMO_ESTADO, JSON.stringify(all));
+      } catch (_) {}
+    }
+    // Lectura tolerante: compara por legajo normalizado (mismoLegajo) para no
+    // fallar por ceros a la izquierda u otras variantes de tipeo.
+    function leerUltimoEstadoConocido(legajo) {
+      try {
+        const all = JSON.parse(localStorage.getItem(LS_ULTIMO_ESTADO) || '{}') || {};
+        if (all[String(legajo || '').trim()]) return all[String(legajo || '').trim()];
+        for (const k of Object.keys(all)) {
+          if (mismoLegajo(k, legajo)) return all[k];
+        }
+        return null;
+      } catch (_) { return null; }
+    }
+
     function verificarUltimoEstadoLocal(legajoInput) {
       let ultimaFichadaTipo = "";
       let timestampUltimo = 0;
       let ultimaFichadaObj = null;
+
+      // 1) Punto de partida: el ULTIMO ESTADO CONOCIDO online, cacheado en este
+      //    telefono la ultima vez que hubo internet. Asi una ENTRADA fichada
+      //    online se "ve" aunque ahora estemos sin conexion.
+      const snap = leerUltimoEstadoConocido(legajoInput);
+      if (snap && snap.tipo) {
+        timestampUltimo = Number(snap.ts) || 0;
+        ultimaFichadaTipo = String(snap.tipo).trim().toUpperCase();
+        ultimaFichadaObj = snap.entradaActiva
+          ? Object.assign({ tipo: ultimaFichadaTipo }, snap.entradaActiva)
+          : null;
+      }
+
+      // 2) La cola offline puede tener fichadas mas nuevas que el snapshot: gana
+      //    siempre la mas reciente por fecha/hora del dispositivo.
       let pendientes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
-      
       pendientes.forEach(p => {
         if (mismoLegajo(p.legajo, legajoInput)) {
           let tiempoP = p.fechaHoraDispositivo ? new Date(p.fechaHoraDispositivo).getTime() : 0;
@@ -1671,6 +1724,7 @@
               divResultado.className = "p-3 rounded-xl text-xs text-center bg-emerald-950 text-emerald-200 border border-emerald-500";
               divResultado.innerText = `✓ ¡Fichada de ${tipo} registrada y validada por el servidor!`;
               ultimoTipoFichadaGlobal = tipo;
+              guardarUltimoEstadoConocido(legajo, tipo, Date.now(), (tipo === 'ENTRADA') ? capturarEntradaActiva('ENTRADA', datos) : null);
               limpiarFormularioExitoso();
               finalizarSesionTrasFichada();
               return; // Guardado online confirmado: NO encolar copia offline.
@@ -1721,6 +1775,7 @@
         localStorage.setItem('fichadas_pendientes', JSON.stringify(pendientes));
       }
       ultimoTipoFichadaGlobal = tipo;
+      guardarUltimoEstadoConocido(legajo, tipo, Date.now(), (tipo === 'ENTRADA') ? capturarEntradaActiva('ENTRADA', datos) : null);
       const div = divResultado || document.getElementById('resultado');
       if (div) {
         div.className = "p-3 rounded-xl text-xs text-center bg-amber-950 text-amber-200 border border-amber-500";
@@ -1771,6 +1826,7 @@
       localStorage.setItem('fichadas_pendientes', JSON.stringify(pendientes));
 
       ultimoTipoFichadaGlobal = tipo;
+      guardarUltimoEstadoConocido(legajo, tipo, Date.now(), (tipo === 'ENTRADA') ? capturarEntradaActiva('ENTRADA', datos) : null);
       const divResultado = document.getElementById('resultado');
       divResultado.className = "p-3 rounded-xl text-xs text-center bg-amber-950 text-amber-200 border border-amber-500";
       const notaCopiaTurno = (typeof turnoProgramadoGlobal!=='undefined' && turnoProgramadoGlobal && turnoProgramadoGlobal._origenCache) ? ' Tu turno se tomó de la copia guardada en este teléfono.' : '';
