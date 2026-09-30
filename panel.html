@@ -4,19 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- Blindaje CSP: solo se permiten los orígenes que la app realmente usa. -->
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' https://cdnjs.cloudflare.com https://www.gstatic.com; style-src 'self' https://cdnjs.cloudflare.com; font-src 'self' data: https://cdnjs.cloudflare.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://*.googleapis.com https://www.gstatic.com https://nominatim.openstreetmap.org https://vigix-auth-admin.micasa27822024.workers.dev; worker-src 'self' blob:; manifest-src 'self'">
   <title>Demo Asistencia - Panel de Control & Métricas</title>
   <link rel="stylesheet" href="panel.css">
+  <script fetchpriority="low" src="lazy-cdn.js"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer">
   
-  <!-- LIBRERÍAS DE EXPORTACIÓN (EXCEL Y PDF) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha512-r22gChDnGvBylk90+2e/ycr3RVrDi8DIOkIGNhJlKfuyQM4tIRAI062MaV8sfjQKYVGjOBaZBOA87z+IhZE9DA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha512-qZvrmS2ekKPF2mSznTQsxqPgnpkI4DNTlrdUmTzrDgektczlKNRRhy5X5AAOnx5S09ydFYWWNSfcEqDTTHgtNA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js" integrity="sha512-/cZZTKETbsuutvNXdPji/z8N+9e+LHq9D60JhcBCigq9I5a2VDEcLzml8PdVlVqzmWlVbhZCuTx+9CTi2xb30A==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-
-  <!-- LIBRERÍA DE GRÁFICOS (CHART.JS) -->
-  <!-- Chart.js fijado a 4.5.1 desde cdnjs para poder aplicar SRI (jsdelivr sin versión no permite integridad). -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js" integrity="sha512-WoViKhKD4qI2WruSZqv9+kvM4WfFhUMQCLN4QlDTt5aU56fLQy2gYoxWIqlEnXqJy/+Ac5q/hk1oWfqnMDhwMA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head> 
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
 
@@ -32,8 +27,8 @@
           <i class="fa-solid fa-shield-halved text-emerald-400 text-xl"></i>
         </div>
         <div>
-          <span class="text-[10px] font-extrabold tracking-widest text-emerald-400 uppercase block">Demo Asistencia</span>
-          <h1 class="text-lg font-bold text-white tracking-wide">Sistema de Control</h1>
+          <span class="text-[10px] font-extrabold tracking-widest text-emerald-400 uppercase block">Sistema de Control</span>
+          <h1 class="text-lg font-bold text-white tracking-wide">Demo Asistencia</h1>
         </div>
       </div>
 
@@ -324,6 +319,12 @@
           <option value="ENTRADA">Solo Entradas</option>
           <option value="SALIDA">Solo Salidas</option>
         </select>
+
+        <!-- Mostrar fichadas anuladas (solo evidencia, no contabilizan) -->
+        <label class="flex items-center gap-2 text-xs text-slate-400 cursor-pointer select-none whitespace-nowrap">
+          <input type="checkbox" id="chkMostrarAnuladas" class="accent-rose-500">
+          <i class="fa-solid fa-ban text-rose-400"></i> Mostrar anuladas
+        </label>
 
         <!-- Botones de Exportación -->
         <div class="flex items-center gap-2 w-full md:w-auto">

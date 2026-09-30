@@ -99,6 +99,32 @@ function cerrarSesion() {
 // ==========================================
 const URL_BASE_FIREBASE = "https://fir-asistencia-fad12-default-rtdb.firebaseio.com";
 const URL_FIREBASE = `${URL_BASE_FIREBASE}/fichadas.json`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  CARGA BAJO DEMANDA DE LIBRERÍAS CDN PESADAS (xlsx ~600KB, jspdf+autotable ~350KB, Chart.js ~200KB)
+//  Se cargan recién cuando se necesitan, no bloquean el <head>.
+// ─────────────────────────────────────────────────────────────────────────────
+var LAZY_CDN = {
+  xlsx:      { id:'xlsx',      src:'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',             integrity:'sha512-r22gChDnGvBylk90+2e/ycr3RVrDi8DIOkIGNhJlKfuyQM4tIRAI062MaV8sfjQKYVGjOBaZBOA87z+IhZE9DA==' },
+  jspdf:     { id:'jspdf',     src:'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',            integrity:'sha512-qZvrmS2ekKPF2mSznTQsxqPgnpkI4DNTlrdUmTzrDgektczlKNRRhy5X5AAOnx5S09ydFYWWNSfcEqDTTHgtNA==' },
+  autotable: { id:'autotable', src:'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js', integrity:'sha512-/cZZTKETbsuutvNXdPji/z8N+9e+LHq9D60JhcBCigq9I5a2VDEcLzml8PdVlVqzmWlVbhZCuTx+9CTi2xb30A==' },
+  chartjs:   { id:'chartjs',   src:'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js',           integrity:'sha512-WoViKhKD4qI2WruSZqv9+kvM4WfFhUMQCLN4QlDTt5aU56fLQy2gYoxWIqlEnXqJy/+Ac5q/hk1oWfqnMDhwMA==' }
+};
+
+var _lazyExportPromise = null;
+function lazyExport() {
+  if (_lazyExportPromise) return _lazyExportPromise;
+  _lazyExportPromise = window.cargarLoteCDN([LAZY_CDN.xlsx, LAZY_CDN.jspdf, LAZY_CDN.autotable]);
+  return _lazyExportPromise;
+}
+var _lazyChartPromise = null;
+function lazyChart() {
+  if (_lazyChartPromise) return _lazyChartPromise;
+  _lazyChartPromise = window.cargarCDN(LAZY_CDN.chartjs.id, LAZY_CDN.chartjs.src, LAZY_CDN.chartjs.integrity);
+  return _lazyChartPromise;
+}
+
+
 const URL_PERSONAL = `${URL_BASE_FIREBASE}/personal.json`;
 const URL_TURNOS = `${URL_BASE_FIREBASE}/asignacionesTurnos.json`;
 
@@ -1061,7 +1087,8 @@ function actualizarMetricasYGraficos(registros) {
   renderizarGraficoBarras(diasUltimaSemana, conteoPorDia);
 }
 
-function renderizarGraficoDona(enPlanta, salidas) {
+async function renderizarGraficoDona(enPlanta, salidas) {
+  await lazyChart();
   const ctx = document.getElementById('chartDonaHoy').getContext('2d');
 
   if (instChartDona) instChartDona.destroy();
@@ -1090,7 +1117,8 @@ function renderizarGraficoDona(enPlanta, salidas) {
   });
 }
 
-function renderizarGraficoBarras(diasKey, conteoPorDia) {
+async function renderizarGraficoBarras(diasKey, conteoPorDia) {
+  await lazyChart();
   const ctx = document.getElementById('chartBarrasSemana').getContext('2d');
 
   const labels = diasKey.map(f => {
@@ -1155,7 +1183,8 @@ function cerrarModal() {
   document.getElementById('imgModal').src = "";
 }
 
-function exportarExcel() {
+async function exportarExcel() {
+  await lazyExport();
   if (!datosFiltradosActuales || datosFiltradosActuales.length === 0) {
     return alert("No hay datos visibles para exportar.");
   }
@@ -1177,7 +1206,8 @@ function exportarExcel() {
   XLSX.writeFile(wb, `Reporte_Marcaciones_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
-function exportarPDF() {
+async function exportarPDF() {
+  await lazyExport();
   if (!datosFiltradosActuales || datosFiltradosActuales.length === 0) {
     return alert("No hay datos visibles para exportar.");
   }
