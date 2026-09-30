@@ -1518,6 +1518,26 @@
         return;
       }
 
+      // Coherencia de OBJETIVO: una SALIDA debe cerrarse en el MISMO objetivo
+      // donde se abrio la ENTRADA activa. Sin esto, un vigilador podia tomar
+      // servicio en el objetivo A y marcar la SALIDA en el objetivo B, dejando
+      // la ENTRADA de A abierta y ensuciando los reportes. Solo validamos si
+      // conocemos el objetivo de la ENTRADA (fichadas viejas podrian no tenerlo
+      // guardado; en ese caso no bloqueamos, por compatibilidad).
+      if (tipo === "SALIDA" && ultimoTipoFichadaGlobal === "ENTRADA" && ultimaEntradaActivaGlobal) {
+        const idObjetivoEntrada = String(ultimaEntradaActivaGlobal.objetivoAutorizadoId || '').trim();
+        const idObjetivoSalida = String(objetivoIdSeleccionado || '').trim();
+        if (idObjetivoEntrada && idObjetivoSalida && idObjetivoEntrada !== idObjetivoSalida) {
+          const nombreObjEntrada = ultimaEntradaActivaGlobal.objetivo || 'el objetivo donde tomaste servicio';
+          alert("⚠️ Acción bloqueada: tomaste servicio en \"" + nombreObjEntrada + "\". La SALIDA tenés que darla en ESE mismo objetivo, no en otro. Seleccioná \"" + nombreObjEntrada + "\" para poder marcar tu salida.");
+          const divRes = document.getElementById('resultado');
+          divRes.className = "p-3 rounded-xl text-xs text-center bg-rose-950 text-rose-200 border border-rose-500";
+          divRes.innerText = "❌ Bloqueado: la SALIDA debe ser en el mismo objetivo de la ENTRADA (" + nombreObjEntrada + ").";
+          divRes.classList.remove('hidden');
+          return;
+        }
+      }
+
       localStorage.setItem('demo_ultimo_objetivo', objetivo);
 
       if (!fotoBase64Global) {
