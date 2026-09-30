@@ -1981,8 +1981,9 @@
           asignacionesTurnosGlobalAdmin = [];
         }
 
-        // 2. Cargar Marcaciones
-        const resMarcaciones = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/fichadas.json`));
+        // 2. Cargar Marcaciones (sin cache: tras aprobar/anular debe reflejar el
+        //    estado REAL de la base, no una copia cacheada por el navegador).
+        const resMarcaciones = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/fichadas.json?ts=${Date.now()}`), { cache: 'no-store' });
         const dataMarcaciones = await resMarcaciones.json();
         datosMarcaciones = [];
         if (dataMarcaciones) {
@@ -2392,8 +2393,19 @@
           body: JSON.stringify({ alertaFraude: false, requiereRevisionManual: false, verificacionOfflineResuelta: true, validacionFacial: 'VALIDADA_MANUAL', motivoFraude: "Validada manualmente por el administrador", motivoRevision: "Validada manualmente por el administrador" })
         });
         if (!resAprob.ok) { const t = await resAprob.text().catch(() => ''); throw new Error('HTTP ' + resAprob.status + ' ' + t); }
+
+        // VERIFICACION EN LA BASE: releemos ESTA fichada (sin cache) y confirmamos
+        // que la marca de resolucion quedo realmente escrita antes de dar el OK.
+        // Asi el cartel de exito refleja el estado REAL de la base, no la respuesta
+        // del PATCH a ciegas.
+        const resCheck = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/fichadas/${id}.json?ts=${Date.now()}`), { cache: 'no-store' });
+        const fichadaBase = resCheck.ok ? await resCheck.json().catch(() => null) : null;
+        if (!fichadaBase || fichadaBase.verificacionOfflineResuelta !== true) {
+          throw new Error('la base no confirmo el cambio (el estado no persistio). Reintenta.');
+        }
+
         registrarAuditoria('FICHADA_APROBADA', `fichadas/${id}`, { motivo: 'Validada manualmente por el administrador' });
-        alert("Fichada validada correctamente.");
+        alert("Fichada validada correctamente (confirmado en la base de datos).");
         cerrarModalAccionFraude();
         recargarDatosEfectivo();
       } catch (e) {
