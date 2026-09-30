@@ -1109,6 +1109,7 @@
 
         ultimoTipoFichadaGlobal = ultimaFichadaTipo;
         ultimaEntradaActivaGlobal = capturarEntradaActiva(ultimaFichadaTipo, ultimaFichadaObj);
+        actualizarBotonSalidaSegunObjetivo();
         // Persistimos el estado REAL leido del servidor para que, si despues se
         // corta internet, el modo offline conozca la ultima ENTRADA/SALIDA.
         guardarUltimoEstadoConocido(legajoInput, ultimaFichadaTipo, timestampUltimo, ultimaEntradaActivaGlobal);
@@ -1218,6 +1219,7 @@
 
       ultimoTipoFichadaGlobal = ultimaFichadaTipo;
       ultimaEntradaActivaGlobal = capturarEntradaActiva(ultimaFichadaTipo, ultimaFichadaObj);
+      actualizarBotonSalidaSegunObjetivo();
       const badgeEstado = document.getElementById('ultimo-estado-badge');
 
       if (ultimaFichadaTipo) {
@@ -2001,6 +2003,38 @@
       });
     }
 
+// Habilita o BLOQUEA el boton SALIDA segun el objetivo elegido. Si hay una
+// ENTRADA activa y el objetivo seleccionado NO coincide con el de esa entrada,
+// el boton SALIDA queda deshabilitado (no se puede fichar salida) hasta que el
+// vigilador corrija el objetivo. Es preventivo; la validacion dentro de
+// procesarEnvio sigue como respaldo. Solo actua si conocemos el objetivo de la
+// ENTRADA (fichadas viejas sin ese dato no bloquean, por compatibilidad).
+function actualizarBotonSalidaSegunObjetivo(){
+  var btnSalida = document.getElementById("btnSalida");
+  var selObjetivo = document.getElementById("objetivo");
+  if(!btnSalida || !selObjetivo) return;
+  var opcion = selObjetivo.selectedOptions && selObjetivo.selectedOptions[0];
+  var idSeleccionado = opcion ? String(opcion.dataset.objetivoId || "").trim() : "";
+  var idEntrada = (ultimaEntradaActivaGlobal && ultimaEntradaActivaGlobal.objetivoAutorizadoId)
+    ? String(ultimaEntradaActivaGlobal.objetivoAutorizadoId).trim() : "";
+  var hayEntradaActiva = (ultimoTipoFichadaGlobal === "ENTRADA");
+  var objetivoIncorrecto = hayEntradaActiva && idEntrada && idSeleccionado && idEntrada !== idSeleccionado;
+  if(objetivoIncorrecto){
+    var nombreObj = ultimaEntradaActivaGlobal.objetivo || "el objetivo donde tomaste servicio";
+    btnSalida.disabled = true;
+    btnSalida.classList.add("btn-bloqueado");
+    btnSalida.setAttribute("aria-disabled", "true");
+    btnSalida.title = 'Para dar la SALIDA eleg\u00ed el objetivo "' + nombreObj + '", donde tomaste servicio.';
+    selObjetivo.classList.add("objetivo-error");
+  } else {
+    btnSalida.disabled = false;
+    btnSalida.classList.remove("btn-bloqueado");
+    btnSalida.removeAttribute("aria-disabled");
+    btnSalida.title = "";
+    selObjetivo.classList.remove("objetivo-error");
+  }
+}
+
 // --- Cableado de eventos (antes onclick en el HTML) ---
 document.addEventListener("DOMContentLoaded", function(){
   var b;
@@ -2009,4 +2043,6 @@ document.addEventListener("DOMContentLoaded", function(){
   b=document.getElementById("btnEntrada"); if(b) b.addEventListener("click", function(){ procesarEnvio("ENTRADA"); });
   b=document.getElementById("btnSalida"); if(b) b.addEventListener("click", function(){ procesarEnvio("SALIDA"); });
   b=document.getElementById("btnVincular"); if(b) b.addEventListener("click", function(){ vincularDispositivo(); });
+  var selObjetivoBtn=document.getElementById("objetivo"); if(selObjetivoBtn) selObjetivoBtn.addEventListener("change", actualizarBotonSalidaSegunObjetivo);
+  actualizarBotonSalidaSegunObjetivo();
 });

@@ -1079,3 +1079,19 @@ function cerrarSesionVigilador() {
   document.getElementById('filtroMes').innerHTML = `<option value="todos">Todos los meses</option>`;
   document.getElementById('filtroDia').value = '';
 }
+
+// --- Cableado de eventos ---------------------------------------------------
+// Reemplaza los antiguos onclick/onsubmit/onchange que estaban escritos
+// dentro del HTML. Con el CSP endurecido (sin 'unsafe-inline' en script-src)
+// esos handlers embebidos ya no se ejecutan, asi que aca se enganchan con
+// addEventListener a los mismos ids/funciones de siempre. No cambia ninguna
+// logica: solo la forma de conectar el boton/formulario con su funcion.
+document.addEventListener("DOMContentLoaded", function(){
+  var el;
+  el=document.getElementById("formLoginVigilador"); if(el) el.addEventListener("submit", function(ev){ ev.preventDefault(); buscarMisHoras(); });
+  el=document.getElementById("btnCerrarSesion");     if(el) el.addEventListener("click",  function(){ cerrarSesionVigilador(); });
+  el=document.getElementById("filtroMes");           if(el) el.addEventListener("change", function(){ aplicarFiltros(); });
+  el=document.getElementById("filtroDia");           if(el) el.addEventListener("change", function(){ aplicarFiltros(); });
+  el=document.getElementById("btnLimpiarFiltros");   if(el) el.addEventListener("click",  function(){ limpiarFiltros(); });
+  el=document.getElementById("btnEnviarNovedad");    if(el) el.addEventListener("click",  function(){ enviarNovedadPortal(); });
+});
