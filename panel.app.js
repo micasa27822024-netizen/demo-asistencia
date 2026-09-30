@@ -105,6 +105,7 @@ const URL_TURNOS = `${URL_BASE_FIREBASE}/asignacionesTurnos.json`;
 let datosLocales = [];
 let datosFiltradosActuales = [];
 let datosSupervisorGlobal = [];
+let datosAnuladasGlobal = []; // Fichadas anuladas: se conservan como evidencia pero no se contabilizan
 let firebaseKeysMap = {}; // Guarda la relación de los elementos con sus IDs de Firebase
 // Clave estable de una fichada para el mapa de IDs de Firebase. Usa solo los
 // campos identificatorios (fecha, legajo, nombre, objetivo, tipo, mapa) y
@@ -204,14 +205,22 @@ async function cargarDatos() {
           //     NO fue sellada por el servidor. [8] Además sigue pendiente de que
           //     un administrador la verifique manualmente.
           (item.origenOffline === true || item.sincronizadoDesdeOffline === true || item.horaVerificadaServidor === false),
-          ((item.origenOffline === true || item.sincronizadoDesdeOffline === true || item.horaVerificadaServidor === false) && item.verificacionOfflineResuelta !== true)
+          ((item.origenOffline === true || item.sincronizadoDesdeOffline === true || item.horaVerificadaServidor === false) && item.verificacionOfflineResuelta !== true),
+          // [9] Fichada ANULADA: se conserva como evidencia pero no se contabiliza
+          //     en métricas, gráficos, alertas ni auditoría de horas del supervisor.
+          item.anulada === true
         ];
         fichadasArray.push(arrayItem);
         firebaseKeysMap[claveFichada(arrayItem)] = key;
       });
     }
 
-    datosLocales = fichadasArray;
+    // Separar fichadas anuladas del dataset activo. Las anuladas se conservan
+    // como evidencia pero NO cuentan para tabla visible, métricas, gráficos,
+    // alertas de supervisión ni auditoría de horas del supervisor.
+    const fichadasAnuladas = fichadasArray.filter(f => f[9] === true);
+    datosLocales = fichadasArray.filter(f => f[9] !== true);
+    datosAnuladasGlobal = fichadasAnuladas;
     filtrarTabla();
     // Deriva y sincroniza las alertas de supervisión (llegadas tarde / salidas anticipadas).
     generarAlertasSupervision(datosLocales);
@@ -452,8 +461,13 @@ function renderizarTabla(registros) {
     // servidor). Si además sigue pendiente de verificación se resalta en ámbar.
     const esOfflineFila = fila[7] === true;
     const pendienteVerifFila = fila[8] === true;
+    const esAnuladaFila = fila[9] === true;
     const notaOfflineFila = esOfflineFila
       ? `<div class="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${pendienteVerifFila ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' : 'bg-slate-500/15 text-slate-300 border border-slate-500/30'}" title="Fichada registrada sin conexión: la hora proviene del dispositivo y no fue sellada por el servidor${pendienteVerifFila ? '. Pendiente de verificación por un administrador.' : ' (ya verificada manualmente).'}"><i class="fa-solid fa-clock-rotate-left"></i> hora del dispositivo${pendienteVerifFila ? ' · pendiente de verificación' : ''}</div>`
+      : '';
+    // Marca visual de fichada ANULADA: se muestra con tachado y badge rojo.
+    const notaAnuladaFila = esAnuladaFila
+      ? '<div class="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/40"><i class="fa-solid fa-ban"></i> ANULADA — no contabiliza</div>'
       : '';
 
     const badgeColor = tipo === 'ENTRADA' 
@@ -490,12 +504,12 @@ function renderizarTabla(registros) {
       : `<span class="text-[10px] text-slate-500">-</span>`;
 
     const tr = document.createElement('tr');
-    tr.className = "hover:bg-slate-700/30 transition";
+    tr.className = `hover:bg-slate-700/30 transition${esAnuladaFila ? ' opacity-50' : ''}`;
     tr.innerHTML = `
-      <td class="p-4 font-mono text-xs text-slate-300">${fecha}${notaOfflineFila}</td>
-      <td class="p-4 font-semibold text-white">${escaparHtml(legajo)}</td>
-      <td class="p-4 font-medium text-slate-200">${escaparHtml(nombre)}</td>
-      <td class="p-4 text-slate-400">${escaparHtml(objetivo)}</td>
+      <td class="p-4 font-mono text-xs text-slate-300${esAnuladaFila ? ' line-through' : ''}">${fecha}${notaOfflineFila}${notaAnuladaFila}</td>
+      <td class="p-4 font-semibold text-white${esAnuladaFila ? ' line-through opacity-60' : ''}">${escaparHtml(legajo)}</td>
+      <td class="p-4 font-medium text-slate-200${esAnuladaFila ? ' line-through opacity-60' : ''}">${escaparHtml(nombre)}</td>
+      <td class="p-4 text-slate-400${esAnuladaFila ? ' line-through opacity-60' : ''}">${escaparHtml(objetivo)}</td>
       <td class="p-4 text-center">
         <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${badgeColor}">${escaparHtml(tipo)}</span>
       </td>
@@ -551,8 +565,14 @@ function filtrarTabla() {
   const filtroTipo = document.getElementById('filtroTipo').value;
   const valDesde = document.getElementById('fechaDesde').value;
   const valHasta = document.getElementById('fechaHasta').value;
+  const chkAnuladas = document.getElementById('chkMostrarAnuladas');
+  const mostrarAnuladas = !!(chkAnuladas && chkAnuladas.checked);
 
-  datosFiltradosActuales = datosLocales.filter(fila => {
+  // Base: fichadas activas (no anuladas) siempre visibles.
+  // Si el checkbox está tildado, se agregan las anuladas al final.
+  let baseDatos = mostrarAnuladas ? [...datosLocales, ...datosAnuladasGlobal] : datosLocales;
+
+  datosFiltradosActuales = baseDatos.filter(fila => {
     const textoFila = `${fila[1]} ${fila[2]} ${fila[3]}`.toLowerCase();
     const coincideBusqueda = textoFila.includes(busqueda);
     const coincideTipo = (filtroTipo === 'TODOS') || (fila[4] === filtroTipo);
@@ -583,7 +603,7 @@ function filtrarTabla() {
   });
 
   renderizarTabla(datosFiltradosActuales);
-  // Los KPI representan el estado GENERAL (dataset completo), no el subconjunto
+  // Los KPI representan el estado GENERAL (dataset completo sin anuladas), no el subconjunto
   // filtrado. Asi los indicadores no cambian al aplicar busqueda/fecha/tipo.
   actualizarMetricasYGraficos(datosLocales);
 }
@@ -1228,6 +1248,7 @@ document.addEventListener('DOMContentLoaded', function () {
   on('fechaDesde', 'change', function () { filtrarTabla(); });
   on('fechaHasta', 'change', function () { filtrarTabla(); });
   on('filtroTipo', 'change', function () { filtrarTabla(); });
+  on('chkMostrarAnuladas', 'change', function () { filtrarTabla(); });
   on('btnExcelGeneral', 'click', function () { exportarExcel(); });
   on('btnPdfGeneral', 'click', function () { exportarPDF(); });
 
