@@ -92,10 +92,27 @@
     //  fetch de personal/fichadas.
     // ===================================================================
     let idTokenVig = null;                 // idToken de la sesion Auth activa
+    let sesionEsOffline = false;           // true = sesion iniciada SIN conexion (login por hash local del PIN, sin idToken). Distingue "sesion offline legitima" de "token vencido".
+    let uidSesion = null;                  // uid de Firebase Auth de la sesion activa (para sellar authUid)
     let legajoSesion = null;               // legajo logueado
     let modoDispositivo = 'compartido';    // 'individual' mantiene sesion; 'compartido' cierra tras fichar
     let timerInactividad = null;
     const MS_INACTIVIDAD = 2 * 60 * 1000;  // auto-logout por inactividad (~2 min) en modo compartido
+
+    // ===================================================================
+    //  FASE 2 - COLA OFFLINE OPT-IN (login local + lote firmado por dispositivo)
+    //  Habilita que un vigilador inicie sesion y fiche SIN conexion, y que esas
+    //  fichadas se suban despues por una via AUTONOMA de la sesion: un lote
+    //  firmado con la credencial HMAC del dispositivo (endpoint 'ficharLoteOffline'
+    //  del Worker). Todo es OPT-IN: solo actua si el modo offline esta habilitado
+    //  globalmente (cfg.offlineHabilitado) y si el dispositivo esta provisionado.
+    //  El PIN NUNCA se guarda en claro: se cachea su hash PBKDF2+salt.
+    // ===================================================================
+    const URL_WORKER_FICHAJE = URL_WORKER;           // alias: la sincronizacion del lote offline usa el mismo Worker
+    const LS_OFFLINE_CFG   = 'vigix_offline_cfg';    // { offlineHabilitado, ventanaLoteOfflineHoras }
+    const LS_CRED_OFFLINE  = 'vigix_cred_offline';   // { <legajo>: { salt, hashHex, uid, personal, ... } }
+    const LS_DISPOSITIVO   = 'vigix_dispositivo';     // { deviceId, secreto } (lo provisiona el Admin en Fase 3)
+    const PBKDF2_ITER      = 150000;
 
     // Agrega ?auth=<idToken> a una URL de la RTDB si hay sesion activa.
     function urlAuth(url) {
@@ -136,6 +153,388 @@
       } catch (_) { modoDispositivo = 'compartido'; }
     }
 
+    // --- Timeout acotado para las llamadas al Worker (AbortController) ---
+    function fetchConLimite(url, opciones, msTimeout) {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => { try { ctrl.abort(); } catch (_) {} }, msTimeout || 20000);
+      return fetch(url, Object.assign({}, opciones || {}, { signal: ctrl.signal })).finally(() => clearTimeout(t));
+    }
+
+    // --- Config offline cacheada (para saber, estando offline, si se permite) ---
+    function offlineHabilitadoLocal() {
+      try { const c = JSON.parse(localStorage.getItem(LS_OFFLINE_CFG) || '{}'); return !!(c && c.offlineHabilitado === true); } catch (_) { return false; }
+    }
+    function ventanaLoteOfflineHorasLocal() {
+      try { const c = JSON.parse(localStorage.getItem(LS_OFFLINE_CFG) || '{}'); const v = Number(c && c.ventanaLoteOfflineHoras); return (Number.isFinite(v) && v > 0) ? v : 168; } catch (_) { return 168; }
+    }
+    // Persiste el flag desde /configuracionGlobal cuando hay conexion.
+    function guardarOfflineCfg(cfg) {
+      try { localStorage.setItem(LS_OFFLINE_CFG, JSON.stringify({ offlineHabilitado: !!(cfg && cfg.offlineHabilitado === true), ventanaLoteOfflineHoras: Number(cfg && cfg.ventanaLoteOfflineHoras) || 168 })); } catch (_) {}
+    }
+    // Lee /configuracionGlobal AHORA (con conexion) y persiste el flag offline de
+    // forma AWAITABLE, para GARANTIZAR que el flag este cacheado ANTES de cachear
+    // la credencial offline (evita la carrera del primer login online).
+    async function asegurarOfflineCfg() {
+      if (!navigator.onLine) return;
+      try {
+        const res = await fetch(urlAuth(`${URL_FIREBASE}/configuracionGlobal.json?ts=${Date.now()}`), { cache: 'no-store' });
+        const cfg = await res.json();
+        guardarOfflineCfg(cfg);
+      } catch (_) {}
+    }
+
+    // --- Utilidades cripto (WebCrypto) ---
+    function _b64FromBytes(bytes) { let s = ''; for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]); return btoa(s); }
+    function _bytesFromB64(b64) { const s = atob(String(b64 || '')); const a = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); return a; }
+    // Comparacion de hex en tiempo casi constante (no cortocircuita por caracter).
+    function _igualHex(a, b) { a = String(a || '').toLowerCase(); b = String(b || '').toLowerCase(); if (!a || a.length !== b.length) return false; let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i); return d === 0; }
+    async function _pbkdf2Hex(pin, saltBytes, iteraciones) {
+      const baseKey = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(pin)), 'PBKDF2', false, ['deriveBits']);
+      const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: saltBytes, iterations: iteraciones, hash: 'SHA-256' }, baseKey, 256);
+      const b = new Uint8Array(bits); let h = ''; for (let i = 0; i < b.length; i++) h += b[i].toString(16).padStart(2, '0'); return h;
+    }
+    async function firmarHmacHex(secreto, mensaje) {
+      const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(secreto)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+      const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(mensaje)));
+      let h = ''; for (let i = 0; i < mac.length; i++) h += mac[i].toString(16).padStart(2, '0'); return h;
+    }
+
+    // ===================================================================
+    //  ALMACEN SEGURO DE LA CLAVE HMAC DEL DISPOSITIVO (IndexedDB)
+    //  El secreto se importa como CryptoKey con extractable:false: se puede USAR
+    //  para firmar los lotes offline, pero su material NUNCA vuelve a leerse desde
+    //  JavaScript (defensa ante XSS, a diferencia de guardarlo en localStorage).
+    // ===================================================================
+    const IDB_NOMBRE   = 'vigix_seguro';
+    const IDB_STORE    = 'claves';
+    const IDB_KEY_HMAC = 'hmac_dispositivo';
+    function _idbAbrir() {
+      return new Promise((resolve, reject) => {
+        let req;
+        try { req = indexedDB.open(IDB_NOMBRE, 1); } catch (e) { return reject(e); }
+        req.onupgradeneeded = () => { const db = req.result; if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE); };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+    function _idbGuardar(clave, valor) {
+      return _idbAbrir().then(db => new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        tx.objectStore(IDB_STORE).put(valor, clave);
+        tx.oncomplete = () => { db.close(); resolve(true); };
+        tx.onerror = () => { db.close(); reject(tx.error); };
+      }));
+    }
+    function _idbLeer(clave) {
+      return _idbAbrir().then(db => new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, 'readonly');
+        const rq = tx.objectStore(IDB_STORE).get(clave);
+        rq.onsuccess = () => { db.close(); resolve(rq.result || null); };
+        rq.onerror = () => { db.close(); reject(rq.error); };
+      }));
+    }
+    function _idbBorrar(clave) {
+      return _idbAbrir().then(db => new Promise((resolve) => {
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        tx.objectStore(IDB_STORE).delete(clave);
+        tx.oncomplete = () => { db.close(); resolve(true); };
+        tx.onerror = () => { db.close(); resolve(false); };
+      })).catch(() => false);
+    }
+    async function _importarClaveHmacNoExtraible(secreto) {
+      return crypto.subtle.importKey('raw', new TextEncoder().encode(String(secreto)), { name: 'HMAC', hash: 'SHA-256' }, false /* NO extraible */, ['sign']);
+    }
+    async function _persistirClaveHmac(secreto) {
+      try { const key = await _importarClaveHmacNoExtraible(secreto); await _idbGuardar(IDB_KEY_HMAC, key); return true; }
+      catch (e) { console.warn('No se pudo guardar la clave del dispositivo de forma segura:', e); return false; }
+    }
+    async function _obtenerClaveHmacDispositivo() {
+      try { const k = await _idbLeer(IDB_KEY_HMAC); if (k) return k; } catch (_) {}
+      try {
+        const d = JSON.parse(localStorage.getItem(LS_DISPOSITIVO) || 'null');
+        if (d && d.deviceId && d.secreto) {
+          const ok = await _persistirClaveHmac(d.secreto);
+          if (ok) {
+            localStorage.setItem(LS_DISPOSITIVO, JSON.stringify({ deviceId: d.deviceId, provisionado: true }));
+            const k2 = await _idbLeer(IDB_KEY_HMAC); if (k2) return k2;
+          }
+          return await _importarClaveHmacNoExtraible(d.secreto);
+        }
+      } catch (_) {}
+      return null;
+    }
+    async function firmarLoteDispositivo(mensaje) {
+      const key = await _obtenerClaveHmacDispositivo();
+      if (!key) return null;
+      const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(mensaje)));
+      let h = ''; for (let i = 0; i < mac.length; i++) h += mac[i].toString(16).padStart(2, '0'); return h;
+    }
+
+    // --- Credencial del dispositivo (deviceId + secreto HMAC) ---
+    function obtenerCredencialDispositivo() {
+      try { const d = JSON.parse(localStorage.getItem(LS_DISPOSITIVO) || 'null'); return (d && d.deviceId && (d.secreto || d.provisionado)) ? d : null; } catch (_) { return null; }
+    }
+
+    // --- Vinculacion del dispositivo (Fase 3): el operador pega el codigo que
+    //     genero el Admin. Se decodifica y se guarda {deviceId} + clave HMAC no
+    //     extraible en IndexedDB. El secreto NUNCA sale de este dispositivo salvo
+    //     dentro de la firma HMAC de cada lote.
+    function _parsearCodigoVinculacion(codigo) {
+      const raw = String(codigo || '').trim();
+      if (!raw) return null;
+      let obj = null;
+      try { obj = JSON.parse(atob(raw)); } catch (_) { obj = null; }
+      if (!obj) { try { obj = JSON.parse(raw); } catch (_) { obj = null; } }
+      if (obj && typeof obj.deviceId === 'string' && typeof obj.secreto === 'string' && obj.deviceId && obj.secreto) {
+        return { deviceId: obj.deviceId, secreto: obj.secreto };
+      }
+      return null;
+    }
+    function vincularDispositivo() {
+      const estado = document.getElementById('estadoVincular');
+      const ya = obtenerCredencialDispositivo();
+      const msgInicial = ya ? 'Este dispositivo YA está vinculado. Pegar un código nuevo lo reemplaza.\n\nCódigo de vinculación:' : 'Pegá el código de vinculación que te dio el administrador:';
+      const codigo = prompt(msgInicial);
+      if (codigo === null) return; // cancelado
+      const cred = _parsearCodigoVinculacion(codigo);
+      if (!cred) {
+        if (estado) { estado.className = 'text-[11px] mt-1 text-rose-400 font-semibold'; estado.innerText = '❌ Código inválido. Verificá que lo hayas copiado completo.'; }
+        return;
+      }
+      (async () => {
+      try {
+        const guardado = await _persistirClaveHmac(cred.secreto);
+        if (guardado) {
+          localStorage.setItem(LS_DISPOSITIVO, JSON.stringify({ deviceId: cred.deviceId, provisionado: true }));
+        } else {
+          localStorage.setItem(LS_DISPOSITIVO, JSON.stringify({ deviceId: cred.deviceId, secreto: cred.secreto }));
+        }
+        if (estado) { estado.className = 'text-[11px] mt-1 text-emerald-400 font-semibold'; estado.innerText = '✓ Dispositivo vinculado. Ya puede fichar sin conexión.'; }
+        const lbl = document.getElementById('lblVincular');
+        if (lbl) lbl.innerText = 'Dispositivo vinculado — volver a vincular';
+      } catch (_) {
+        if (estado) { estado.className = 'text-[11px] mt-1 text-rose-400 font-semibold'; estado.innerText = '❌ No se pudo guardar en este navegador.'; }
+      }
+      })();
+    }
+    window.vincularDispositivo = vincularDispositivo;
+
+    // Refleja en la pantalla de login si este telefono YA esta vinculado.
+    function refrescarEstadoVinculacion() {
+      const lbl = document.getElementById('lblVincular');
+      const estado = document.getElementById('estadoVincular');
+      const ya = obtenerCredencialDispositivo();
+      if (ya) {
+        if (lbl) lbl.innerText = 'Dispositivo vinculado — volver a vincular';
+        if (estado) { estado.className = 'text-[11px] mt-1 text-emerald-400 font-semibold'; estado.innerText = '✓ Dispositivo vinculado. Puede fichar sin conexión.'; }
+      } else {
+        if (lbl) lbl.innerText = 'Vincular dispositivo para fichaje offline';
+        if (estado) { estado.className = 'text-[11px] mt-1'; estado.innerText = ''; }
+      }
+    }
+    window.refrescarEstadoVinculacion = refrescarEstadoVinculacion;
+
+    // Muestra cuantas fichadas offline quedan por sincronizar y, si alguna fue
+    // rechazada por el servidor, el motivo.
+    function refrescarEstadoOfflinePendientes() {
+      const el = document.getElementById('estadoOfflinePend');
+      if (!el) return;
+      let pend = [], rech = [];
+      try { pend = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]'); } catch (_) {}
+      try { rech = JSON.parse(localStorage.getItem('fichadas_rechazadas') || '[]'); } catch (_) {}
+      const offPend = (pend || []).filter(f => f && (f.creadaOffline === true || f.origenOffline === true));
+      if (offPend.length > 0) {
+        if (!obtenerCredencialDispositivo()) {
+          el.className = 'text-[11px] mt-1 text-rose-400 font-semibold';
+          el.innerText = '⚠️ ' + offPend.length + ' fichada(s) offline sin enviar: este teléfono no tiene un dispositivo vinculado. Volvé a vincularlo (botón de arriba) y conectate a internet.';
+          el.classList.remove('hidden');
+          return;
+        }
+        el.className = 'text-[11px] mt-1 text-amber-400 font-semibold';
+        el.innerText = '⏳ ' + offPend.length + ' fichada(s) offline pendiente(s) de sincronizar. Conectate a internet para enviarlas.';
+        el.classList.remove('hidden');
+        return;
+      }
+      const recientes = (rech || []).filter(f => f && f.viaLoteOffline === true);
+      if (recientes.length > 0) {
+        const ultima = recientes[recientes.length - 1];
+        el.className = 'text-[11px] mt-1 text-rose-400 font-semibold';
+        el.innerText = '⚠️ Una fichada offline fue rechazada por el servidor: ' + (ultima.motivoRechazo || 'validación fallida') + '. Avisá al administrador.';
+        el.classList.remove('hidden');
+        return;
+      }
+      el.classList.add('hidden');
+      el.innerText = '';
+    }
+    window.refrescarEstadoOfflinePendientes = refrescarEstadoOfflinePendientes;
+
+    // --- Credencial de login OFFLINE (hash PBKDF2 del PIN + snapshot del vigilador) ---
+    function _leerCredsOffline() { try { return JSON.parse(localStorage.getItem(LS_CRED_OFFLINE) || '{}') || {}; } catch (_) { return {}; } }
+    // Se llama tras un login ONLINE exitoso. Guarda el hash del PIN (nunca el PIN)
+    // y una copia de la config del vigilador para poder operar sin red mas tarde.
+    // Se cachea si el modo offline esta habilitado globalmente O si este telefono
+    // ya fue VINCULADO por el admin (provisionado para offline). El servidor igual
+    // revalida el lote al sincronizar, por lo que cachear el hash local es seguro.
+    async function cachearCredencialOffline(legajo, pin, uid, nombre, personal, fotoMaster) {
+      if (!offlineHabilitadoLocal() && !obtenerCredencialDispositivo()) return;
+      if (!(self.crypto && crypto.subtle)) return;
+      try {
+        const salt = crypto.getRandomValues(new Uint8Array(16));
+        const hashHex = await _pbkdf2Hex(String(pin).padStart(6, '0'), salt, PBKDF2_ITER);
+        const creds = _leerCredsOffline();
+        creds[String(legajo).trim()] = {
+          legajo: String(legajo).trim(), uid: uid || null, nombre: nombre || null,
+          salt: _b64FromBytes(salt), hashHex, iteraciones: PBKDF2_ITER,
+          personal: personal || null, fotoMaster: fotoMaster || null,
+          guardadoEn: new Date().toISOString()
+        };
+        localStorage.setItem(LS_CRED_OFFLINE, JSON.stringify(creds));
+      } catch (e) { console.warn('No se pudo cachear la credencial offline:', e); }
+    }
+    // Verifica el PIN contra el hash local. Devuelve el registro cacheado o null.
+    async function verificarCredencialOffline(legajo, pin) {
+      const c = _leerCredsOffline()[String(legajo).trim()];
+      if (!c || !c.salt || !c.hashHex) return null;
+      try {
+        const h = await _pbkdf2Hex(String(pin).padStart(6, '0'), _bytesFromB64(c.salt), c.iteraciones || PBKDF2_ITER);
+        return _igualHex(h, c.hashHex) ? c : null;
+      } catch (_) { return null; }
+    }
+
+    // --- Login OFFLINE (sin idToken; identidad probada por hash local del PIN) ---
+    async function iniciarSesionOffline(legajo, pin, st, btn) {
+      const cred = await verificarCredencialOffline(legajo, pin);
+      if (!cred) {
+        st.className = 'text-xs mt-1 text-center text-rose-400 block';
+        if (obtenerCredencialDispositivo()) {
+          st.innerText = 'Este teléfono ya está vinculado, pero todavía no guardó tu acceso para fichar sin conexión. Con internet, iniciá sesión una vez con tu legajo y PIN en este mismo teléfono; después vas a poder fichar offline.';
+        } else if (!offlineHabilitadoLocal()) {
+          st.innerText = 'Sin conexión: este teléfono todavía no está habilitado para uso offline. Pedile al administrador que active el modo offline y, con internet, iniciá sesión una vez en este mismo teléfono.';
+        } else {
+          st.innerText = 'Sin conexión: legajo/PIN no verificados en este dispositivo. Conectate a internet e iniciá sesión al menos una vez en este teléfono.';
+        }
+        if (btn) btn.disabled = false; return;
+      }
+      // Sesion OFFLINE: NO hay idToken. La identidad se ata luego, al sincronizar,
+      // via el authUid cacheado + la credencial firmada del dispositivo (Worker).
+      idTokenVig = null;
+      sesionEsOffline = true;   // marca de sesion offline legitima: el fichaje NO debe exigir idToken
+      uidSesion = cred.uid || null;
+      legajoSesion = String(legajo).trim();
+      document.getElementById('loginPin').value = '';
+      document.getElementById('pantallaLogin').classList.add('hidden');
+      document.getElementById('panelFichaje').classList.remove('hidden');
+      document.getElementById('legajo').value = legajoSesion;
+      st.className = 'text-xs mt-1 text-center hidden'; st.innerText = '';
+      iniciarCamaraSegura();
+      cargarModelosIA();
+      cargarObjetivos();                 // usa la cache local de objetivos
+      modoDispositivo = 'compartido';    // offline: no se pudo leer config -> por defecto compartido
+      document.getElementById('nombre').value = cred.nombre || '';
+      const lblNom = document.getElementById('lblSesionNombre'); if (lblNom) lblNom.innerText = cred.nombre || legajoSesion;
+      fotoMasterGuardada = cred.fotoMaster || null;
+      vigiladorInactivoGlobal = false;
+      let personalOffline = cred.personal || null;
+      if (!personalOffline || !personalOffline.objetivosAsignados) {
+        try {
+          const cache = JSON.parse(localStorage.getItem('personal_config_fichada') || 'null');
+          if (cache && String(cache.legajo || '').trim() === legajoSesion) personalOffline = cache;
+        } catch (_) {}
+      }
+      if (personalOffline) { try { await aplicarConfiguracionVigilador(personalOffline); } catch (_) {} }
+      verificarUltimoEstadoLocal(legajoSesion);
+      reiniciarInactividad();
+    }
+
+    // --- Sincronizacion del LOTE OFFLINE firmado por dispositivo ---
+    // Sube por 'ficharLoteOffline' las fichadas creadas realmente sin conexion.
+    // No requiere idToken. El Worker revalida identidad + objetivo + geocerca y es
+    // idempotente por idEvento.
+    let estaSincronizandoLote = false;
+    async function sincronizarLoteOffline() {
+      if (estaSincronizandoLote) return;
+      if (!navigator.onLine) return;
+      if (!URL_WORKER_FICHAJE) return;
+      if (!offlineHabilitadoLocal()) return;               // opt-in
+      const disp = obtenerCredencialDispositivo();
+      if (!disp) return;                                    // sin dispositivo provisionado no hay via firmada
+      const pendientes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
+      const loteItems = pendientes.filter(f => f && (f.creadaOffline === true || f.origenOffline === true));
+      if (loteItems.length === 0) return;
+      estaSincronizandoLote = true;
+      try {
+        const envio = loteItems.slice(0, 200).map(f => Object.assign({}, f, {
+          timestampServidorEstimado: (typeof f.timestampServidorEstimado === 'number') ? f.timestampServidorEstimado
+            : (f.horaServidorFichaje ? Date.parse(f.horaServidorFichaje) : (f.timestampLocal || null))
+        }));
+        const fichadasStr = JSON.stringify(envio);
+        const timestamp = Date.now();
+        const firma = await firmarLoteDispositivo(`${disp.deviceId}.${timestamp}.${fichadasStr}`);
+        if (!firma) return; // sin clave utilizable: se conserva la cola (finally resetea el flag)
+        const resp = await fetchConLimite(URL_WORKER_FICHAJE, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accion: 'ficharLoteOffline', deviceId: disp.deviceId, timestamp, fichadas: fichadasStr, firma })
+        }, 25000);
+        let data = {}; try { data = await resp.json(); } catch (_) {}
+        if (resp.status === 403 && data && data.motivo === 'OFFLINE_DESHABILITADO') { estaSincronizandoLote = false; return; }
+        if (!resp.ok || !data || !data.ok) throw new Error('Lote offline respondió ' + resp.status);
+
+        const porRef = {}; (data.resultados || []).forEach(r => { if (r && r.ref) porRef[String(r.ref)] = r; });
+        const rechazadasArch = JSON.parse(localStorage.getItem('fichadas_rechazadas') || '[]');
+        let restantes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
+        restantes = restantes.filter(f => {
+          if (!(f && (f.creadaOffline === true || f.origenOffline === true))) return true; // ajenas al lote: no se tocan
+          const r = porRef[String(f.idEvento || f.fichadaId || '')];
+          if (!r) return true;                       // sin resultado: se conserva para reintentar
+          if (r.creada || r.duplicada) return false; // aceptada: sale de la cola
+          if (r.rechazada) {                         // invalida server-side: se archiva y sale
+            rechazadasArch.push(Object.assign({}, f, { motivoRechazo: r.motivo || 'validación del servidor fallida', rechazadaEn: new Date().toISOString(), viaLoteOffline: true }));
+            return false;
+          }
+          return true;
+        });
+        localStorage.setItem('fichadas_rechazadas', JSON.stringify(rechazadasArch));
+        localStorage.setItem('fichadas_pendientes', JSON.stringify(restantes));
+        console.log(`🔒 Lote offline sincronizado: creadas ${data.creadas || 0}, duplicadas ${data.duplicadas || 0}, rechazadas ${data.rechazadas || 0}.`);
+      } catch (err) {
+        console.warn('No se pudo sincronizar el lote offline (se reintentará):', err);
+      } finally {
+        estaSincronizandoLote = false;
+        try { if (typeof refrescarEstadoOfflinePendientes === 'function') refrescarEstadoOfflinePendientes(); } catch (_) {}
+      }
+    }
+
+    // ===================================================================
+    //  CADUCIDAD Y LIMPIEZA DE DATOS SENSIBLES OFFLINE
+    // ===================================================================
+    const MAX_RETENCION_OFFLINE_MS = 30 * 24 * 3600 * 1000; // 30 dias
+    function _tsDesdeISO(iso) { const t = Date.parse(iso || ''); return Number.isFinite(t) ? t : 0; }
+    function purgarCacheOfflineVencido() {
+      const ahora = Date.now();
+      try {
+        const creds = _leerCredsOffline(); let cambio = false;
+        for (const k of Object.keys(creds)) {
+          const g = _tsDesdeISO(creds[k] && creds[k].guardadoEn);
+          if (!g || (ahora - g) > MAX_RETENCION_OFFLINE_MS) { delete creds[k]; cambio = true; }
+        }
+        if (cambio) localStorage.setItem(LS_CRED_OFFLINE, JSON.stringify(creds));
+      } catch (_) {}
+      try {
+        const cache = JSON.parse(localStorage.getItem('vigix_turnos_cache') || '{}') || {}; let cambio = false;
+        for (const k of Object.keys(cache)) {
+          const g = _tsDesdeISO(cache[k] && cache[k].guardadoEn);
+          if (!g || (ahora - g) > MAX_RETENCION_OFFLINE_MS) { delete cache[k]; cambio = true; }
+        }
+        if (cambio) localStorage.setItem('vigix_turnos_cache', JSON.stringify(cache));
+      } catch (_) {}
+    }
+    function limpiarDatosSensiblesAlSalir() {
+      try { fotoBase64Global = ''; fotoMasterGuardada = null; } catch (_) {}
+      const offlineActivo = offlineHabilitadoLocal() || !!obtenerCredencialDispositivo();
+      if (!offlineActivo) { try { localStorage.removeItem(LS_CRED_OFFLINE); } catch (_) {} }
+      purgarCacheOfflineVencido();
+    }
+
     async function iniciarSesionVigilador(e) {
       if (e && e.preventDefault) e.preventDefault();
       const legajo = document.getElementById('loginLegajo').value.trim();
@@ -143,7 +542,14 @@
       const st = document.getElementById('login-status');
       const btn = document.getElementById('btnIngresar');
       if (!legajo || !pin) { st.className = 'text-xs mt-1 text-center text-rose-400 block'; st.innerText = 'Ingresá tu legajo y PIN.'; return; }
-      if (!navigator.onLine) { st.className = 'text-xs mt-1 text-center text-rose-400 block'; st.innerText = 'Sin conexión: no se puede iniciar sesión de forma segura.'; return; }
+      if (!navigator.onLine) {
+        // Sin conexión: intento de login OFFLINE contra el hash local del PIN
+        // (solo si el modo offline esta habilitado y la credencial fue cacheada).
+        if (btn) btn.disabled = true;
+        st.className = 'text-xs mt-1 text-center text-amber-400 block'; st.innerText = 'Verificando credencial local...';
+        await iniciarSesionOffline(legajo, pin, st, btn);
+        return;
+      }
       st.className = 'text-xs mt-1 text-center text-amber-400 block'; st.innerText = 'Verificando...';
       if (btn) btn.disabled = true;
       try {
@@ -158,6 +564,8 @@
           return;
         }
         idTokenVig = r.idToken;
+        sesionEsOffline = false;   // sesion ONLINE autenticada con idToken
+        uidSesion = r.uid || null;
         legajoSesion = String(legajo).trim();
         document.getElementById('loginPin').value = '';
         document.getElementById('pantallaLogin').classList.add('hidden');
@@ -170,12 +578,17 @@
         cargarObjetivos();
         await cargarModoDispositivo();
         await validarLegajo();   // lee SOLO el registro propio, con token
+        // Fase 2 (opt-in): si el modo offline esta habilitado o el dispositivo esta
+        // vinculado, cacheamos el hash del PIN (PBKDF2+salt) y la config del vigilador
+        // para permitir un login OFFLINE posterior. Nunca se guarda el PIN en claro.
+        try { await asegurarOfflineCfg(); } catch (_) {}
+        try { await cachearCredencialOffline(legajoSesion, pin, uidSesion, (personalActualGlobal && personalActualGlobal.nombre) || document.getElementById('nombre').value, personalActualGlobal, fotoMasterGuardada); } catch (_) {}
         reiniciarInactividad();
         // Ya con sesion activa (idToken + legajo propio), intenta subir las
         // fichadas/alertas offline que pertenezcan a ESTE legajo. Las Reglas de
         // Seguridad atan cada fichada al legajo del uid autenticado, por eso la
         // sincronizacion debe ocurrir con la sesion del propio vigilador.
-        if (navigator.onLine) { sincronizarFichadasPendientes(); sincronizarAlertasFichadasPendientes(); }
+        if (navigator.onLine) { sincronizarFichadasPendientes(); sincronizarAlertasFichadasPendientes(); sincronizarLoteOffline(); }
       } catch (err) {
         st.className = 'text-xs mt-1 text-center text-rose-400 block';
         st.innerText = 'Error al iniciar sesión.';
@@ -185,10 +598,11 @@
 
     async function cerrarSesionVigilador() {
       try { if (typeof window.logoutVigilador === 'function') await window.logoutVigilador(); } catch (_) {}
-      idTokenVig = null; legajoSesion = null;
+      idTokenVig = null; sesionEsOffline = false; legajoSesion = null; uidSesion = null;
       if (timerInactividad) { clearTimeout(timerInactividad); timerInactividad = null; }
       personalActualGlobal = null; turnoProgramadoGlobal = null; fotoMasterGuardada = null;
       vigiladorInactivoGlobal = false; ultimoTipoFichadaGlobal = '';
+      try { limpiarDatosSensiblesAlSalir(); } catch (_) {}
       const panel = document.getElementById('panelFichaje'); if (panel) panel.classList.add('hidden');
       const login = document.getElementById('pantallaLogin'); if (login) login.classList.remove('hidden');
       const st = document.getElementById('login-status'); if (st) { st.className = 'text-xs mt-1 text-center hidden'; st.innerText = ''; }
@@ -205,9 +619,15 @@
       const f = document.getElementById('formLogin');
       if (f) f.addEventListener('submit', iniciarSesionVigilador);
 
+      // Estado offline en la pantalla de login: vinculacion y cola pendiente.
+      try { purgarCacheOfflineVencido(); } catch (_) {}
+      try { refrescarEstadoVinculacion(); } catch (_) {}
+      try { refrescarEstadoOfflinePendientes(); } catch (_) {}
+
       if (navigator.onLine) {
         sincronizarFichadasPendientes();
         sincronizarAlertasFichadasPendientes();
+        sincronizarLoteOffline();
       }
     };
 
@@ -240,6 +660,8 @@
       actualizarEstadoRed();
       sincronizarFichadasPendientes();
       sincronizarAlertasFichadasPendientes();
+      sincronizarLoteOffline();
+      try { refrescarEstadoOfflinePendientes(); } catch (_) {}
     });
     
     window.addEventListener('offline', actualizarEstadoRed);
@@ -948,9 +1370,19 @@
       const nombre = document.getElementById('nombre').value.trim();
       const objetivo = document.getElementById('objetivo').value;
 
-      // Guarda de sesion: la identidad ya se valido en el login (Firebase Auth).
-      // Si por algun motivo se perdio el token, se obliga a re-loguear.
-      if (!idTokenVig || !legajoSesion) {
+      // Guarda de sesion. IMPORTANTE: debe permitir la sesion OFFLINE.
+      // En modo offline NO existe idToken (idTokenVig === null): la identidad ya
+      // quedo probada por el hash local del PIN al iniciar sesion, y la fichada se
+      // guardara en la cola offline firmada por el dispositivo (no usa idToken).
+      // Se usa 'sesionEsOffline' (no navigator.onLine, que es poco fiable) para
+      // solo forzar re-login si (a) no hay sesion, o (b) es una sesion ONLINE que
+      // perdio su idToken (token realmente vencido).
+      if (!legajoSesion) {
+        alert('Tu sesión expiró. Volvé a ingresar tu legajo y PIN.');
+        cerrarSesionVigilador();
+        return;
+      }
+      if (!idTokenVig && !sesionEsOffline) {
         alert('Tu sesión expiró. Volvé a ingresar tu legajo y PIN.');
         cerrarSesionVigilador();
         return;
@@ -1290,12 +1722,24 @@
         }
       }
 
-      // 🛡️ SEGURIDAD ANTI-TRAMPA: Fuerza la alerta si se fichó sin cotejo de Foto Master
+      // Fichada sin cotejo de identidad en el momento (tipico caso offline: no
+      // hubo servidor para verificar el rostro). NO es fraude: se marca como
+      // PENDIENTE DE VERIFICACION para que RRHH la revise con criterio, sin acusar
+      // al vigilador. La alerta de fraude REAL (rostro sospechoso o foto de pantalla
+      // detectada por el analisis local) se conserva aparte en datos.alertaFraude
+      // y NO se pisa aqui.
       if (resultadoSimilitudGlobal === "SIN_MASTER" || resultadoSimilitudGlobal === "IA_NO_DISPONIBLE" || resultadoSimilitudGlobal === "NO_EVALUADO") {
-        datos.alertaFraude = true;
-        datos.motivoFraude = "⚠️ Fichada Offline: Requiere revisión manual (Rostro no cotejado en servidor)";
-        datos.validacionFacial = "OFFLINE_AUDITORIA_REQUERIDA";
+        datos.requiereRevisionManual = true;
+        datos.motivoRevision = "Fichada registrada sin conexión: la identidad no pudo verificarse en el momento y queda pendiente de revisión.";
+        datos.validacionFacial = "OFFLINE_PENDIENTE_VERIFICACION";
       }
+
+      // Fase 2: marca de origen. Solo las creadas REALMENTE sin conexion viajan por
+      // la via firmada por dispositivo (lote offline), que no depende del idToken.
+      datos.creadaOffline = !navigator.onLine;
+      // authUid de la sesion (online u offline desde cache): el Worker lo exige para
+      // atar la fichada a un legajo real al sincronizar el lote.
+      if (!datos.authUid && typeof uidSesion !== 'undefined' && uidSesion) datos.authUid = uidSesion;
 
       pendientes.push(datos);
       localStorage.setItem('fichadas_pendientes', JSON.stringify(pendientes));
@@ -1303,10 +1747,15 @@
       ultimoTipoFichadaGlobal = tipo;
       const divResultado = document.getElementById('resultado');
       divResultado.className = "p-3 rounded-xl text-xs text-center bg-amber-950 text-amber-200 border border-amber-500";
-      divResultado.innerText = `⚠️ Registrada Offline. Al no haber conexión para verificar tu identidad, esta fichada requerirá REVISIÓN MANUAL por RRHH.`;
+      const notaCopiaTurno = (typeof turnoProgramadoGlobal!=='undefined' && turnoProgramadoGlobal && turnoProgramadoGlobal._origenCache) ? ' Tu turno se tomó de la copia guardada en este teléfono.' : '';
+      divResultado.innerText = `✅ Fichada de ${tipo} registrada sin conexión.${notaCopiaTurno} Se sincronizará automáticamente al recuperar internet y quedará pendiente de verificación por RRHH.`;
 
       limpiarFormularioExitoso();
       finalizarSesionTrasFichada();
+      // Si en este momento hay conexion (fallo puntual del Worker/RTDB), se intenta
+      // subir de inmediato por el lote firmado; si estamos offline, quedara para el
+      // evento 'online'. Solo actua sobre fichadas creadas offline.
+      if (navigator.onLine) sincronizarLoteOffline();
     }
 
     // Tras una fichada exitosa: en modo COMPARTIDO se cierra la sesion (para
@@ -1354,8 +1803,13 @@
       let pendientes = JSON.parse(localStorage.getItem('fichadas_pendientes') || '[]');
       if (pendientes.length === 0) return;
 
-      const idx = pendientes.findIndex(f => f && mismoLegajo(f.legajo, legajoSesion));
-      if (idx === -1) return; // ninguna pendiente es del vigilador logueado
+      // Reparto de responsabilidades (Fase 2): si el dispositivo esta provisionado,
+      // las fichadas creadas OFFLINE se suben por la via firmada (sincronizarLoteOffline),
+      // no por aqui. Sin dispositivo provisionado, esta sync (con sesion activa) sigue
+      // siendo el respaldo para no perderlas.
+      const hayDispositivo = !!obtenerCredencialDispositivo();
+      const idx = pendientes.findIndex(f => f && mismoLegajo(f.legajo, legajoSesion) && !(hayDispositivo && (f.creadaOffline === true || f.origenOffline === true)));
+      if (idx === -1) return; // ninguna pendiente corresponde a esta via
 
       estaSincronizando = true;
       let datos = pendientes.splice(idx, 1)[0];
@@ -1380,8 +1834,23 @@
       })
       .then(async res => {
         const cuerpo = await res.json().catch(() => null);
+        // Rechazo de VALIDACION (no de red): la fichada es invalida (fuera de radio,
+        // objetivo no autorizado, datos incompletos). No puede sincronizar nunca; se
+        // retira de la cola y se ARCHIVA como rechazada para auditoria (NO se descarta
+        // en silencio ni se reintenta en bucle).
+        if (res.status === 403 || res.status === 422 || (cuerpo && cuerpo.bloqueado)) {
+          const rechazadas = JSON.parse(localStorage.getItem('fichadas_rechazadas') || '[]');
+          rechazadas.push(Object.assign({}, datos, {
+            motivoRechazo: (cuerpo && (cuerpo.error || cuerpo.motivo)) || 'validacion del servidor fallida',
+            distanciaMetros: (cuerpo && cuerpo.distanciaMetros != null) ? cuerpo.distanciaMetros : null,
+            rechazadaEn: new Date().toISOString()
+          }));
+          localStorage.setItem('fichadas_rechazadas', JSON.stringify(rechazadas));
+          console.warn("⛔ Fichada pendiente RECHAZADA por el servidor y archivada:", (cuerpo && cuerpo.error));
+          return { _rechazada: true };
+        }
         // Solo se da por sincronizada si el Worker confirma ok:true (creada o
-        // duplicada idempotente). Cualquier rechazo la devuelve a la cola.
+        // duplicada idempotente). Cualquier otro estado (red/5xx) la devuelve a la cola.
         if (!res.ok || !cuerpo || !cuerpo.ok) {
           throw new Error((cuerpo && cuerpo.error) || ('El servidor rechazo la fichada pendiente (HTTP ' + res.status + ').'));
         }
@@ -1412,4 +1881,5 @@ document.addEventListener("DOMContentLoaded", function(){
   b=document.getElementById("btnCapturar"); if(b) b.addEventListener("click", function(){ capturarFoto(); });
   b=document.getElementById("btnEntrada"); if(b) b.addEventListener("click", function(){ procesarEnvio("ENTRADA"); });
   b=document.getElementById("btnSalida"); if(b) b.addEventListener("click", function(){ procesarEnvio("SALIDA"); });
+  b=document.getElementById("btnVincular"); if(b) b.addEventListener("click", function(){ vincularDispositivo(); });
 });
