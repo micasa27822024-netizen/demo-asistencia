@@ -199,7 +199,12 @@ async function cargarDatos() {
           item.objetivo,
           item.tipo,
           item.mapa || item.urlMapa || `https://www.google.com/maps?q=${item.latitud},${item.longitud}`,
-          item.foto || item.urlFoto || item.fotoBase64 || ''
+          item.foto || item.urlFoto || item.fotoBase64 || '',
+          // [7] Fichada registrada SIN CONEXIÓN: la hora proviene del dispositivo y
+          //     NO fue sellada por el servidor. [8] Además sigue pendiente de que
+          //     un administrador la verifique manualmente.
+          (item.origenOffline === true || item.sincronizadoDesdeOffline === true || item.horaVerificadaServidor === false),
+          ((item.origenOffline === true || item.sincronizadoDesdeOffline === true || item.horaVerificadaServidor === false) && item.verificacionOfflineResuelta !== true)
         ];
         fichadasArray.push(arrayItem);
         firebaseKeysMap[claveFichada(arrayItem)] = key;
@@ -443,6 +448,13 @@ function renderizarTabla(registros) {
     const tipo = fila[4] || '-';
     const urlMapa = fila[5] || '';
     const urlFoto = fila[6] || '';
+    // Marca de fichada offline: la hora es del dispositivo (no sellada por el
+    // servidor). Si además sigue pendiente de verificación se resalta en ámbar.
+    const esOfflineFila = fila[7] === true;
+    const pendienteVerifFila = fila[8] === true;
+    const notaOfflineFila = esOfflineFila
+      ? `<div class="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${pendienteVerifFila ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' : 'bg-slate-500/15 text-slate-300 border border-slate-500/30'}" title="Fichada registrada sin conexión: la hora proviene del dispositivo y no fue sellada por el servidor${pendienteVerifFila ? '. Pendiente de verificación por un administrador.' : ' (ya verificada manualmente).'}"><i class="fa-solid fa-clock-rotate-left"></i> hora del dispositivo${pendienteVerifFila ? ' · pendiente de verificación' : ''}</div>`
+      : '';
 
     const badgeColor = tipo === 'ENTRADA' 
       ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
@@ -480,7 +492,7 @@ function renderizarTabla(registros) {
     const tr = document.createElement('tr');
     tr.className = "hover:bg-slate-700/30 transition";
     tr.innerHTML = `
-      <td class="p-4 font-mono text-xs text-slate-300">${fecha}</td>
+      <td class="p-4 font-mono text-xs text-slate-300">${fecha}${notaOfflineFila}</td>
       <td class="p-4 font-semibold text-white">${escaparHtml(legajo)}</td>
       <td class="p-4 font-medium text-slate-200">${escaparHtml(nombre)}</td>
       <td class="p-4 text-slate-400">${escaparHtml(objetivo)}</td>

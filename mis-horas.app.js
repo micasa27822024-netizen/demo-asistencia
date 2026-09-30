@@ -336,6 +336,11 @@ function renderPreviewVigilador(nombreEmpleado, misFichadas) {
     const fdt = new Date(ultima.fecha);
     const fechaFmt = isNaN(fdt.getTime()) ? String(ultima.fecha) : fdt.toLocaleString('es-AR');
     ultimaTxt = `${(ultima.tipo || 'FICHADA')} — ${fechaFmt}`;
+    if (ultima.esOffline === true) {
+      ultimaTxt += ultima.pendienteVerif === true
+        ? ' (hora del dispositivo · pendiente de verificación)'
+        : ' (hora del dispositivo)';
+    }
     proximaTxt = (String(ultima.tipo || '').toUpperCase() === 'ENTRADA') ? 'SALIDA' : 'ENTRADA';
   }
   cont.classList.remove('hidden');
@@ -420,7 +425,11 @@ async function buscarMisHoras() {
             fecha: (typeof f.timestampServidor === 'number' ? new Date(f.timestampServidor).toISOString() : (typeof f.timestamp === 'number' ? new Date(f.timestamp).toISOString() : (f.fechaHoraDispositivo || f.fecha))),
             legajo: f.legajo,
             objetivo: f.objetivo || 'Objetivo General',
-            tipo: String(f.tipo || "").toUpperCase()
+            tipo: String(f.tipo || "").toUpperCase(),
+            // Fichada registrada sin conexión: la hora es del dispositivo (no
+            // sellada por el servidor) y puede estar pendiente de verificación.
+            esOffline: (f.origenOffline === true || f.sincronizadoDesdeOffline === true || f.horaVerificadaServidor === false),
+            pendienteVerif: ((f.origenOffline === true || f.sincronizadoDesdeOffline === true || f.horaVerificadaServidor === false) && f.verificacionOfflineResuelta !== true)
           });
         }
       });
@@ -558,13 +567,21 @@ function procesarYRenderizar(marcacionesVigilador) {
       const fEntrada = parseFechaSegura(entrada.fecha);
       const fSalida = salida ? parseFechaSegura(salida.fecha) : null;
 
+      // Marca de fichada offline: la hora mostrada es del dispositivo (no sellada
+      // por el servidor). Se resalta en ámbar mientras esté pendiente de verificación.
+      const algunOffline = (entrada && entrada.esOffline === true) || (salida && salida.esOffline === true);
+      const algunPendiente = (entrada && entrada.pendienteVerif === true) || (salida && salida.pendienteVerif === true);
+      const notaOffline = algunOffline
+        ? `<div class="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${algunPendiente ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' : 'bg-slate-500/15 text-slate-300 border border-slate-500/30'}" title="Fichada registrada sin conexión: la hora proviene del dispositivo y no fue sellada por el servidor${algunPendiente ? '. Pendiente de verificación por un administrador.' : ' (ya verificada manualmente).'}"><i class="fa-solid fa-clock-rotate-left"></i> hora del dispositivo${algunPendiente ? ' · pendiente de verificación' : ''}</div>`
+        : '';
+
       const tr = document.createElement('tr');
       tr.className = "hover:bg-slate-700/30 transition";
       tr.innerHTML = `
         <td class="p-4 text-xs font-mono">${!isNaN(fEntrada.getTime()) ? fEntrada.toLocaleString('es-AR', { hour12: false }) : escapeHtml(entrada.fecha)}</td>
         <td class="p-4 text-xs font-mono">${salida ? (!isNaN(fSalida.getTime()) ? fSalida.toLocaleString('es-AR', { hour12: false }) : escapeHtml(salida.fecha)) : '<span class="text-amber-400">En Turno</span>'}</td>
         <td class="p-4 text-xs text-slate-300 font-medium">${escapeHtml(objetivoNombre)}
-          <div class="text-[10px] text-slate-500 mt-1">${horarioProgramado ? `Turno ${escapeHtml(horarioProgramado.inicio || '--:--')} - ${escapeHtml(horarioProgramado.fin || '--:--')} · ${escapeHtml(horarioProgramado.origen)}` : 'Sin horario configurado'}${horas.ajusteMinutos > 0 ? ` · ${horas.ajusteMinutos} min anticipados no computados` : ''}</div>
+          <div class="text-[10px] text-slate-500 mt-1">${horarioProgramado ? `Turno ${escapeHtml(horarioProgramado.inicio || '--:--')} - ${escapeHtml(horarioProgramado.fin || '--:--')} · ${escapeHtml(horarioProgramado.origen)}` : 'Sin horario configurado'}${horas.ajusteMinutos > 0 ? ` · ${horas.ajusteMinutos} min anticipados no computados` : ''}</div>${notaOffline}
         </td>
         <td class="p-4 text-center text-xs font-semibold text-amber-400">${formatearAHorasReloj(horas.d)}</td>
         <td class="p-4 text-center text-xs font-semibold text-indigo-400">${formatearAHorasReloj(horas.n)}</td>
