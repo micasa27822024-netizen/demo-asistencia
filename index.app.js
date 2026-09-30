@@ -1074,6 +1074,12 @@
         if (dataFichadas) {
           Object.values(dataFichadas).forEach(f => {
             if (mismoLegajo(f.legajo, legajoInput)) {
+              // Fichada ANULADA/DESAPROBADA por el administrador: se conserva en la
+              // base como evidencia (marca 'anulada' o estado 'ANULADA'), pero NO
+              // debe contar como el ultimo estado valido del vigilador. Si no la
+              // descartamos, una ENTRADA anulada seguiria habilitando una SALIDA.
+              const estadoF = String(f.estado || '').trim().toUpperCase();
+              if (f.anulada === true || estadoF === 'ANULADA' || estadoF === 'DESAPROBADA') return;
               // Hora OFICIAL para determinar la ultima fichada (ENTRADA/SALIDA): sello del
               // servidor Firebase unificado (timestampServidor, .sv=timestamp, NO manipulable)
               // primero; 'timestamp' queda como compat de fichadas antiguas y el reloj del
