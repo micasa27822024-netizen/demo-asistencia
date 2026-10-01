@@ -741,25 +741,66 @@ function dispararAlertaPanico() {
         return;
       }
 
-      // Token fresco antes de disparar la alerta (evita rechazo por token vencido).
-      const urlPanico = await urlAuthFresca(`${URL_FIREBASE}/panicos.json`);
-      fetch(urlPanico, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payloadPanico)
-      })
-      .then(res => res.json())
-      .then(() => {
+      // ENVÍO ONLINE con validación REAL de la respuesta del servidor.
+      // Antes se informaba "ENVIADA" apenas respondía el servidor, sin mirar
+      // el código HTTP: un rechazo (token vencido, reglas) se mostraba como
+      // éxito y la alerta se perdía en silencio. Ahora decidimos según el
+      // resultado real:
+      //   - 2xx + payload (data.name)  -> ÉXITO confirmado.
+      //   - 401 (token vencido)        -> refrescamos token y reintentamos 1 vez.
+      //   - 403 / 422 (rechazo reglas) -> NO se encola (reintentar daría lo mismo):
+      //                                    se avisa que la central NO la recibió.
+      //   - red / 5xx (caída temporal) -> se encola con el MISMO idEvento para
+      //                                    reintento automático (sin duplicar).
+      async function postPanicoUnaVez() {
+        const urlPanico = await urlAuthFresca(`${URL_FIREBASE}/panicos.json`);
+        return fetch(urlPanico, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payloadPanico)
+        });
+      }
+
+      try {
+        let res = await postPanicoUnaVez();
+
+        // 401: token vencido. Refrescamos (urlAuthFresca ya fuerza refresh)
+        // y reintentamos una sola vez.
+        if (res.status === 401) {
+          res = await postPanicoUnaVez();
+        }
+
+        if (res.ok) {
+          // Éxito confirmado: 2xx + payload del servidor (push-key en data.name).
+          const data = await res.json().catch(() => null);
+          if (data && data.name) {
+            if (payloadPanico.idEvento) eventosEnviados.add(payloadPanico.idEvento);
+            panicoEnEnvio = false;
+            alert("🚨 ¡ALERTA DE PÁNICO ENVIADA A LA CENTRAL. EL PERSONAL OPERATIVO HA SIDO NOTIFICADO!");
+          } else {
+            // 2xx pero sin payload esperado: lo tratamos como ambiguo y lo
+            // encolamos para reintento (no perdemos la alerta).
+            panicoEnEnvio = false;
+            encolarPanicoPendiente(payloadPanico);
+            alert("⚠️ La central respondió de forma incompleta. La alerta quedó guardada y se reintentará automáticamente.");
+          }
+        } else if (res.status === 403 || res.status === 422) {
+          // Rechazo definitivo (permisos / datos inválidos): reintentar daría
+          // el mismo resultado, por eso NO se encola. Se avisa con claridad.
+          panicoEnEnvio = false;
+          alert("❌ La central RECHAZÓ la alerta de pánico (sesión o permisos). NO fue registrada. Volvé a iniciar sesión e intentá de nuevo.");
+        } else {
+          // 5xx u otro error temporal del servidor: se encola para reintento.
+          panicoEnEnvio = false;
+          encolarPanicoPendiente(payloadPanico);
+          alert("⚠️ La central no pudo procesar la alerta en este momento. Quedó guardada y se reintentará automáticamente.");
+        }
+      } catch (error) {
+        // Caída de red: no se pierde la alerta, se encola con el mismo idEvento.
         panicoEnEnvio = false;
-        alert("🚨 ¡ALERTA DE PÁNICO ENVIADA A LA CENTRAL. EL PERSONAL OPERATIVO HA SIDO NOTIFICADO!");
-      })
-      .catch(error => {
-        panicoEnEnvio = false;
-        // Falló el envío (caída de red): en lugar de perder la alerta, la
-        // encolamos para reintento automático al volver la conexión.
         encolarPanicoPendiente(payloadPanico);
         alert("⚠️ No se pudo contactar a la central en este momento. La alerta quedó guardada y se reintentará automáticamente al recuperar la conexión.");
-      });
+      }
     },
     function(error) {
       alert("Error: Es obligatorio permitir el acceso al GPS para activar la alerta de pánico.");

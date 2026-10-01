@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- Blindaje CSP: solo se permiten los orígenes que la app realmente usa. -->
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' https://www.gstatic.com; style-src 'self' https://cdnjs.cloudflare.com; font-src 'self' data: https://cdnjs.cloudflare.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://*.googleapis.com https://www.gstatic.com https://nominatim.openstreetmap.org https://vigix-auth-admin.micasa27822024.workers.dev; worker-src 'self' blob:; manifest-src 'self'">
   <title>Demo Asistencia - Mi Historial de Horas y Marcaciones</title>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer">
@@ -17,7 +19,6 @@
     <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-4">
       <div class="flex items-center space-x-3">
         <div class="w-10 h-10 bg-slate-800 border border-emerald-500/30 rounded-xl flex items-center justify-center overflow-hidden shadow-inner p-1">
-          <img src="" alt="Logo VGA Security" class="w-full h-full object-contain">
         </div>
         <div>
           <span class="text-[10px] font-extrabold tracking-widest text-emerald-400 uppercase block">Demo Asistencia</span>
