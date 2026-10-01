@@ -383,13 +383,17 @@ window.onload = function() {
   // NO un flag editable en sessionStorage. Ver listener en el modulo Firebase.
 };
 
-// Genera un PIN aleatorio de 4 digitos para el alta de empleado con acceso.
+// Genera un PIN aleatorio de 6 digitos para el alta de empleado con acceso.
+// (Antes eran 4 digitos = 9000 combinaciones; ahora son 6 digitos reales =
+// 900000 combinaciones, segun recomendacion de la auditoria A5.)
 // Usa crypto.getRandomValues (CSPRNG) en vez de Math.random (no seguro,
 // predecible). Muestreo por rechazo para eliminar el sesgo por modulo:
 // se descartan los valores del tramo superior que no reparten parejo entre
-// los 9000 PIN posibles (1000-9999), asi cada PIN es equiprobable.
+// los 900000 PIN posibles (100000-999999), asi cada PIN es equiprobable.
+// Compatibilidad: el login completa el PIN a 6 con padStart(6,'0'), por lo que
+// los PIN viejos de 4 digitos (p.ej. 3456 -> 003456) siguen funcionando igual.
 function generarPinEmpleado() {
-  const RANGO = 9000; // 9999 - 1000 + 1
+  const RANGO = 900000; // 999999 - 100000 + 1
   const LIMITE = Math.floor(0x100000000 / RANGO) * RANGO; // umbral anti-sesgo
   const buf = new Uint32Array(1);
   let n;
@@ -397,7 +401,7 @@ function generarPinEmpleado() {
     crypto.getRandomValues(buf);
     n = buf[0];
   } while (n >= LIMITE);
-  const pin = String(1000 + (n % RANGO));
+  const pin = String(100000 + (n % RANGO));
   const inputPin = document.getElementById('altaPin');
   if (inputPin) inputPin.value = pin;
 }
