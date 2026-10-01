@@ -29,7 +29,17 @@ window.LICENCIA = {
   mostrarContador: true,
 
   // Mostrar el aviso emergente (ventanita) cuando falta poco (true/false).
-  avisoEmergente: true
+  avisoEmergente: true,
+
+  // TABLA DE ESTADOS DE COLOR segun los dias que faltan para vencer.
+  // Se recorre de arriba hacia abajo y se usa el PRIMER renglon que cumpla
+  // "dias restantes <= hastaDias". El ultimo (hastaDias: null) es el resto.
+  //   color = color del numero del contador | borde = color del borde de la barra
+  estadosColor: [
+    { hastaDias: 1,    etiqueta: "Critico (ultimo dia)", color: "#f87171", borde: "#7f1d1d" },
+    { hastaDias: 3,    etiqueta: "Alerta (por vencer)",  color: "#fbbf24", borde: "#78350f" },
+    { hastaDias: null, etiqueta: "Normal",               color: "#f8fafc", borde: "#334155" }
+  ]
 };
 
 /* ========================= LOGICA (no editar) ============================ */
@@ -124,8 +134,47 @@ window.LICENCIA = {
     box.appendChild(t1); box.appendChild(t2); box.appendChild(elReloj);
     (document.body || document.documentElement).appendChild(box);
     elContador = box;
+    layoutResponsive();
     actualizarContador();
     ajustarEspacio();
+    // Animacion suave de entrada: la barra baja desde arriba y aparece.
+    s.opacity = '0';
+    s.top = '-80px';
+    s.transition = 'top .45s ease, opacity .45s ease';
+    try {
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () { s.opacity = '1'; s.top = '0'; });
+      });
+    } catch (_) { s.opacity = '1'; s.top = '0'; }
+    // En pantallas chicas la altura puede cambiar al terminar de dibujarse
+    // (wrap a 2 renglones, carga de fuentes). Reajustamos cuando el navegador
+    // termina el layout y, por las dudas, un instante despues.
+    try { requestAnimationFrame(ajustarEspacio); } catch (_) {}
+    setTimeout(ajustarEspacio, 300);
+    // Si cambia la altura de la barra (ej: pasa a 2 lineas), reajustamos solos.
+    try {
+      if (window.ResizeObserver) {
+        var ro = new ResizeObserver(ajustarEspacio);
+        ro.observe(box);
+      }
+    } catch (_) {}
+  }
+
+  // Adapta la barra al ancho de la pantalla: en celular ocupa todo el ancho
+  // (texto mas compacto) y en pantallas grandes queda centrada tipo pastilla.
+  function layoutResponsive() {
+    if (!elContador) return;
+    var s = elContador.style;
+    var angosta = window.innerWidth < 560;
+    if (angosta) {
+      s.left = '0'; s.right = '0'; s.transform = 'none';
+      s.maxWidth = '100%'; s.borderRadius = '0 0 10px 10px';
+      s.padding = '5px 10px'; s.gap = '6px';
+    } else {
+      s.left = '50%'; s.right = 'auto'; s.transform = 'translateX(-50%)';
+      s.maxWidth = '100vw'; s.borderRadius = '0 0 12px 12px';
+      s.padding = '6px 16px'; s.gap = '10px';
+    }
   }
 
   // Empuja el contenido hacia abajo tanto como mida la barra, para que NUNCA
@@ -144,6 +193,21 @@ window.LICENCIA = {
     }
   }
 
+  // Elige el estado de color (de la tabla configurable) segun los dias restantes.
+  var ESTADOS_DEF = [
+    { hastaDias: 1,    color: '#f87171', borde: '#7f1d1d' },
+    { hastaDias: 3,    color: '#fbbf24', borde: '#78350f' },
+    { hastaDias: null, color: '#f8fafc', borde: '#334155' }
+  ];
+  function elegirEstado(d) {
+    var tabla = (L.estadosColor && L.estadosColor.length) ? L.estadosColor : ESTADOS_DEF;
+    for (var i = 0; i < tabla.length; i++) {
+      var e = tabla[i];
+      if (e.hastaDias == null || d <= e.hastaDias) return e;
+    }
+    return tabla[tabla.length - 1];
+  }
+
   function actualizarContador() {
     var falta = venceMs - ahora();
     if (falta <= 0) {
@@ -154,13 +218,9 @@ window.LICENCIA = {
     }
     if (elReloj) {
       elReloj.textContent = restanteTexto(falta);
-      var d = diasRestantes(ahora());
-      var col = (d <= 1) ? '#f87171' : (d <= (L.avisarDiasAntes || 0)) ? '#fbbf24' : '#f8fafc';
-      elReloj.style.color = col;
-      if (elContador) {
-        elContador.style.borderBottomColor = (d <= 1) ? '#7f1d1d'
-                                     : (d <= (L.avisarDiasAntes || 0)) ? '#78350f' : '#334155';
-      }
+      var est = elegirEstado(diasRestantes(ahora()));
+      elReloj.style.color = est.color || '#f8fafc';
+      if (elContador) elContador.style.borderBottomColor = est.borde || '#334155';
     }
   }
 
@@ -192,10 +252,21 @@ window.LICENCIA = {
 
     var card = document.createElement('div');
     var c = card.style;
+    c.position = 'relative';
     c.maxWidth = '400px'; c.width = '100%'; c.textAlign = 'center';
     c.background = '#0f172a'; c.border = '1px solid #78350f';
     c.borderRadius = '18px'; c.padding = '28px 24px';
     c.boxShadow = '0 20px 60px rgba(0,0,0,0.6)'; c.color = '#e2e8f0';
+
+    // Boton de cierre manual (X) arriba a la derecha.
+    var cerrar = document.createElement('span');
+    cerrar.textContent = '\u2715';
+    var xs = cerrar.style;
+    xs.position = 'absolute'; xs.top = '12px'; xs.right = '14px';
+    xs.cursor = 'pointer'; xs.fontSize = '16px'; xs.fontWeight = '700';
+    xs.color = '#94a3b8'; xs.lineHeight = '1'; xs.padding = '4px';
+    cerrar.setAttribute('aria-label', 'Cerrar');
+    cerrar.addEventListener('click', function () { ov.remove(); });
 
     var icono = document.createElement('div');
     icono.textContent = '\u23F3';
@@ -219,6 +290,7 @@ window.LICENCIA = {
     btn.setAttribute('data-licencia-ok', '1'); // que no lo deshabilite el modo solo-lectura
     btn.addEventListener('click', function () { ov.remove(); });
 
+    card.appendChild(cerrar);
     card.appendChild(icono); card.appendChild(titulo);
     card.appendChild(txt); card.appendChild(btn);
     ov.appendChild(card);
@@ -328,9 +400,14 @@ window.LICENCIA = {
     crearContador();
     tick = setInterval(actualizarContador, 1000);
     evaluarAvisos();
-    // Reajustar el espacio si cambia el tamano de la ventana (la barra puede
-    // ocupar una o dos lineas segun el ancho).
-    window.addEventListener('resize', ajustarEspacio);
+    // Reajustar el espacio y el ancho cuando cambia el tamano o la orientacion
+    // de la pantalla (clave en celulares: girar el telefono, barra a 2 lineas).
+    function reacomodar() { layoutResponsive(); ajustarEspacio(); }
+    window.addEventListener('resize', reacomodar);
+    window.addEventListener('orientationchange', function () {
+      reacomodar(); setTimeout(reacomodar, 300);
+    });
+    window.addEventListener('load', reacomodar);
     // Confirmacion con la hora del servidor (atrapa relojes cambiados a mano).
     horaServidor().then(function (hs) {
       if (hs) {
