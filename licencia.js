@@ -85,28 +85,31 @@ window.LICENCIA = {
     var box = document.createElement('div');
     box.id = 'licenciaContador';
     var s = box.style;
-    s.position = 'fixed'; s.right = '12px'; s.bottom = '12px';
+    // Barra fija centrada en la parte SUPERIOR de la pantalla.
+    s.position = 'fixed'; s.top = '8px'; s.left = '50%';
+    s.transform = 'translateX(-50%)';
     s.zIndex = '2147483645';
+    s.display = 'flex'; s.alignItems = 'center'; s.gap = '10px';
+    s.flexWrap = 'wrap'; s.justifyContent = 'center'; s.maxWidth = '94vw';
     s.background = 'rgba(15,23,42,0.95)';
-    s.border = '1px solid #334155'; s.borderRadius = '12px';
-    s.padding = '8px 12px'; s.minWidth = '150px';
+    s.border = '1px solid #334155'; s.borderRadius = '999px';
+    s.padding = '6px 14px';
     s.boxShadow = '0 8px 24px rgba(0,0,0,0.45)';
     s.font = '600 11px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
-    s.color = '#cbd5e1'; s.textAlign = 'center'; s.pointerEvents = 'none';
-    s.lineHeight = '1.35';
+    s.color = '#cbd5e1'; s.pointerEvents = 'none'; s.lineHeight = '1';
 
-    var t1 = document.createElement('div');
+    var t1 = document.createElement('span');
     t1.textContent = 'VERSION DE PRUEBA';
     t1.style.fontSize = '9px'; t1.style.letterSpacing = '1px';
     t1.style.color = '#34d399'; t1.style.fontWeight = '700';
 
-    var t2 = document.createElement('div');
-    t2.textContent = 'Vence: ' + fechaLegible(venceMs);
-    t2.style.color = '#94a3b8'; t2.style.marginTop = '2px';
+    var t2 = document.createElement('span');
+    t2.textContent = 'Vence ' + fechaLegible(venceMs);
+    t2.style.color = '#94a3b8';
 
-    elReloj = document.createElement('div');
-    elReloj.style.fontSize = '16px'; elReloj.style.fontWeight = '800';
-    elReloj.style.marginTop = '3px'; elReloj.style.color = '#f8fafc';
+    elReloj = document.createElement('span');
+    elReloj.style.fontSize = '14px'; elReloj.style.fontWeight = '800';
+    elReloj.style.color = '#f8fafc';
     elReloj.style.fontVariantNumeric = 'tabular-nums';
 
     box.appendChild(t1); box.appendChild(t2); box.appendChild(elReloj);
