@@ -39,7 +39,13 @@ window.LICENCIA = {
     { hastaDias: 1,    etiqueta: "Critico (ultimo dia)", color: "#f87171", borde: "#7f1d1d" },
     { hastaDias: 3,    etiqueta: "Alerta (por vencer)",  color: "#fbbf24", borde: "#78350f" },
     { hastaDias: null, etiqueta: "Normal",               color: "#f8fafc", borde: "#334155" }
-  ]
+  ],
+
+  // Guardar en el navegador un registro (log) de los eventos del aviso:
+  // cuando se mostro y cuando se cerro (y con que boton). true/false.
+  logs: true,
+  // Cuantos eventos como maximo se conservan (los mas nuevos pisan a los viejos).
+  logMax: 200
 };
 
 /* ========================= LOGICA (no editar) ============================ */
@@ -92,6 +98,53 @@ window.LICENCIA = {
     return cab + ' Para seguir utilizando los servicios de ' + MARCA +
            ', comunicate con nuestros representantes.';
   }
+
+  // ===================== SISTEMA DE LOGS DEL AVISO =====================
+  // Guarda en el navegador (localStorage) un registro de los eventos del aviso
+  // de licencia: cuando se mostro y cuando se cerro (con la X o con "Entendido").
+  // No se envia nada a ningun servidor; queda en el dispositivo. Para verlo o
+  // vaciarlo desde la consola del navegador (F12):
+  //    LicenciaLogs.ver()      -> muestra la tabla de eventos
+  //    LicenciaLogs.exportar() -> devuelve el texto JSON para copiar/guardar
+  //    LicenciaLogs.limpiar()  -> borra el registro
+  var LOG_KEY = 'licenciaLogs';
+
+  function leerLogs() {
+    try { return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); }
+    catch (_) { return []; }
+  }
+  function registrarLog(evento, extra) {
+    if (L.logs === false) return;
+    try {
+      var lista = leerLogs();
+      var reg = {
+        fecha: new Date(ahora()).toISOString(),
+        evento: evento,
+        pagina: location.pathname.split('/').pop() || location.pathname,
+        diasRestantes: diasRestantes(ahora())
+      };
+      if (extra) for (var k in extra) { if (extra.hasOwnProperty(k)) reg[k] = extra[k]; }
+      lista.push(reg);
+      var max = L.logMax || 200;
+      if (lista.length > max) lista = lista.slice(lista.length - max);
+      localStorage.setItem(LOG_KEY, JSON.stringify(lista));
+      if (window.console && console.log) console.log('[Licencia][log]', reg);
+    } catch (_) {}
+  }
+
+  // API publica para consultar los logs desde la consola del navegador.
+  window.LicenciaLogs = {
+    ver: function () {
+      var lista = leerLogs();
+      try { if (console.table) console.table(lista); else console.log(lista); } catch (_) {}
+      return lista;
+    },
+    exportar: function () { return JSON.stringify(leerLogs(), null, 2); },
+    limpiar: function () {
+      try { localStorage.removeItem(LOG_KEY); } catch (_) {}
+      return true;
+    }
+  };
 
   // ===================== CONTADOR SIEMPRE VISIBLE (ARRIBA) =====================
   var elContador = null, elReloj = null, tick = null;
@@ -266,7 +319,10 @@ window.LICENCIA = {
     xs.cursor = 'pointer'; xs.fontSize = '16px'; xs.fontWeight = '700';
     xs.color = '#94a3b8'; xs.lineHeight = '1'; xs.padding = '4px';
     cerrar.setAttribute('aria-label', 'Cerrar');
-    cerrar.addEventListener('click', function () { ov.remove(); });
+    cerrar.addEventListener('click', function () {
+      registrarLog('aviso_cerrado', { metodo: 'x' });
+      ov.remove();
+    });
 
     var icono = document.createElement('div');
     icono.textContent = '\u23F3';
@@ -288,13 +344,17 @@ window.LICENCIA = {
     bs.borderRadius = '10px'; bs.background = '#059669'; bs.color = '#fff';
     bs.fontWeight = '700'; bs.fontSize = '14px'; bs.cursor = 'pointer';
     btn.setAttribute('data-licencia-ok', '1'); // que no lo deshabilite el modo solo-lectura
-    btn.addEventListener('click', function () { ov.remove(); });
+    btn.addEventListener('click', function () {
+      registrarLog('aviso_cerrado', { metodo: 'boton_entendido' });
+      ov.remove();
+    });
 
     card.appendChild(cerrar);
     card.appendChild(icono); card.appendChild(titulo);
     card.appendChild(txt); card.appendChild(btn);
     ov.appendChild(card);
     (document.body || document.documentElement).appendChild(ov);
+    registrarLog('aviso_mostrado', { dias: dias });
   }
 
   // ---- Cartel de bloqueo (pantalla completa) ----
