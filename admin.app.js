@@ -701,9 +701,9 @@ async function cargarDispositivos() {
         <td class="px-3 py-3 text-slate-300">${legajos}</td>
         <td class="px-3 py-3 font-mono text-[11px] text-slate-500 break-all">${id}</td>
         <td class="px-3 py-3 text-right whitespace-nowrap">
-          <button type="button" onclick='toggleDispositivo(${idJs}, ${d.activo ? 'false' : 'true'})' class="text-xs font-semibold text-sky-400 hover:text-sky-300 px-2 py-1"><i class="fa-solid ${toggleIcon}"></i> ${toggleTxt}</button>
-          <button type="button" onclick='rotarSecretoDispositivo(${idJs})' class="text-xs font-semibold text-amber-400 hover:text-amber-300 px-2 py-1"><i class="fa-solid fa-key"></i> Rotar secreto</button>
-          <button type="button" onclick='eliminarDispositivo(${idJs})' class="text-xs font-semibold text-rose-400 hover:text-rose-300 px-2 py-1"><i class="fa-solid fa-trash"></i> Eliminar</button>
+          <button type="button" data-accion="toggleDispositivo" data-a1="${escaparHtml(d.deviceId)}" data-a2="${d.activo ? 'false' : 'true'}" class="text-xs font-semibold text-sky-400 hover:text-sky-300 px-2 py-1"><i class="fa-solid ${toggleIcon}"></i> ${toggleTxt}</button>
+          <button type="button" data-accion="rotarSecretoDispositivo" data-a1="${escaparHtml(d.deviceId)}" class="text-xs font-semibold text-amber-400 hover:text-amber-300 px-2 py-1"><i class="fa-solid fa-key"></i> Rotar secreto</button>
+          <button type="button" data-accion="eliminarDispositivo" data-a1="${escaparHtml(d.deviceId)}" class="text-xs font-semibold text-rose-400 hover:text-rose-300 px-2 py-1"><i class="fa-solid fa-trash"></i> Eliminar</button>
         </td>
       </tr>`;
     }).join('');
@@ -712,6 +712,38 @@ async function cargarDispositivos() {
   }
 }
 window.cargarDispositivos = cargarDispositivos;
+
+// ─── DELEGACIÓN DE EVENTOS (reemplaza los onclick="" bloqueados por el CSP) ───
+// El Content-Security-Policy (script-src sin 'unsafe-inline') bloquea los
+// manejadores inline onclick="". En lugar de debilitar el CSP, los botones
+// generados dinámicamente llevan data-accion + data-a1/data-a2, y este ÚNICO
+// listener global despacha cada click al handler correcto. La seguridad del
+// CSP queda intacta (sin 'unsafe-inline' ni 'unsafe-hashes').
+document.addEventListener('click', function (ev) {
+  const el = ev.target.closest('[data-accion]');
+  if (!el) return;
+  const accion = el.getAttribute('data-accion');
+  const a1 = el.getAttribute('data-a1');
+  const a2 = el.getAttribute('data-a2');
+  switch (accion) {
+    case 'toggleDispositivo': toggleDispositivo(a1, a2 === 'true'); break;
+    case 'rotarSecretoDispositivo': rotarSecretoDispositivo(a1); break;
+    case 'eliminarDispositivo': eliminarDispositivo(a1); break;
+    case 'abrirModalAuditoriaPorId': abrirModalAuditoriaPorId(a1); break;
+    case 'abrirModalAccionFraudePorId': abrirModalAccionFraudePorId(a1); break;
+    case 'abrirFoto': abrirFoto(a1); break;
+    case 'eliminarPanico': eliminarPanico(a1); break;
+    case 'cambiarEstadoPersonal': cambiarEstadoPersonal(a1, a2 === 'true'); break;
+    case 'abrirModalEditar': abrirModalEditar(a1); break;
+    case 'abrirModalTurnosPersonal': abrirModalTurnosPersonal(a1); break;
+    case 'eliminarPersonal': eliminarPersonal(a1); break;
+    case 'editarAsignacionTurno': editarAsignacionTurno(a1); break;
+    case 'eliminarAsignacionTurno': eliminarAsignacionTurno(a1); break;
+    case 'seleccionarResultadoNominatim': seleccionarResultadoNominatim(a1, parseInt(a2, 10)); break;
+    case 'abrirModalEditarObjetivo': abrirModalEditarObjetivo(a1); break;
+    case 'eliminarObjetivo': eliminarObjetivo(a1); break;
+  }
+});
 
 // Convierte {deviceId, secreto} en un codigo compacto para pegar en el dispositivo.
 function armarCodigoVinculacion(deviceId, secreto) {
@@ -1164,15 +1196,15 @@ function renderizarTablaMarcaciones(registros) {
     let badgeIA = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"><i class="fa-solid fa-circle-check"></i> OK</span>`;
     
     if (esFraudeReal) {
-      badgeIA = `<button onclick='abrirModalAuditoriaPorId("${firebaseId}")' class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-extrabold bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse hover:bg-rose-500/30 transition shadow-lg cursor-pointer">
+      badgeIA = `<button data-accion="abrirModalAuditoriaPorId" data-a1="${firebaseId}" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-extrabold bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse hover:bg-rose-500/30 transition shadow-lg cursor-pointer">
                   <i class="fa-solid fa-triangle-exclamation"></i> SOSPECHA DE FRAUDE
                  </button>`;
     } else if (esOfflinePendiente) {
-      badgeIA = `<button onclick='abrirModalAccionFraudePorId("${firebaseId}")' class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-amber-500/15 text-amber-300 border border-amber-500/40 hover:bg-amber-500/25 transition cursor-pointer">
+      badgeIA = `<button data-accion="abrirModalAccionFraudePorId" data-a1="${firebaseId}" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-amber-500/15 text-amber-300 border border-amber-500/40 hover:bg-amber-500/25 transition cursor-pointer">
                   <i class="fa-regular fa-clock"></i> Pendiente de verificación
                  </button>`;
     } else if (distanciaEuclidiana !== null) {
-      badgeIA = `<button onclick='abrirModalAuditoriaPorId("${firebaseId}")' class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-700/60 text-slate-300 hover:bg-slate-700 border border-slate-600 transition">
+      badgeIA = `<button data-accion="abrirModalAuditoriaPorId" data-a1="${firebaseId}" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-700/60 text-slate-300 hover:bg-slate-700 border border-slate-600 transition">
                   <i class="fa-solid fa-brain text-emerald-400"></i> Verificado (d: ${distanciaEuclidiana.toFixed(2)})
                  </button>`;
     }
@@ -1184,18 +1216,18 @@ function renderizarTablaMarcaciones(registros) {
       : `<span class="text-xs text-slate-500">Sin GPS</span>`;
 
     const btnFoto = (urlFoto && urlFoto.length > 50)
-      ? `<button onclick="abrirFoto('${escaparHtml(urlFoto)}')" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
+      ? `<button data-accion="abrirFoto" data-a1="${escaparHtml(urlFoto)}" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
           <i class="fa-solid fa-image"></i> Foto
          </button>`
       : `<span class="text-xs text-slate-500">Sin Foto</span>`;
 
     let btnAccionFraude = '';
     if (esFraudeReal) {
-      btnAccionFraude = `<button onclick='abrirModalAccionFraudePorId("${firebaseId}")' class="inline-flex items-center gap-1 bg-rose-600 hover:bg-rose-500 text-white font-bold px-2.5 py-1 rounded-lg text-xs transition shadow-md">
+      btnAccionFraude = `<button data-accion="abrirModalAccionFraudePorId" data-a1="${firebaseId}" class="inline-flex items-center gap-1 bg-rose-600 hover:bg-rose-500 text-white font-bold px-2.5 py-1 rounded-lg text-xs transition shadow-md">
                           <i class="fa-solid fa-shield-cat"></i> 🚨 Resolver Fraude
                          </button>`;
     } else if (esOfflinePendiente) {
-      btnAccionFraude = `<button onclick='abrirModalAccionFraudePorId("${firebaseId}")' class="inline-flex items-center gap-1 bg-amber-600 hover:bg-amber-500 text-white font-bold px-2.5 py-1 rounded-lg text-xs transition shadow-md">
+      btnAccionFraude = `<button data-accion="abrirModalAccionFraudePorId" data-a1="${firebaseId}" class="inline-flex items-center gap-1 bg-amber-600 hover:bg-amber-500 text-white font-bold px-2.5 py-1 rounded-lg text-xs transition shadow-md">
                           <i class="fa-solid fa-clipboard-check"></i> Revisar fichada
                          </button>`;
     }
@@ -1502,7 +1534,7 @@ function renderizarTablaNovedades(registros) {
       : `<span class="text-xs text-slate-500">Sin GPS</span>`;
 
     const btnFoto = (urlFoto && urlFoto.length > 50)
-      ? `<button onclick="abrirFoto('${escaparHtml(urlFoto)}')" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
+      ? `<button data-accion="abrirFoto" data-a1="${escaparHtml(urlFoto)}" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition">
           <i class="fa-solid fa-image"></i> Foto
          </button>`
       : `<span class="text-xs text-slate-500">Sin Foto</span>`;
@@ -1577,7 +1609,7 @@ function renderizarTablaPanicos(registros) {
       </td>
       <td class="p-4 text-center">${btnMapa}</td>
       <td class="p-4 text-center">
-        <button onclick="eliminarPanico('${id}')" class="bg-rose-600/20 text-rose-400 hover:bg-rose-600/40 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1">
+        <button data-accion="eliminarPanico" data-a1="${escaparHtml(id)}" class="bg-rose-600/20 text-rose-400 hover:bg-rose-600/40 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1">
           <i class="fa-solid fa-ban"></i> Anular
         </button>
       </td>
@@ -1647,13 +1679,13 @@ function renderizarTablaPersonal(registros) {
     const horarioTexto = h.inicio && h.fin ? `${h.inicio} - ${h.fin}` : 'Sin horario habitual';
     const objetivosTexto = objetivos.length ? `${objetivos.length} autorizado(s)` : 'Sin objetivos asignados';
     const btnFotoMaster = (fotoMaster && fotoMaster.length > 50)
-      ? `<button onclick="abrirFoto('${escaparHtml(fotoMaster)}')" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition"><i class="fa-solid fa-id-card"></i> Ver Foto</button>`
+      ? `<button data-accion="abrirFoto" data-a1="${escaparHtml(fotoMaster)}" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition"><i class="fa-solid fa-id-card"></i> Ver Foto</button>`
       : `<span class="text-xs text-slate-500">Sin Foto</span>`;
     const esActivoVig = String(estadoStr).trim().toUpperCase() === 'ACTIVO';
     const claseEstadoVig = esActivoVig ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/15 text-rose-400 border border-rose-500/40';
     const btnEstadoVig = esActivoVig
-      ? `<button onclick="cambiarEstadoPersonal('${escaparHtml(firebaseId)}', true)" class="bg-orange-600/20 text-orange-400 hover:bg-orange-600/40 border border-orange-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1"><i class="fa-solid fa-user-slash"></i> Dar de baja</button>`
-      : `<button onclick="cambiarEstadoPersonal('${escaparHtml(firebaseId)}', false)" class="bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/40 border border-emerald-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1"><i class="fa-solid fa-user-check"></i> Reactivar</button>`;
+      ? `<button data-accion="cambiarEstadoPersonal" data-a1="${escaparHtml(firebaseId)}" data-a2="true" class="bg-orange-600/20 text-orange-400 hover:bg-orange-600/40 border border-orange-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1"><i class="fa-solid fa-user-slash"></i> Dar de baja</button>`
+      : `<button data-accion="cambiarEstadoPersonal" data-a1="${escaparHtml(firebaseId)}" data-a2="false" class="bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/40 border border-emerald-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1"><i class="fa-solid fa-user-check"></i> Reactivar</button>`;
     const tr = document.createElement('tr');
     tr.className = "hover:bg-slate-700/30 transition";
     tr.innerHTML = `
@@ -1663,10 +1695,10 @@ function renderizarTablaPersonal(registros) {
       <td class="p-4 text-center">${btnFotoMaster}</td>
       <td class="p-4 text-center"><span class="${claseEstadoVig} px-2 py-1 rounded text-xs">${escaparHtml(estadoStr)}</span></td>
       <td class="p-4 text-center"><div class="flex flex-wrap justify-center gap-2">
-        <button onclick="abrirModalEditar('${escaparHtml(firebaseId)}')" class="bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1"><i class="fa-solid fa-sliders"></i> Configurar</button>
-        <button onclick="abrirModalTurnosPersonal('${escaparHtml(firebaseId)}')" class="bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1"><i class="fa-solid fa-calendar-days"></i> Turnos</button>
+        <button data-accion="abrirModalEditar" data-a1="${escaparHtml(firebaseId)}" class="bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1"><i class="fa-solid fa-sliders"></i> Configurar</button>
+        <button data-accion="abrirModalTurnosPersonal" data-a1="${escaparHtml(firebaseId)}" class="bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1"><i class="fa-solid fa-calendar-days"></i> Turnos</button>
         ${btnEstadoVig}
-        <button onclick="eliminarPersonal('${escaparHtml(firebaseId)}')" class="bg-rose-600/20 text-rose-400 hover:bg-rose-600/40 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1"><i class="fa-solid fa-trash"></i> Eliminar</button>
+        <button data-accion="eliminarPersonal" data-a1="${escaparHtml(firebaseId)}" class="bg-rose-600/20 text-rose-400 hover:bg-rose-600/40 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1"><i class="fa-solid fa-trash"></i> Eliminar</button>
       </div></td>`;
     cuerpo.appendChild(tr);
   });
@@ -2093,7 +2125,7 @@ async function cargarAsignacionesTurnoPersonal() {
     if (!asignacionesTurnosAdmin.length) { cuerpo.innerHTML = '<tr><td colspan="5" class="p-6 text-center text-slate-500">No hay cambios de turno registrados.</td></tr>'; return; }
     asignacionesTurnosAdmin.forEach(t => {
       const tr=document.createElement('tr'); tr.className='border-t border-slate-800';
-      tr.innerHTML=`<td class="p-3 text-slate-200">${escaparHtml(t.fecha||'')}</td><td class="p-3 text-slate-200">${escaparHtml(t.objetivoNombre||t.objetivo||'')}</td><td class="p-3 font-mono text-emerald-300">${escaparHtml(t.horaInicio||'')} - ${escaparHtml(t.horaFin||'')}</td><td class="p-3 text-slate-400">${escaparHtml(t.observacion||'')}</td><td class="p-3 text-center"><button onclick="editarAsignacionTurno('${escaparHtml(t.id)}')" class="text-amber-400 hover:text-amber-300 mr-3"><i class="fa-solid fa-pen"></i></button><button onclick="eliminarAsignacionTurno('${escaparHtml(t.id)}')" class="text-rose-400 hover:text-rose-300"><i class="fa-solid fa-trash"></i></button></td>`;
+      tr.innerHTML=`<td class="p-3 text-slate-200">${escaparHtml(t.fecha||'')}</td><td class="p-3 text-slate-200">${escaparHtml(t.objetivoNombre||t.objetivo||'')}</td><td class="p-3 font-mono text-emerald-300">${escaparHtml(t.horaInicio||'')} - ${escaparHtml(t.horaFin||'')}</td><td class="p-3 text-slate-400">${escaparHtml(t.observacion||'')}</td><td class="p-3 text-center"><button data-accion="editarAsignacionTurno" data-a1="${escaparHtml(t.id)}" class="text-amber-400 hover:text-amber-300 mr-3"><i class="fa-solid fa-pen"></i></button><button data-accion="eliminarAsignacionTurno" data-a1="${escaparHtml(t.id)}" class="text-rose-400 hover:text-rose-300"><i class="fa-solid fa-trash"></i></button></td>`;
       cuerpo.appendChild(tr);
     });
   } catch(e) { cuerpo.innerHTML='<tr><td colspan="5" class="p-6 text-center text-rose-400">No se pudieron cargar los turnos.</td></tr>'; }
@@ -2251,7 +2283,7 @@ function mostrarResultadosNominatim(modo, resultados) {
     <div class="bg-slate-950/60 border border-slate-700 rounded-xl p-3 space-y-2">
       <div class="text-xs text-slate-400 mb-2"><i class="fa-solid fa-list"></i> Seleccioná la dirección correcta:</div>
       ${resultados.map((r, i) => `
-        <button type="button" onclick="seleccionarResultadoNominatim('${modo}', ${i})" class="w-full text-left bg-slate-900 hover:bg-slate-700 border border-slate-700 hover:border-sky-500/50 rounded-xl p-3 transition">
+        <button type="button" data-accion="seleccionarResultadoNominatim" data-a1="${modo}" data-a2="${i}" class="w-full text-left bg-slate-900 hover:bg-slate-700 border border-slate-700 hover:border-sky-500/50 rounded-xl p-3 transition">
           <div class="text-sm font-semibold text-white">${escaparHtml(r.display_name || 'Ubicación encontrada')}</div>
           <div class="text-[11px] text-slate-500 mt-1 font-mono">${formatearCoordenada(r.lat)}, ${formatearCoordenada(r.lon)}</div>
         </button>
@@ -2432,8 +2464,8 @@ function renderizarTablaObjetivos(registros) {
       <td class="p-4 font-mono text-xs ${tieneGPS ? 'text-emerald-300' : 'text-rose-400'}">${tieneGPS ? `<a href="${mapaLink}" target="_blank" rel="noopener noreferrer" title="Abrir esta ubicación en Google Maps" class="hover:underline inline-flex items-center gap-1.5"><i class="fa-brands fa-google text-red-400"></i>${coordenadas}</a>` : coordenadas}</td>
       <td class="p-4 text-center"><span class="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded text-xs">${escaparHtml(estado)}</span></td>
       <td class="p-4 text-center whitespace-nowrap">
-        <button onclick="abrirModalEditarObjetivo('${escaparHtml(firebaseId)}')" class="bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1 mr-1"><i class="fa-solid fa-pen-to-square"></i> Editar</button>
-        <button onclick="eliminarObjetivo('${escaparHtml(firebaseId)}')" class="bg-rose-600/20 text-rose-400 hover:bg-rose-600/40 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1"><i class="fa-solid fa-trash"></i> Eliminar</button>
+        <button data-accion="abrirModalEditarObjetivo" data-a1="${escaparHtml(firebaseId)}" class="bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1 mr-1"><i class="fa-solid fa-pen-to-square"></i> Editar</button>
+        <button data-accion="eliminarObjetivo" data-a1="${escaparHtml(firebaseId)}" class="bg-rose-600/20 text-rose-400 hover:bg-rose-600/40 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1"><i class="fa-solid fa-trash"></i> Eliminar</button>
       </td>`;
     cuerpo.appendChild(tr);
   });
