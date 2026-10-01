@@ -21,11 +21,14 @@ window.LICENCIA = {
   //   "solo-lectura" -> deja ver, pero DESHABILITA todos los botones (no se puede fichar/guardar).
   modo: "bloquear",
 
-  // Cuantos dias antes del vencimiento empieza a mostrar un cartelito de aviso.
+  // Cuantos dias antes del vencimiento el contador se pone en color de alerta.
   avisarDiasAntes: 3,
 
   // Texto de contacto que se muestra cuando vence (telefono, mail, lo que quieras).
-  contacto: "Contactate con el proveedor para renovar el acceso."
+  contacto: "Contactate con el proveedor para renovar el acceso.",
+
+  // Mostrar el contador regresivo siempre visible (true) o no (false).
+  mostrarContador: true
 };
 
 /* ========================= LOGICA (no editar) ============================ */
@@ -36,26 +39,17 @@ window.LICENCIA = {
 
   var MS_DIA = 86400000;
   var bloqueado = false;
-  var avisoHecho = false;
 
-  function diasRestantes(ahora) {
-    return Math.ceil((venceMs - ahora) / MS_DIA);
-  }
+  // Desfase entre la hora del servidor y la del dispositivo (ms).
+  // Se fija una vez con el servidor y se usa para que el contador sea fiel
+  // aunque muevan el reloj del telefono/compu a mano.
+  var offsetServidorMs = 0;
 
-  // Evalua con una hora dada: si ya paso el vencimiento, aplica el bloqueo;
-  // si falta poco, muestra el aviso.
-  function evaluar(ahora) {
-    if (ahora >= venceMs) {
-      aplicarVencimiento();
-    } else {
-      var d = diasRestantes(ahora);
-      if (d <= (L.avisarDiasAntes || 0)) mostrarAviso(d);
-    }
-  }
+  function ahora() { return Date.now() + offsetServidorMs; }
+  function diasRestantes(t) { return Math.ceil((venceMs - t) / MS_DIA); }
 
-  // Hora oficial tomada del SERVIDOR (header Date de la respuesta HTTP).
-  // Es resistente a que cambien el reloj del telefono/compu. Si falla
-  // (sin conexion), devuelve null y se usa la hora local como respaldo.
+  // Hora oficial del SERVIDOR (header Date de la respuesta HTTP). Resistente a
+  // que cambien el reloj local. Si falla (sin conexion), devuelve null.
   function horaServidor() {
     return fetch(location.href, { method: 'HEAD', cache: 'no-store' })
       .then(function (r) {
@@ -64,6 +58,86 @@ window.LICENCIA = {
         return null;
       })
       .catch(function () { return null; });
+  }
+
+  // ---- Fecha legible: "16/10/2026 23:59" ----
+  function dos(n) { return (n < 10 ? '0' : '') + n; }
+  function fechaLegible(ms) {
+    var f = new Date(ms);
+    return dos(f.getDate()) + '/' + dos(f.getMonth() + 1) + '/' + f.getFullYear() +
+           ' ' + dos(f.getHours()) + ':' + dos(f.getMinutes());
+  }
+  // ---- Cuenta regresiva: "12d 05:30:21" ----
+  function restanteTexto(ms) {
+    if (ms < 0) ms = 0;
+    var seg = Math.floor(ms / 1000);
+    var d = Math.floor(seg / 86400); seg -= d * 86400;
+    var h = Math.floor(seg / 3600);  seg -= h * 3600;
+    var m = Math.floor(seg / 60);    seg -= m * 60;
+    return d + 'd ' + dos(h) + ':' + dos(m) + ':' + dos(seg);
+  }
+
+  // ===================== CONTADOR SIEMPRE VISIBLE =====================
+  var elContador = null, elReloj = null, tick = null;
+
+  function crearContador() {
+    if (!L.mostrarContador || document.getElementById('licenciaContador')) return;
+    var box = document.createElement('div');
+    box.id = 'licenciaContador';
+    var s = box.style;
+    s.position = 'fixed'; s.right = '12px'; s.bottom = '12px';
+    s.zIndex = '2147483645';
+    s.background = 'rgba(15,23,42,0.95)';
+    s.border = '1px solid #334155'; s.borderRadius = '12px';
+    s.padding = '8px 12px'; s.minWidth = '150px';
+    s.boxShadow = '0 8px 24px rgba(0,0,0,0.45)';
+    s.font = '600 11px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
+    s.color = '#cbd5e1'; s.textAlign = 'center'; s.pointerEvents = 'none';
+    s.lineHeight = '1.35';
+
+    var t1 = document.createElement('div');
+    t1.textContent = 'VERSION DE PRUEBA';
+    t1.style.fontSize = '9px'; t1.style.letterSpacing = '1px';
+    t1.style.color = '#34d399'; t1.style.fontWeight = '700';
+
+    var t2 = document.createElement('div');
+    t2.textContent = 'Vence: ' + fechaLegible(venceMs);
+    t2.style.color = '#94a3b8'; t2.style.marginTop = '2px';
+
+    elReloj = document.createElement('div');
+    elReloj.style.fontSize = '16px'; elReloj.style.fontWeight = '800';
+    elReloj.style.marginTop = '3px'; elReloj.style.color = '#f8fafc';
+    elReloj.style.fontVariantNumeric = 'tabular-nums';
+
+    box.appendChild(t1); box.appendChild(t2); box.appendChild(elReloj);
+    (document.body || document.documentElement).appendChild(box);
+    elContador = box;
+    actualizarContador();
+  }
+
+  function actualizarContador() {
+    var falta = venceMs - ahora();
+    if (falta <= 0) {
+      if (elReloj) elReloj.textContent = 'VENCIDA';
+      ocultarContador();
+      aplicarVencimiento();
+      return;
+    }
+    if (elReloj) {
+      elReloj.textContent = restanteTexto(falta);
+      var d = diasRestantes(ahora());
+      var col = (d <= 1) ? '#f87171' : (d <= (L.avisarDiasAntes || 0)) ? '#fbbf24' : '#f8fafc';
+      elReloj.style.color = col;
+      if (elContador) {
+        elContador.style.borderColor = (d <= 1) ? '#7f1d1d'
+                                     : (d <= (L.avisarDiasAntes || 0)) ? '#78350f' : '#334155';
+      }
+    }
+  }
+
+  function ocultarContador() {
+    if (tick) { clearInterval(tick); tick = null; }
+    if (elContador) { elContador.remove(); elContador = null; }
   }
 
   // ---- Cartel de bloqueo (pantalla completa) ----
@@ -87,7 +161,7 @@ window.LICENCIA = {
     c.boxShadow = '0 20px 60px rgba(0,0,0,0.6)'; c.color = '#e2e8f0';
 
     var icono = document.createElement('div');
-    icono.textContent = '\u23F0'; // reloj
+    icono.textContent = '\u23F0';
     icono.style.fontSize = '44px'; icono.style.marginBottom = '12px';
 
     var titulo = document.createElement('div');
@@ -116,8 +190,8 @@ window.LICENCIA = {
 
   // ---- Modo solo lectura: banner fijo + deshabilitar todos los botones ----
   function modoSoloLectura() {
-    bannerFijo('\u26A0 Prueba vencida \u2014 modo solo lectura. ' +
-               (L.contacto || ''), '#7f1d1d', '#fecaca');
+    bannerFijo('\u26A0 Prueba vencida \u2014 modo solo lectura. ' + (L.contacto || ''),
+               '#7f1d1d', '#fecaca');
     function desactivar() {
       var btns = document.querySelectorAll('button, input[type=submit], input[type=button]');
       for (var i = 0; i < btns.length; i++) {
@@ -138,22 +212,13 @@ window.LICENCIA = {
   function aplicarVencimiento() {
     if (bloqueado) return;
     bloqueado = true;
+    ocultarContador();
     if (L.modo === 'solo-lectura') modoSoloLectura();
     else modoBloqueo();
   }
 
-  // ---- Cartelito de aviso previo (no bloquea, se puede cerrar) ----
-  function mostrarAviso(dias) {
-    if (avisoHecho) return;
-    avisoHecho = true;
-    var txt = (dias <= 0)
-      ? 'La prueba vence hoy.'
-      : ('La prueba vence en ' + dias + (dias === 1 ? ' dia.' : ' dias.'));
-    bannerFijo('\u23F3 ' + txt + ' ' + (L.contacto || ''), '#78350f', '#fde68a', true);
-  }
-
-  // Crea un banner fijo arriba de todo. cerrable=true agrega una X.
-  function bannerFijo(mensaje, fondo, color, cerrable) {
+  // Crea un banner fijo arriba de todo.
+  function bannerFijo(mensaje, fondo, color) {
     if (document.getElementById('licenciaBanner')) return;
     var b = document.createElement('div');
     b.id = 'licenciaBanner';
@@ -162,29 +227,24 @@ window.LICENCIA = {
     s.zIndex = '2147483646';
     s.background = fondo; s.color = color;
     s.font = '600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
-    s.padding = '10px 44px 10px 16px'; s.textAlign = 'center';
+    s.padding = '10px 16px'; s.textAlign = 'center';
     s.boxShadow = '0 2px 10px rgba(0,0,0,0.4)';
     b.textContent = mensaje;
-    if (cerrable) {
-      var x = document.createElement('span');
-      x.textContent = '\u2715';
-      var xs = x.style;
-      xs.position = 'absolute'; xs.right = '14px'; xs.top = '50%';
-      xs.transform = 'translateY(-50%)'; xs.cursor = 'pointer';
-      xs.fontWeight = '700'; xs.opacity = '0.8';
-      x.addEventListener('click', function () { b.remove(); });
-      b.appendChild(x);
-    }
     (document.body || document.documentElement).appendChild(b);
   }
 
   // ---- Arranque ----
   function iniciar() {
-    // 1) Chequeo inmediato con la hora local (bloqueo instantaneo si ya vencio).
-    evaluar(Date.now());
-    // 2) Confirmacion con la hora del servidor (atrapa relojes atrasados a mano).
+    // 1) Chequeo inmediato con la hora local.
+    if (ahora() >= venceMs) { aplicarVencimiento(); return; }
+    crearContador();
+    tick = setInterval(actualizarContador, 1000);
+    // 2) Confirmacion con la hora del servidor (atrapa relojes cambiados a mano).
     horaServidor().then(function (hs) {
-      if (hs) evaluar(hs);
+      if (hs) {
+        offsetServidorMs = hs - Date.now();
+        actualizarContador();
+      }
     });
   }
 
