@@ -71,16 +71,17 @@ async function loginAdminReal(email, password) {
     // Un supervisor NO puede ingresar al panel completo de admin.
     if (rol !== 'admin') {
       try { await signOut(mainAuth); } catch (_) {}
-      // Diagnóstico temporal: mostramos el UID real para poder compararlo con la base
+      // SEGURIDAD: el mensaje de error NUNCA debe exponer el UID, el rol real
+      // leído ni rutas internas de la base (/usuarios/...). Esos datos no deben
+      // quedar a la vista ni como "referencia". Solo devolvemos un aviso
+      // genérico; para supervisores, una ayuda de "panel equivocado".
       let detalle;
       if (errorLectura) {
-        detalle = 'No se pudo leer /usuarios (las reglas bloquean la lectura): ' + errorLectura;
-      } else if (!existeNodo) {
-        detalle = 'No existe el nodo usuarios/' + uid + ' . Copiá EXACTO este UID en la base: ' + uid;
+        detalle = 'No se pudieron verificar tus permisos en este momento. Reintentá en unos segundos.';
       } else if (rol === 'supervisor') {
-        detalle = 'Tu usuario es de rol "supervisor" y este panel es exclusivo de administradores. No tenés acceso al panel de administración.';
+        detalle = 'Tu cuenta es de supervisor; este panel es exclusivo de administradores.';
       } else {
-        detalle = 'El nodo existe pero el rol leído fue "' + (rol === null ? '(vacío)' : rol) + '". Se requiere rol "admin". UID: ' + uid;
+        detalle = 'Esta cuenta no tiene permisos de administrador para ingresar a este panel.';
       }
       return { ok: false, mensaje: detalle };
     }
