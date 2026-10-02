@@ -427,7 +427,7 @@ async function buscarMisHoras() {
             // Se prioriza el sello de servidor unificado (timestampServidor, no
             // manipulable) y se convierte a texto ISO; 'timestamp' queda como compat
             // de fichadas antiguas y el reloj del dispositivo como fallback final.
-            fecha: (typeof f.timestampServidor === 'number' ? new Date(f.timestampServidor).toISOString() : (typeof f.timestamp === 'number' ? new Date(f.timestamp).toISOString() : (f.fechaHoraDispositivo || f.fecha))),
+            fecha: (typeof f.timestampServidor === 'number' ? new Date(f.timestampServidor).toISOString() : (typeof f.timestampEstimadoDispositivo === 'number' ? new Date(f.timestampEstimadoDispositivo).toISOString() : (typeof f.timestamp === 'number' ? new Date(f.timestamp).toISOString() : (f.fechaHoraDispositivo || f.fecha)))),
             legajo: f.legajo,
             objetivo: f.objetivo || 'Objetivo General',
             tipo: String(f.tipo || "").toUpperCase(),

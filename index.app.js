@@ -57,6 +57,7 @@
           // Hora OFICIAL: sello de servidor unificado (timestampServidor). Se mantiene
           // compatibilidad con fichadas antiguas que usaban 'timestamp' / 'timestampLocal'.
           let ts = (typeof f.timestampServidor === 'number') ? f.timestampServidor
+                 : (typeof f.timestampEstimadoDispositivo === 'number') ? f.timestampEstimadoDispositivo
                  : (typeof f.timestamp === 'number') ? f.timestamp
                  : (typeof f.timestampLocal === 'number' ? f.timestampLocal
                  : (f.fechaHoraDispositivo ? new Date(f.fechaHoraDispositivo).getTime() : 0));
@@ -1264,7 +1265,7 @@
               // servidor Firebase unificado (timestampServidor, .sv=timestamp, NO manipulable)
               // primero; 'timestamp' queda como compat de fichadas antiguas y el reloj del
               // dispositivo SOLO como fallback final.
-              const refTiempo = f.timestampServidor || f.timestamp || f.fechaHoraDispositivo;
+              const refTiempo = f.timestampServidor || f.timestampEstimadoDispositivo || f.timestamp || f.fechaHoraDispositivo;
               let tiempoFichada = refTiempo ? new Date(refTiempo).getTime() : 0;
               if (tiempoFichada >= timestampUltimo) {
                 timestampUltimo = tiempoFichada;

@@ -180,7 +180,7 @@ function activarModalPanico(id, datos) {
   document.getElementById('panicoNombre').innerText = datos.nombre || 'Vigilador No Especificado';
   document.getElementById('panicoDetalle').innerText = `Legajo: ${datos.legajo || '-'} | Objetivo: ${datos.objetivo || '-'}`;
   
-  const horaStr = datos.fechaHora ? new Date(datos.fechaHora).toLocaleString('es-AR', { hour12: false }) : ((datos.timestampServidor || datos.timestamp) ? new Date(datos.timestampServidor || datos.timestamp).toLocaleString('es-AR', { hour12: false }) : new Date().toLocaleString('es-AR', { hour12: false }));
+  const horaStr = datos.fechaHora ? new Date(datos.fechaHora).toLocaleString('es-AR', { hour12: false }) : ((datos.timestampServidor || datos.timestampEstimadoDispositivo || datos.timestamp) ? new Date(datos.timestampServidor || datos.timestampEstimadoDispositivo || datos.timestamp).toLocaleString('es-AR', { hour12: false }) : new Date().toLocaleString('es-AR', { hour12: false }));
   document.getElementById('panicoHora').innerText = `Activado a las: ${horaStr}`;
 
   const linkGps = document.getElementById('panicoMapaUrl');
@@ -1182,7 +1182,7 @@ async function recargarDatosEfectivo() {
           // manipulable) primero; 'timestamp' queda como compat de fichadas antiguas y el
           // reloj del dispositivo SOLO como fallback final para registros sin sello.
           // Evita que un telefono con la hora cambiada falsee llegada tarde / salida anticipada.
-          const fecha = d.timestampServidor || d.timestamp || d.fechaHoraDispositivo || '';
+          const fecha = d.timestampServidor || d.timestampEstimadoDispositivo || d.timestamp || d.fechaHoraDispositivo || '';
           const mapaUrl = (d.latitud && d.longitud) ? `https://maps.google.com/?q=${d.latitud},${d.longitud}` : '';
           
           const legajoStr = d.legajo ? String(d.legajo).trim() : '';
@@ -1238,7 +1238,7 @@ async function recargarDatosEfectivo() {
       Object.keys(dataNovedades).forEach(id => {
         const d = dataNovedades[id];
         if (d) {
-          const fecha = d.timestampServidor || d.fechaHoraDispositivo || d.timestamp || d.fechaHora || '';
+          const fecha = d.timestampServidor || d.timestampEstimadoDispositivo || d.fechaHoraDispositivo || d.timestamp || d.fechaHora || '';
           const mapaUrl = (d.latitud && d.longitud) ? `https://maps.google.com/?q=${d.latitud},${d.longitud}` : '';
           const fotoNovedad = d.fotoBase64 || d.foto || '';
           datosNovedades.push([fecha, d.legajo ? String(d.legajo) : '', d.nombre || '', d.objetivo || '', d.tipoIncidencia || 'General', d.descripcion || '', mapaUrl, fotoNovedad]);
@@ -1259,7 +1259,7 @@ async function recargarDatosEfectivo() {
           if (d.anulado === true) return;
           // Priorizamos el sello de servidor (timestampServidor, .sv) por ser hora oficial
           // NO manipulable; luego fechaHora/timestamp enviados desde mis-horas como fallback.
-          const rawFecha = d.timestampServidor || d.fechaHora || d.timestamp || d.fecha || '';
+          const rawFecha = d.timestampServidor || d.timestampEstimadoDispositivo || d.fechaHora || d.timestamp || d.fecha || '';
           const mapaUrl = (d.latitud && d.longitud) ? `https://maps.google.com/?q=${d.latitud},${d.longitud}` : '';
           
           datosPanicos.push([

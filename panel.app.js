@@ -221,7 +221,7 @@ async function cargarDatos() {
           // .sv=timestamp, NO manipulable). 'timestamp' queda como compat de registros
           // antiguos y el reloj del dispositivo SOLO como fallback final. Asi un
           // telefono con la hora adelantada/atrasada no puede falsear cumplimiento.
-          item.timestampServidor || item.timestamp || item.fechaHoraDispositivo || item.fecha,
+          item.timestampServidor || item.timestampEstimadoDispositivo || item.timestamp || item.fechaHoraDispositivo || item.fecha,
           item.legajo,
           item.nombre,
           item.objetivo,
