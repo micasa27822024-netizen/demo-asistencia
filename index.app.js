@@ -579,9 +579,20 @@
         if (!r || !r.ok) {
           const cod = r && r.razon;
           st.className = 'text-xs mt-1 text-center text-rose-400 block';
-          st.innerText = (cod === 'auth/too-many-requests')
-            ? 'Demasiados intentos. Esperá unos minutos.'
-            : 'Legajo o PIN incorrectos.';
+          if (cod === 'bloqueado' || cod === 'auth/too-many-requests') {
+            // Bloqueo temporal por fuerza bruta (lo aplica el Worker).
+            const seg = Number(r && r.segundosRestantes) || 0;
+            const min = Math.ceil(seg / 60);
+            st.innerText = seg
+              ? `Demasiados intentos. Esperá ${min} min antes de reintentar.`
+              : 'Demasiados intentos. Esperá unos minutos.';
+          } else {
+            // Credenciales invalidas. Avisamos los intentos restantes si quedan pocos.
+            const quedan = Number(r && r.intentosRestantes);
+            st.innerText = (Number.isFinite(quedan) && quedan > 0 && quedan <= 3)
+              ? `Legajo o PIN incorrectos. Te quedan ${quedan} intento(s).`
+              : 'Legajo o PIN incorrectos.';
+          }
           if (btn) btn.disabled = false;
           return;
         }

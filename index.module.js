@@ -1,5 +1,5 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getAuth, signInWithEmailAndPassword, signOut, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { getAuth, signInWithCustomToken, signOut, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBYsTCQWwnqEaBzsC5P-9cTM6uBKCnKAmo",
@@ -18,21 +18,51 @@
     // compartido). Al cerrar la pestaña, Firebase no restaura la sesión.
     try { setPersistence(vigAuth, browserSessionPersistence); } catch (_) {}
 
+    // Endpoint del Worker que ahora INTERMEDIA el login por PIN (bloqueo anti
+    // fuerza bruta). El login ya NO va directo del navegador a Firebase: pasa por
+    // el Worker, que cuenta/limita intentos y, si el PIN es correcto, emite un
+    // custom token para abrir la sesion del SDK.
+    const URL_WORKER_LOGIN = "https://vigix-auth-admin.micasa27822024.workers.dev";
+
     /**
-     * Inicia y MANTIENE la sesión del vigilador contra Firebase Auth.
-     * El empleado se autentica con el correo sintético legajo@demo.asistencia
-     * y el PIN completado a 6 dígitos con ceros a la izquierda (igual que en el alta).
-     * Devuelve el idToken para leer/escribir SOLO sus propios datos (?auth=).
-     * @returns {Promise<{ok:boolean, idToken?:string, uid?:string, razon?:string}>}
+     * Inicia y MANTIENE la sesión del vigilador.
+     * AHORA el login pasa por el Worker (accion:'loginPin'): el Worker aplica el
+     * bloqueo anti fuerza bruta, valida el PIN contra Firebase y, si es correcto,
+     * devuelve un CUSTOM TOKEN. El navegador abre la sesion con
+     * signInWithCustomToken(), de modo que currentUser queda seteado y toda la
+     * renovacion automatica de token sigue EXACTAMENTE igual que antes.
+     * El empleado se identifica con legajo + PIN (misma convencion de siempre:
+     * legajo@demo.asistencia / PIN a 6 digitos; esa conversion ahora la hace el
+     * Worker).
+     * @returns {Promise<{ok:boolean, idToken?:string, uid?:string, razon?:string,
+     *                     segundosRestantes?:number, intentosRestantes?:number}>}
      */
     async function loginVigilador(legajo, pin) {
       const legajoLimpio = String(legajo || '').trim();
       const pinLimpio    = String(pin || '').trim();
       if (!legajoLimpio || !pinLimpio) return { ok: false, razon: 'faltan_datos' };
-      const email    = `${legajoLimpio}@demo.asistencia`;
-      const password = pinLimpio.padStart(6, '0');
       try {
-        const cred = await signInWithEmailAndPassword(vigAuth, email, password);
+        // 1) El login pasa por el Worker (unica puerta: ahi se cuentan/limitan
+        //    los intentos). El Worker arma email/PIN y valida contra Firebase.
+        const resp = await fetch(URL_WORKER_LOGIN, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accion: 'loginPin', legajo: legajoLimpio, pin: pinLimpio })
+        });
+        const data = await resp.json().catch(() => ({}));
+
+        if (!resp.ok || !data.ok) {
+          // Bloqueo temporal por demasiados intentos.
+          if (resp.status === 429 || data.bloqueado) {
+            return { ok: false, razon: 'bloqueado', segundosRestantes: data.segundosRestantes };
+          }
+          // Credenciales invalidas (mensaje generico; el Worker no revela la causa).
+          return { ok: false, razon: 'credenciales', intentosRestantes: data.intentosRestantes };
+        }
+
+        // 2) Con el custom token abrimos la sesion REAL del SDK: currentUser queda
+        //    seteado y la renovacion automatica funciona sin cambios.
+        const cred = await signInWithCustomToken(vigAuth, data.customToken);
         const idToken = await cred.user.getIdToken();
         _tokenTimestamp = Date.now();
         idTokenGlobal = idToken;
