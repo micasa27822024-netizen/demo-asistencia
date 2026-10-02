@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { getAuth, signInWithCustomToken, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
 const firebaseConfig = {
@@ -48,47 +48,91 @@ window.authListoPanel = new Promise((resolve) => {
  * 'supervisor' o 'admin' (el admin puede ver todo).
  * @returns {Promise<{ok:boolean, uid?:string, rol?:string, mensaje?:string}>}
  */
+// Endpoint del Worker que ahora INTERMEDIA el login (bloqueo anti fuerza bruta
+// PERSISTENTE del lado del servidor). El login del supervisor ya NO va directo
+// del navegador a Firebase: pasa por el Worker, que cuenta/limita los intentos
+// en la base y, si la clave es correcta, emite un custom token.
+const URL_WORKER_LOGIN_PANEL = "https://vigix-auth-admin.micasa27822024.workers.dev";
+
+// Formatea segundos restantes como "X min YY s" (o "YY s" si es menos de 1 min).
+function _fmtSegundos(seg) {
+  seg = Math.max(0, Math.ceil(Number(seg) || 0));
+  const m = Math.floor(seg / 60), s = seg % 60;
+  if (m > 0) return m + ' min ' + (s < 10 ? '0' : '') + s + ' s';
+  return s + ' s';
+}
+
 async function loginSupervisorReal(email, password) {
   if (!email || !password) {
     return { ok: false, mensaje: 'Ingresá el correo y la contraseña.' };
   }
+
+  // 1) EL LOGIN PASA POR EL WORKER (unica puerta). El Worker lleva el conteo de
+  //    intentos fallidos de forma PERSISTENTE (nodo /intentosLogin, solo
+  //    accesible por la service account) y bloquea temporalmente al superar el
+  //    limite, SIN consultar a Firebase. El bloqueo ya NO vive en el navegador.
+  //    Si la clave es correcta, el Worker devuelve un custom token que
+  //    canjeamos con signInWithCustomToken para abrir la sesion real del SDK.
+  let data, httpStatus;
   try {
-    const cred = await signInWithEmailAndPassword(auth, email, password);
-    const uid  = cred.user.uid;
-
-    let rol = null;
-    let rolTimeout = false;
-    try {
-      const snap = await conLimite(get(ref(db, `usuarios/${uid}`)), 12000, '__TIMEOUT__');
-      if (snap === '__TIMEOUT__') { rolTimeout = true; }
-      else if (snap && snap.exists()) { rol = (snap.val() || {}).rol || null; }
-    } catch (_) { /* si falla la lectura, se rechaza abajo */ }
-
-    if (rolTimeout) {
-      try { await signOut(auth); } catch (_) {}
-      return { ok: false, mensaje: 'La conexión está lenta y no se pudo verificar tu acceso. Reintentá en unos segundos.' };
-    }
-
-    if (rol !== 'admin' && rol !== 'supervisor') {
-      try { await signOut(auth); } catch (_) {}
-      return { ok: false, mensaje: 'Tu usuario no tiene permisos para este panel.' };
-    }
-    _tokenTimestamp = Date.now();
-    _iniciarRenovacionToken();
-    return { ok: true, uid, rol };
+    const resp = await fetch(URL_WORKER_LOGIN_PANEL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accion: 'loginPin', email: email, password: password })
+    });
+    httpStatus = resp.status;
+    data = await resp.json().catch(() => ({}));
   } catch (e) {
-    let mensaje = 'Correo o contraseña incorrectos.';
-    switch (e && e.code) {
-      case 'auth/invalid-email':          mensaje = 'El correo no es válido.'; break;
-      case 'auth/user-disabled':          mensaje = 'Esta cuenta está deshabilitada.'; break;
-      case 'auth/user-not-found':
-      case 'auth/wrong-password':
-      case 'auth/invalid-credential':     mensaje = 'Correo o contraseña incorrectos.'; break;
-      case 'auth/too-many-requests':      mensaje = 'Demasiados intentos. Esperá unos minutos e intentá de nuevo.'; break;
-      case 'auth/network-request-failed': mensaje = 'Sin conexión. Revisá tu internet.'; break;
-    }
-    return { ok: false, mensaje };
+    return { ok: false, mensaje: 'No se pudo contactar el servicio de acceso. Revisá tu conexión y reintentá.' };
   }
+
+  // 2) El Worker rechazo (bloqueo o credenciales invalidas).
+  if (!data || !data.ok) {
+    if (httpStatus === 429 || data.bloqueado) {
+      const seg = Number(data.segundosRestantes) || 0;
+      return { ok: false, bloqueado: true, segundosRestantes: seg,
+               mensaje: 'Demasiados intentos fallidos. Por seguridad, el ingreso quedó bloqueado. Probá de nuevo en ' + _fmtSegundos(seg) + '.' };
+    }
+    let mensaje = 'Correo o contraseña incorrectos.';
+    const quedan = (typeof data.intentosRestantes === 'number') ? data.intentosRestantes : null;
+    if (quedan !== null && quedan > 0 && quedan <= 2) {
+      mensaje += ' Te queda' + (quedan === 1 ? '' : 'n') + ' ' + quedan + ' intento' + (quedan === 1 ? '' : 's') + ' antes del bloqueo.';
+    }
+    return { ok: false, mensaje: mensaje, intentosRestantes: quedan };
+  }
+
+  // 3) Credenciales OK -> abrimos la sesion real del SDK con el custom token.
+  let cred;
+  try {
+    cred = await signInWithCustomToken(auth, data.customToken);
+  } catch (e) {
+    return { ok: false, mensaje: 'No se pudo abrir la sesión. Reintentá en unos segundos.' };
+  }
+  const uid = cred.user.uid;
+
+  // 4) Leer el rol desde /usuarios/<uid> (con limite de tiempo).
+  let rol = null, rolTimeout = false;
+  try {
+    const snap = await conLimite(get(ref(db, `usuarios/${uid}`)), 12000, '__TIMEOUT__');
+    if (snap === '__TIMEOUT__') { rolTimeout = true; }
+    else if (snap && snap.exists()) { rol = (snap.val() || {}).rol || null; }
+  } catch (_) { /* si falla la lectura, se rechaza abajo */ }
+
+  if (rolTimeout) {
+    try { await signOut(auth); } catch (_) {}
+    return { ok: false, mensaje: 'La conexión está lenta y no se pudo verificar tu acceso. Reintentá en unos segundos.' };
+  }
+
+  // 5) Se permite entrar con rol 'supervisor' o 'admin'. Mensaje generico (sin
+  //    exponer UID ni el rol real) para cualquier otro caso.
+  if (rol !== 'admin' && rol !== 'supervisor') {
+    try { await signOut(auth); } catch (_) {}
+    return { ok: false, mensaje: 'Tu usuario no tiene permisos para este panel.' };
+  }
+
+  _tokenTimestamp = Date.now();
+  _iniciarRenovacionToken();
+  return { ok: true, uid, rol };
 }
 window.loginSupervisorReal = loginSupervisorReal;
 

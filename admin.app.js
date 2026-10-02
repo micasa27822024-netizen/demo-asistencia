@@ -535,50 +535,6 @@ async function descargarComprobantePinPDF() {
   }
 }
 
-// ───────────────────────────────────────────────────────────────
-//  BLOQUEO TEMPORAL DE LOGIN (anti fuerza bruta, lado cliente).
-//  Tras 5 intentos fallidos se bloquea el ingreso EN ESTE NAVEGADOR por 15 min.
-//  Es una capa de disuasión local (Firebase Auth ya aplica su propio límite
-//  server-side con 'auth/too-many-requests'); no reemplaza al servidor, pero
-//  frena el tanteo manual de contraseñas/PIN. Los errores de RED no cuentan
-//  como intento fallido (no son credenciales incorrectas).
-// ───────────────────────────────────────────────────────────────
-var LOGIN_MAX_INTENTOS = 5;
-var LOGIN_BLOQUEO_MS = 15 * 60 * 1000; // 15 minutos
-var _LOGIN_K_FALLOS = 'vigix_login_fallos_admin';
-var _LOGIN_K_HASTA  = 'vigix_login_hasta_admin';
-
-function _loginLeerNum(k) { try { return parseInt(localStorage.getItem(k) || '0', 10) || 0; } catch (_) { return 0; } }
-function _loginGuardar(k, v) { try { localStorage.setItem(k, String(v)); } catch (_) {} }
-function _loginBorrar(k) { try { localStorage.removeItem(k); } catch (_) {} }
-
-function estadoBloqueoLogin() {
-  var hasta = _loginLeerNum(_LOGIN_K_HASTA);
-  var ahora = Date.now();
-  if (hasta && ahora < hasta) return { bloqueado: true, restanteMs: hasta - ahora };
-  if (hasta && ahora >= hasta) { _loginBorrar(_LOGIN_K_HASTA); _loginBorrar(_LOGIN_K_FALLOS); }
-  return { bloqueado: false, restanteMs: 0 };
-}
-
-function registrarFalloLogin() {
-  var n = _loginLeerNum(_LOGIN_K_FALLOS) + 1;
-  _loginGuardar(_LOGIN_K_FALLOS, n);
-  if (n >= LOGIN_MAX_INTENTOS) {
-    _loginGuardar(_LOGIN_K_HASTA, Date.now() + LOGIN_BLOQUEO_MS);
-    return { bloqueado: true, restanteMs: LOGIN_BLOQUEO_MS, restantesIntentos: 0 };
-  }
-  return { bloqueado: false, restanteMs: 0, restantesIntentos: LOGIN_MAX_INTENTOS - n };
-}
-
-function limpiarFallosLogin() { _loginBorrar(_LOGIN_K_FALLOS); _loginBorrar(_LOGIN_K_HASTA); }
-
-function _formatoRestanteLogin(ms) {
-  var seg = Math.max(0, Math.ceil(ms / 1000));
-  var m = Math.floor(seg / 60), s = seg % 60;
-  if (m > 0) return m + ' min ' + (s < 10 ? '0' : '') + s + ' s';
-  return s + ' s';
-}
-
 function validarPasswordAdmin(e) {
   e.preventDefault();
   let email = (document.getElementById('inputEmailAdmin') ? document.getElementById('inputEmailAdmin').value : '').trim();
@@ -590,15 +546,6 @@ function validarPasswordAdmin(e) {
   const input = document.getElementById('inputPassAdmin').value;
   const errorMsg = document.getElementById('msgErrorPassAdmin');
   errorMsg.classList.add('hidden');
-
-  // Bloqueo temporal: si ya se superó el límite de intentos, ni siquiera se
-  // intenta el login hasta que pase el tiempo de espera.
-  const _bq = estadoBloqueoLogin();
-  if (_bq.bloqueado) {
-    errorMsg.innerHTML = '<i class="fa-solid fa-lock"></i> Demasiados intentos fallidos. Por seguridad, el ingreso quedó bloqueado. Probá de nuevo en ' + _formatoRestanteLogin(_bq.restanteMs) + '.';
-    errorMsg.classList.remove('hidden');
-    return;
-  }
 
   // --- Login REAL con Firebase Auth (correo + contraseña) ---
   if (typeof window.loginAdminReal === 'function') {
@@ -619,21 +566,15 @@ function validarPasswordAdmin(e) {
       clearTimeout(watchdog);
       if (btnLogin) btnLogin.disabled = false;
       if (res && res.ok) {
-        limpiarFallosLogin();
         sessionStorage.setItem('auth_admin', 'true');
         if (res.rol) sessionStorage.setItem('rol_admin', res.rol);
         if (res.uid) sessionStorage.setItem('uid_admin', res.uid);
         if (email) sessionStorage.setItem('email_admin', email);
         mostrarAdmin();
       } else {
-        const _f = registrarFalloLogin();
-        let _msg = (res && res.mensaje) || 'Correo o contraseña incorrectos.';
-        if (_f.bloqueado) {
-          _msg = 'Demasiados intentos fallidos. Por seguridad, el ingreso quedó bloqueado. Probá de nuevo en ' + _formatoRestanteLogin(_f.restanteMs) + '.';
-        } else if (_f.restantesIntentos <= 2) {
-          _msg += ' Te queda' + (_f.restantesIntentos === 1 ? '' : 'n') + ' ' + _f.restantesIntentos + ' intento' + (_f.restantesIntentos === 1 ? '' : 's') + ' antes del bloqueo.';
-        }
-        errorMsg.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> ' + _msg;
+        // El Worker ya aplica el bloqueo y arma el mensaje (bloqueo o intentos
+        // restantes). El cliente solo lo muestra.
+        errorMsg.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> ' + ((res && res.mensaje) || 'Correo o contraseña incorrectos.');
         errorMsg.classList.remove('hidden');
         document.getElementById('inputPassAdmin').value = '';
         document.getElementById('inputPassAdmin').focus();

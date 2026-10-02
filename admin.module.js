@@ -1,6 +1,6 @@
 // ---- Módulos requeridos desde la CDN de Firebase (v10.8.0) ----
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithCustomToken, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { getDatabase, ref, set, get, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
 // ---- Configuración de tu proyecto Firebase ----
@@ -41,67 +41,104 @@ function conLimite(promesa, ms, valorReserva) {
   ]);
 }
 
+// Endpoint del Worker que ahora INTERMEDIA el login (bloqueo anti fuerza bruta
+// PERSISTENTE del lado del servidor). El login del admin ya NO va directo del
+// navegador a Firebase: pasa por el Worker, que cuenta/limita los intentos en
+// la base y, si la clave es correcta, emite un custom token.
+const URL_WORKER_LOGIN_ADMIN = "https://vigix-auth-admin.micasa27822024.workers.dev";
+
+// Formatea segundos restantes como "X min YY s" (o "YY s" si es menos de 1 min).
+function _fmtSegundos(seg) {
+  seg = Math.max(0, Math.ceil(Number(seg) || 0));
+  const m = Math.floor(seg / 60), s = seg % 60;
+  if (m > 0) return m + ' min ' + (s < 10 ? '0' : '') + s + ' s';
+  return s + ' s';
+}
+
 async function loginAdminReal(email, password) {
   if (!email || !password) {
     return { ok: false, mensaje: 'Ingresá el correo y la contraseña.' };
   }
+  // Persistencia de SESION: se intenta, pero NO debe bloquear el login (en
+  // algunos navegadores de celular puede trabarse; la limitamos en el tiempo).
+  await conLimite(setPersistence(mainAuth, browserSessionPersistence), 1500, null);
+
+  // 1) EL LOGIN PASA POR EL WORKER (unica puerta de entrada). El Worker lleva el
+  //    conteo de intentos fallidos de forma PERSISTENTE (nodo /intentosLogin,
+  //    solo accesible por la service account) y, superado el limite, BLOQUEA
+  //    temporalmente SIN consultar a Firebase. El bloqueo ya NO vive en el
+  //    navegador: sobrevive a recargas, a limpiar el storage y a cambiar de
+  //    dispositivo. Si el PIN/clave es correcto, el Worker devuelve un CUSTOM
+  //    TOKEN que canjeamos con signInWithCustomToken para abrir la sesion real.
+  let data, httpStatus;
   try {
-    // Persistencia de SESION: se intenta, pero NO debe bloquear el login. En
-    // algunos navegadores de celular esta operacion puede trabarse; por eso
-    // la limitamos en el tiempo y seguimos igual (login primero, todo lo demas
-    // es secundario).
-    await conLimite(setPersistence(mainAuth, browserSessionPersistence), 1500, null);
-    const cred = await signInWithEmailAndPassword(mainAuth, email, password);
-    const uid  = cred.user.uid;
-
-    // Leer el rol desde /usuarios/<uid> (con limite de tiempo: en celular la
-    // lectura puede colgarse y dejaria el boton "sin hacer nada").
-    let rol = null, existeNodo = false, errorLectura = null;
-    try {
-      const snap = await conLimite(get(ref(mainDb, `usuarios/${uid}`)), 12000, '__TIMEOUT__');
-      if (snap === '__TIMEOUT__') {
-        errorLectura = 'tiempo de espera agotado al leer el rol';
-      } else {
-        existeNodo = snap.exists();
-        if (existeNodo) { rol = (snap.val() || {}).rol || null; }
-      }
-    } catch (e2) { errorLectura = (e2 && (e2.code || e2.message)) || 'desconocido'; }
-
-    // Separación de roles: este panel es EXCLUSIVO de administradores.
-    // Un supervisor NO puede ingresar al panel completo de admin.
-    if (rol !== 'admin') {
-      try { await signOut(mainAuth); } catch (_) {}
-      // SEGURIDAD: el mensaje de error NUNCA debe exponer el UID, el rol real
-      // leído ni rutas internas de la base (/usuarios/...). Esos datos no deben
-      // quedar a la vista ni como "referencia". Solo devolvemos un aviso
-      // genérico; para supervisores, una ayuda de "panel equivocado".
-      let detalle;
-      if (errorLectura) {
-        detalle = 'No se pudieron verificar tus permisos en este momento. Reintentá en unos segundos.';
-      } else if (rol === 'supervisor') {
-        detalle = 'Tu cuenta es de supervisor; este panel es exclusivo de administradores.';
-      } else {
-        detalle = 'Esta cuenta no tiene permisos de administrador para ingresar a este panel.';
-      }
-      return { ok: false, mensaje: detalle };
-    }
-    // Marcar la hora del token recién emitido e iniciar renovación automática
-    _tokenTimestamp = Date.now();
-    _iniciarRenovacionToken();
-    return { ok: true, uid, rol };
+    const resp = await fetch(URL_WORKER_LOGIN_ADMIN, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accion: 'loginPin', email: email, password: password })
+    });
+    httpStatus = resp.status;
+    data = await resp.json().catch(() => ({}));
   } catch (e) {
-    let mensaje = 'Correo o contraseña incorrectos.';
-    switch (e && e.code) {
-      case 'auth/invalid-email':          mensaje = 'El correo no es válido.'; break;
-      case 'auth/user-disabled':          mensaje = 'Esta cuenta está deshabilitada.'; break;
-      case 'auth/user-not-found':
-      case 'auth/wrong-password':
-      case 'auth/invalid-credential':     mensaje = 'Correo o contraseña incorrectos.'; break;
-      case 'auth/too-many-requests':      mensaje = 'Demasiados intentos. Esperá unos minutos e intentá de nuevo.'; break;
-      case 'auth/network-request-failed': mensaje = 'Sin conexión. Revisá tu internet.'; break;
-    }
-    return { ok: false, mensaje };
+    return { ok: false, mensaje: 'No se pudo contactar el servicio de acceso. Revisá tu conexión y reintentá.' };
   }
+
+  // 2) El Worker rechazo (bloqueo o credenciales invalidas).
+  if (!data || !data.ok) {
+    if (httpStatus === 429 || data.bloqueado) {
+      const seg = Number(data.segundosRestantes) || 0;
+      return { ok: false, bloqueado: true, segundosRestantes: seg,
+               mensaje: 'Demasiados intentos fallidos. Por seguridad, el ingreso quedó bloqueado. Probá de nuevo en ' + _fmtSegundos(seg) + '.' };
+    }
+    let mensaje = 'Correo o contraseña incorrectos.';
+    const quedan = (typeof data.intentosRestantes === 'number') ? data.intentosRestantes : null;
+    if (quedan !== null && quedan > 0 && quedan <= 2) {
+      mensaje += ' Te queda' + (quedan === 1 ? '' : 'n') + ' ' + quedan + ' intento' + (quedan === 1 ? '' : 's') + ' antes del bloqueo.';
+    }
+    return { ok: false, mensaje: mensaje, intentosRestantes: quedan };
+  }
+
+  // 3) Credenciales OK -> abrimos la sesion real del SDK con el custom token.
+  let cred;
+  try {
+    cred = await signInWithCustomToken(mainAuth, data.customToken);
+  } catch (e) {
+    return { ok: false, mensaje: 'No se pudo abrir la sesión. Reintentá en unos segundos.' };
+  }
+  const uid = cred.user.uid;
+
+  // 4) Leer el rol desde /usuarios/<uid> (con limite de tiempo).
+  let rol = null, errorLectura = null;
+  try {
+    const snap = await conLimite(get(ref(mainDb, `usuarios/${uid}`)), 12000, '__TIMEOUT__');
+    if (snap === '__TIMEOUT__') {
+      errorLectura = 'tiempo de espera agotado al leer el rol';
+    } else if (snap.exists()) {
+      rol = (snap.val() || {}).rol || null;
+    }
+  } catch (e2) { errorLectura = (e2 && (e2.code || e2.message)) || 'desconocido'; }
+
+  // 5) Separacion de roles: este panel es EXCLUSIVO de administradores.
+  if (rol !== 'admin') {
+    try { await signOut(mainAuth); } catch (_) {}
+    // SEGURIDAD: el mensaje NUNCA debe exponer el UID, el rol real leido ni
+    // rutas internas de la base. Solo un aviso generico (y, para supervisores,
+    // una ayuda de "panel equivocado").
+    let detalle;
+    if (errorLectura) {
+      detalle = 'No se pudieron verificar tus permisos en este momento. Reintentá en unos segundos.';
+    } else if (rol === 'supervisor') {
+      detalle = 'Tu cuenta es de supervisor; este panel es exclusivo de administradores.';
+    } else {
+      detalle = 'Esta cuenta no tiene permisos de administrador para ingresar a este panel.';
+    }
+    return { ok: false, mensaje: detalle };
+  }
+
+  // 6) Todo OK: marcar la hora del token e iniciar la renovacion automatica.
+  _tokenTimestamp = Date.now();
+  _iniciarRenovacionToken();
+  return { ok: true, uid, rol };
 }
 window.loginAdminReal = loginAdminReal;
 
