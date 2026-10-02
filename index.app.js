@@ -224,6 +224,7 @@
     const IDB_NOMBRE   = 'vigix_seguro';
     const IDB_STORE    = 'claves';
     const IDB_KEY_HMAC = 'hmac_dispositivo';
+    const IDB_KEY_AES  = 'aes_cifrado_local';   // M4: clave AES-GCM no extraible para cifrar datos sensibles en reposo
     function _idbAbrir() {
       return new Promise((resolve, reject) => {
         let req;
@@ -263,6 +264,52 @@
     async function _persistirClaveHmac(secreto) {
       try { const key = await _importarClaveHmacNoExtraible(secreto); await _idbGuardar(IDB_KEY_HMAC, key); return true; }
       catch (e) { console.warn('No se pudo guardar la clave del dispositivo de forma segura:', e); return false; }
+    }
+    // ===================================================================
+    //  M4: CIFRADO LOCAL EN REPOSO (AES-GCM, clave NO extraible en IndexedDB)
+    //  Protege la foto master (biometrico) y la config personal (PII) frente a
+    //  robo del dispositivo o volcado del almacenamiento: el dato queda como
+    //  texto cifrado y la clave para descifrarlo nunca sale del navegador.
+    // ===================================================================
+    async function _obtenerClaveCifradoLocal() {
+      if (!(self.crypto && crypto.subtle)) return null;
+      try { const k = await _idbLeer(IDB_KEY_AES); if (k) return k; } catch (_) {}
+      try {
+        const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false /* NO extraible */, ['encrypt', 'decrypt']);
+        await _idbGuardar(IDB_KEY_AES, key);
+        return key;
+      } catch (e) { console.warn('No se pudo preparar el cifrado local:', e); return null; }
+    }
+    async function _cifrarTextoLocal(texto) {
+      if (texto == null) return null;
+      const key = await _obtenerClaveCifradoLocal();
+      if (!key) return null;
+      try {
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(String(texto))));
+        return { iv: _b64FromBytes(iv), ct: _b64FromBytes(ct) };
+      } catch (e) { console.warn('Fallo el cifrado local:', e); return null; }
+    }
+    async function _descifrarTextoLocal(payload) {
+      if (!payload || !payload.iv || !payload.ct) return null;
+      const key = await _obtenerClaveCifradoLocal();
+      if (!key) return null;
+      try {
+        const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: _bytesFromB64(payload.iv) }, key, _bytesFromB64(payload.ct));
+        return new TextDecoder().decode(pt);
+      } catch (_) { return null; }
+    }
+    // M5: migra proactivamente al arranque el secreto HMAC que pudiera haber
+    // quedado en claro en localStorage hacia IndexedDB (clave no extraible) y
+    // BORRA la copia del localStorage. Antes esto solo ocurria de forma perezosa
+    // en la primera firma, dejando una ventana de exposicion.
+    async function _migrarSecretoHmacASeguro() {
+      try {
+        const d = JSON.parse(localStorage.getItem(LS_DISPOSITIVO) || 'null');
+        if (!d || !d.deviceId || !d.secreto) return;    // nada que migrar
+        const ok = await _persistirClaveHmac(d.secreto);
+        if (ok) localStorage.setItem(LS_DISPOSITIVO, JSON.stringify({ deviceId: d.deviceId, provisionado: true }));
+      } catch (_) {}
     }
     async function _obtenerClaveHmacDispositivo() {
       try { const k = await _idbLeer(IDB_KEY_HMAC); if (k) return k; } catch (_) {}
@@ -446,13 +493,19 @@
         // localStorage, NO puede verificar ni crackear el PIN fuera de este
         // telefono: necesitaria la clave del dispositivo, que nunca sale de aca.
         const macHex = await _macPinDispositivo(hashHex); // null si el device no esta vinculado
+        // M4: la foto master (biometrico) y la config personal (PII) se guardan
+        // CIFRADAS en reposo con una clave AES-GCM no extraible. Si el cifrado no
+        // esta disponible, se degrada a texto plano (compatibilidad).
+        const fotoEnc = fotoMaster ? await _cifrarTextoLocal(String(fotoMaster)) : null;
+        const persEnc = personal ? await _cifrarTextoLocal(JSON.stringify(personal)) : null;
         const creds = _leerCredsOffline();
         const registro = {
           legajo: String(legajo).trim(), uid: uid || null, nombre: nombre || null,
           salt: _b64FromBytes(salt), iteraciones: PBKDF2_ITER,
-          personal: personal || null, fotoMaster: fotoMaster || null,
           guardadoEn: new Date().toISOString()
         };
+        if (fotoEnc) registro.fotoMasterEnc = fotoEnc; else if (fotoMaster) registro.fotoMaster = fotoMaster; // cifrado o legacy plano
+        if (persEnc) registro.personalEnc   = persEnc; else if (personal)   registro.personal   = personal;   // cifrado o legacy plano
         if (macHex) { registro.version = 2; registro.macHex = macHex; }   // atada al dispositivo (fuerte)
         else        { registro.version = 1; registro.hashHex = hashHex; } // legacy: hash plano (sin device)
         creds[String(legajo).trim()] = registro;
@@ -479,6 +532,18 @@
         // Legacy (version 1 / sin version): hash plano. Backward-compatible.
         return _igualHex(hashHex, c.hashHex) ? { cred: c, motivo: 'ok' } : { cred: null, motivo: 'pin_invalido' };
       } catch (_) { return { cred: null, motivo: 'pin_invalido' }; }
+    }
+    // M4: devuelve una copia del registro con fotoMaster/personal EN CLARO,
+    // descifrando los campos cifrados (o usando el texto plano legacy).
+    async function _descifrarCamposCred(c) {
+      if (!c) return c;
+      const out = Object.assign({}, c);
+      if (c.fotoMasterEnc) out.fotoMaster = await _descifrarTextoLocal(c.fotoMasterEnc);
+      if (c.personalEnc) {
+        const s = await _descifrarTextoLocal(c.personalEnc);
+        try { out.personal = s ? JSON.parse(s) : null; } catch (_) { out.personal = null; }
+      }
+      return out;
     }
 
     // --- Login OFFLINE (sin idToken; identidad probada por hash local del PIN) ---
@@ -523,7 +588,7 @@
         }
         if (btn) btn.disabled = false; return;
       }
-      const cred = res.cred;
+      const cred = await _descifrarCamposCred(res.cred);
       // M1: login correcto -> se reinicia el contador de fallos de este legajo.
       _limpiarFallosOffline(legajoNorm);
       // M2 (migracion en caliente): si la credencial es legacy (v1, hash plano) y
@@ -752,6 +817,7 @@
       if (f) f.addEventListener('submit', iniciarSesionVigilador);
 
       // Estado offline en la pantalla de login: vinculacion y cola pendiente.
+      try { await _migrarSecretoHmacASeguro(); } catch (_) {}   // M5: saca el secreto HMAC del localStorage
       try { purgarCacheOfflineVencido(); } catch (_) {}
       try { refrescarEstadoVinculacion(); } catch (_) {}
       try { refrescarEstadoOfflinePendientes(); } catch (_) {}
