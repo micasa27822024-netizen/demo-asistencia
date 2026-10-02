@@ -118,9 +118,13 @@
     // ===================================================================
     const URL_WORKER_FICHAJE = URL_WORKER;           // alias: la sincronizacion del lote offline usa el mismo Worker
     const LS_OFFLINE_CFG   = 'vigix_offline_cfg';    // { offlineHabilitado, ventanaLoteOfflineHoras }
-    const LS_CRED_OFFLINE  = 'vigix_cred_offline';   // { <legajo>: { salt, hashHex, uid, personal, ... } }
+    const LS_CRED_OFFLINE  = 'vigix_cred_offline';   // { <legajo>: { version, salt, hashHex|macHex, uid, personal, guardadoEn, ... } }
     const LS_DISPOSITIVO   = 'vigix_dispositivo';     // { deviceId, secreto } (lo provisiona el Admin en Fase 3)
+    const LS_OFFLINE_INTENTOS = 'vigix_offline_intentos'; // M1: { <legajo>: { fallos, bloqueadoHasta } } anti fuerza-bruta offline
     const PBKDF2_ITER      = 150000;
+    const OFFLINE_CRED_TTL_MS     = 14 * 24 * 60 * 60 * 1000; // M3: la credencial offline cacheada caduca a los 14 dias
+    const OFFLINE_MAX_FALLOS_BASE = 5;                        // M1: fallos antes de iniciar el bloqueo escalonado
+    const PIN_BIND_PREFIJO        = 'offline-pin-bind:v2:';   // M2: namespace del HMAC que ata el hash del PIN al dispositivo
 
     // Agrega ?auth=<idToken> a una URL de la RTDB si hay sesion activa.
     function urlAuth(url) {
@@ -388,6 +392,44 @@
 
     // --- Credencial de login OFFLINE (hash PBKDF2 del PIN + snapshot del vigilador) ---
     function _leerCredsOffline() { try { return JSON.parse(localStorage.getItem(LS_CRED_OFFLINE) || '{}') || {}; } catch (_) { return {}; } }
+
+    // --- M1: contador de intentos + bloqueo escalonado del login OFFLINE ---
+    // El login online ya esta protegido por el Worker; esto replica ese freno
+    // del lado del dispositivo, donde el ataque de fuerza bruta es local.
+    function _leerIntentosOffline() { try { return JSON.parse(localStorage.getItem(LS_OFFLINE_INTENTOS) || '{}') || {}; } catch (_) { return {}; } }
+    function _guardarIntentosOffline(m) { try { localStorage.setItem(LS_OFFLINE_INTENTOS, JSON.stringify(m || {})); } catch (_) {} }
+    function _calcularBloqueoOfflineMs(fallos) {
+      if (fallos < OFFLINE_MAX_FALLOS_BASE) return 0; // < 5  -> sin bloqueo
+      if (fallos < 10) return 60 * 1000;              // 5-9  -> 1 min
+      if (fallos < 15) return 5 * 60 * 1000;          // 10-14-> 5 min
+      return 15 * 60 * 1000;                          // 15+  -> 15 min
+    }
+    function estadoBloqueoOffline(legajo) {
+      const r = _leerIntentosOffline()[String(legajo).trim()];
+      if (!r) return { bloqueado: false, fallos: 0, segundosRestantes: 0 };
+      const ahora = Date.now();
+      const hasta = Number(r.bloqueadoHasta) || 0;
+      if (hasta > ahora) return { bloqueado: true, fallos: Number(r.fallos) || 0, segundosRestantes: Math.ceil((hasta - ahora) / 1000) };
+      return { bloqueado: false, fallos: Number(r.fallos) || 0, segundosRestantes: 0 };
+    }
+    function _registrarFalloOffline(legajo) {
+      const m = _leerIntentosOffline(); const k = String(legajo).trim();
+      const r = m[k] || { fallos: 0, bloqueadoHasta: 0 };
+      r.fallos = (Number(r.fallos) || 0) + 1;
+      const ms = _calcularBloqueoOfflineMs(r.fallos);
+      if (ms > 0) r.bloqueadoHasta = Date.now() + ms;
+      m[k] = r; _guardarIntentosOffline(m);
+      return r;
+    }
+    function _limpiarFallosOffline(legajo) {
+      const m = _leerIntentosOffline(); const k = String(legajo).trim();
+      if (m[k]) { delete m[k]; _guardarIntentosOffline(m); }
+    }
+    // M2: calcula el HMAC (atado al dispositivo) del hash del PIN. Devuelve null
+    // si este telefono no tiene clave de dispositivo (no vinculado).
+    async function _macPinDispositivo(hashHex) {
+      return await firmarLoteDispositivo(PIN_BIND_PREFIJO + String(hashHex));
+    }
     // Se llama tras un login ONLINE exitoso. Guarda el hash del PIN (nunca el PIN)
     // y una copia de la config del vigilador para poder operar sin red mas tarde.
     // Se cachea si el modo offline esta habilitado globalmente O si este telefono
@@ -399,46 +441,102 @@
       try {
         const salt = crypto.getRandomValues(new Uint8Array(16));
         const hashHex = await _pbkdf2Hex(String(pin).padStart(6, '0'), salt, PBKDF2_ITER);
+        // M2: si el dispositivo esta vinculado, atamos el hash a su clave HMAC NO
+        // extraible (IndexedDB). Asi, aunque alguien copie esta credencial del
+        // localStorage, NO puede verificar ni crackear el PIN fuera de este
+        // telefono: necesitaria la clave del dispositivo, que nunca sale de aca.
+        const macHex = await _macPinDispositivo(hashHex); // null si el device no esta vinculado
         const creds = _leerCredsOffline();
-        creds[String(legajo).trim()] = {
+        const registro = {
           legajo: String(legajo).trim(), uid: uid || null, nombre: nombre || null,
-          salt: _b64FromBytes(salt), hashHex, iteraciones: PBKDF2_ITER,
+          salt: _b64FromBytes(salt), iteraciones: PBKDF2_ITER,
           personal: personal || null, fotoMaster: fotoMaster || null,
           guardadoEn: new Date().toISOString()
         };
+        if (macHex) { registro.version = 2; registro.macHex = macHex; }   // atada al dispositivo (fuerte)
+        else        { registro.version = 1; registro.hashHex = hashHex; } // legacy: hash plano (sin device)
+        creds[String(legajo).trim()] = registro;
         localStorage.setItem(LS_CRED_OFFLINE, JSON.stringify(creds));
       } catch (e) { console.warn('No se pudo cachear la credencial offline:', e); }
     }
-    // Verifica el PIN contra el hash local. Devuelve el registro cacheado o null.
+    // Verifica el PIN contra la credencial local. Devuelve { cred, motivo } con
+    // motivo in {'ok','sin_credencial','pin_invalido','expirada','device_requerido'}.
     async function verificarCredencialOffline(legajo, pin) {
       const c = _leerCredsOffline()[String(legajo).trim()];
-      if (!c || !c.salt || !c.hashHex) return null;
+      if (!c || !c.salt || (!c.hashHex && !c.macHex)) return { cred: null, motivo: 'sin_credencial' };
+      // M3: caducidad. Una credencial vieja (PIN cambiado o baja del empleado)
+      // deja de valer sin conexion; el proximo login online la renueva.
+      const guardado = c.guardadoEn ? Date.parse(c.guardadoEn) : 0;
+      if (guardado && (Date.now() - guardado) > OFFLINE_CRED_TTL_MS) return { cred: null, motivo: 'expirada' };
       try {
-        const h = await _pbkdf2Hex(String(pin).padStart(6, '0'), _bytesFromB64(c.salt), c.iteraciones || PBKDF2_ITER);
-        return _igualHex(h, c.hashHex) ? c : null;
-      } catch (_) { return null; }
+        const hashHex = await _pbkdf2Hex(String(pin).padStart(6, '0'), _bytesFromB64(c.salt), c.iteraciones || PBKDF2_ITER);
+        if (c.version === 2 && c.macHex) {
+          // M2: credencial atada al dispositivo -> recalculamos el HMAC local.
+          const mac = await _macPinDispositivo(hashHex);
+          if (!mac) return { cred: null, motivo: 'device_requerido' };
+          return _igualHex(mac, c.macHex) ? { cred: c, motivo: 'ok' } : { cred: null, motivo: 'pin_invalido' };
+        }
+        // Legacy (version 1 / sin version): hash plano. Backward-compatible.
+        return _igualHex(hashHex, c.hashHex) ? { cred: c, motivo: 'ok' } : { cred: null, motivo: 'pin_invalido' };
+      } catch (_) { return { cred: null, motivo: 'pin_invalido' }; }
     }
 
     // --- Login OFFLINE (sin idToken; identidad probada por hash local del PIN) ---
     async function iniciarSesionOffline(legajo, pin, st, btn) {
-      const cred = await verificarCredencialOffline(legajo, pin);
-      if (!cred) {
+      const legajoNorm = String(legajo).trim();
+      // M1: freno anti fuerza-bruta. Si esta bloqueado, ni siquiera verificamos.
+      const bloqueo = estadoBloqueoOffline(legajoNorm);
+      if (bloqueo.bloqueado) {
         st.className = 'text-xs mt-1 text-center text-rose-400 block';
-        if (obtenerCredencialDispositivo()) {
-          st.innerText = 'Este teléfono ya está vinculado, pero todavía no guardó tu acceso para fichar sin conexión. Con internet, iniciá sesión una vez con tu legajo y PIN en este mismo teléfono; después vas a poder fichar offline.';
-        } else if (!offlineHabilitadoLocal()) {
-          st.innerText = 'Sin conexión: este teléfono todavía no está habilitado para uso offline. Pedile al administrador que active el modo offline y, con internet, iniciá sesión una vez en este mismo teléfono.';
+        const min = Math.max(1, Math.ceil(bloqueo.segundosRestantes / 60));
+        st.innerText = `Demasiados intentos sin conexión. Esperá ${min} min antes de reintentar.`;
+        if (btn) btn.disabled = false; return;
+      }
+      const res = await verificarCredencialOffline(legajoNorm, pin);
+      if (!res || res.motivo !== 'ok') {
+        st.className = 'text-xs mt-1 text-center text-rose-400 block';
+        if (res && res.motivo === 'expirada') {
+          st.innerText = 'Tu acceso sin conexión caducó por seguridad. Conectate a internet e iniciá sesión una vez con tu legajo y PIN en este mismo teléfono para renovarlo.';
+        } else if (res && res.motivo === 'device_requerido') {
+          st.innerText = 'Tu acceso sin conexión está atado a este teléfono y no se puede verificar porque el dispositivo no está vinculado. Volvé a vincularlo y, con internet, iniciá sesión una vez en este mismo teléfono.';
+        } else if (res && res.motivo === 'sin_credencial') {
+          if (obtenerCredencialDispositivo()) {
+            st.innerText = 'Este teléfono ya está vinculado, pero todavía no guardó tu acceso para fichar sin conexión. Con internet, iniciá sesión una vez con tu legajo y PIN en este mismo teléfono; después vas a poder fichar offline.';
+          } else if (!offlineHabilitadoLocal()) {
+            st.innerText = 'Sin conexión: este teléfono todavía no está habilitado para uso offline. Pedile al administrador que active el modo offline y, con internet, iniciá sesión una vez en este mismo teléfono.';
+          } else {
+            st.innerText = 'Sin conexión: legajo/PIN no verificados en este dispositivo. Conectate a internet e iniciá sesión al menos una vez en este teléfono.';
+          }
         } else {
-          st.innerText = 'Sin conexión: legajo/PIN no verificados en este dispositivo. Conectate a internet e iniciá sesión al menos una vez en este teléfono.';
+          // pin_invalido: contamos el fallo (M1) y avisamos los intentos restantes.
+          const r = _registrarFalloOffline(legajoNorm);
+          const restantes = OFFLINE_MAX_FALLOS_BASE - (Number(r.fallos) || 0);
+          const nb = estadoBloqueoOffline(legajoNorm);
+          if (nb.bloqueado) {
+            const min = Math.max(1, Math.ceil(nb.segundosRestantes / 60));
+            st.innerText = `Demasiados intentos sin conexión. Esperá ${min} min antes de reintentar.`;
+          } else if (restantes > 0 && restantes <= 2) {
+            st.innerText = `PIN incorrecto. Te queda${restantes === 1 ? '' : 'n'} ${restantes} intento${restantes === 1 ? '' : 's'} antes del bloqueo temporal.`;
+          } else {
+            st.innerText = 'Sin conexión: legajo o PIN incorrectos.';
+          }
         }
         if (btn) btn.disabled = false; return;
+      }
+      const cred = res.cred;
+      // M1: login correcto -> se reinicia el contador de fallos de este legajo.
+      _limpiarFallosOffline(legajoNorm);
+      // M2 (migracion en caliente): si la credencial es legacy (v1, hash plano) y
+      // ahora el dispositivo esta vinculado, la re-guardamos ATADA al device (v2).
+      if (cred && cred.version !== 2 && obtenerCredencialDispositivo()) {
+        try { await cachearCredencialOffline(legajoNorm, pin, cred.uid, cred.nombre, cred.personal, cred.fotoMaster); } catch (_) {}
       }
       // Sesion OFFLINE: NO hay idToken. La identidad se ata luego, al sincronizar,
       // via el authUid cacheado + la credencial firmada del dispositivo (Worker).
       idTokenVig = null;
       sesionEsOffline = true;   // marca de sesion offline legitima: el fichaje NO debe exigir idToken
       uidSesion = cred.uid || null;
-      legajoSesion = String(legajo).trim();
+      legajoSesion = legajoNorm;
       document.getElementById('loginPin').value = '';
       document.getElementById('pantallaLogin').classList.add('hidden');
       document.getElementById('panelFichaje').classList.remove('hidden');
