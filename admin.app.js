@@ -2025,67 +2025,18 @@ async function guardarEdicionPersonal() {
       }
       return;
     } catch (eAtom) {
+      // [#4] El panel ya NO escribe /personal, /usuarios ni /credenciales de forma
+      //      directa (las Reglas los tienen en .write:false). Toda la edicion pasa
+      //      por el Worker; cualquier error se informa y se ABORTA, sin ruta legacy.
       const msgAtom = String((eAtom && eAtom.message) || eAtom);
-      if (!/desconocida/i.test(msgAtom)) {
-        // Error real de la operacion atomica (Auth, o inconsistencia parcial):
-        // se informa y NO se reintenta por la ruta legacy.
-        alert('No se pudo guardar de forma atómica: ' + msgAtom);
-        btn.disabled = false; btn.innerText = 'Guardar Cambios';
-        return;
-      }
-      console.warn('El Worker no conoce actualizarEmpleado; usando la ruta clásica.', msgAtom);
+      alert('No se pudo guardar los cambios: ' + msgAtom);
+      btn.disabled = false; btn.innerText = 'Guardar Cambios';
+      return;
     }
+  } else {
+    alert('No se puede guardar: el servicio de administración (Worker) no está configurado (URL_WORKER_AUTH vacío).');
+    btn.disabled = false; btn.innerText = 'Guardar Cambios';
   }
-  // ================== RUTA CLASICA (fallback) ==================
-  try {
-    const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/personal/${id}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datosActualizados) });
-    if (!res.ok) throw new Error('Error al actualizar en Firebase');
-    let avisoAuth = '';
-    // ¿Cambió el legajo? El login del empleado es legajo@demo.asistencia, así que
-    // si cambia el legajo también hay que cambiar el email de Auth, no solo /usuarios.
-    const legajoAnterior = String(fichaActual.legajo || '').trim();
-    const legajoNuevo = String(legajo).trim();
-    const legajoCambio = legajoAnterior !== '' && legajoAnterior !== legajoNuevo;
-    // Guarda la credencial hasheada nueva (si se cambió el PIN).
-    if (credencialNueva) {
-      await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/credenciales/${id}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(credencialNueva) });
-    }
-    // Sincroniza Firebase Auth vía el Worker cuando cambia el PIN (clave) y/o el legajo (email).
-    // Así el empleado puede loguear de verdad con su legajo/PIN nuevos, no solo con el hash local.
-    if (credencialNueva || legajoCambio) {
-      if (URL_WORKER_AUTH) {
-        try {
-          const tokenAdmin = await window.obtenerTokenAdmin();
-          const cuerpoWorker = { idToken: tokenAdmin, uid: id };
-          if (credencialNueva) cuerpoWorker.nuevaClave = String(pin).trim().padStart(6, '0');
-          if (legajoCambio) cuerpoWorker.nuevoEmail = legajoNuevo + '@demo.asistencia';
-          const wr = await fetch(URL_WORKER_AUTH, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpoWorker) });
-          const wd = await wr.json().catch(() => ({}));
-          if (!wr.ok || !wd.ok) avisoAuth = '\n\n⚠️ Los datos se guardaron, pero NO se pudo sincronizar el acceso (Auth): ' + (wd.error || ('HTTP ' + wr.status)) + '. El empleado sigue ingresando con su legajo/PIN anteriores hasta reintentar.';
-        } catch (e) { avisoAuth = '\n\n⚠️ Los datos se guardaron, pero no se pudo contactar el servicio de acceso (Auth). El empleado sigue ingresando con su legajo/PIN anteriores.'; }
-      } else {
-        avisoAuth = '\n\n⚠️ Nota: el cambio de PIN/legajo aún no está conectado al servicio de Auth (falta configurar URL_WORKER_AUTH), así que el empleado sigue ingresando con sus credenciales anteriores.';
-      }
-    }
-    // Sincroniza la identidad de acceso (/usuarios/<uid>) en la MISMA edición:
-    // si cambia el legajo o el nombre, /usuarios queda al día sin depender de
-    // apretar "Sincronizar identidades" a mano. No pisa el rol (solo legajo/nombre).
-    // El id de /personal es el uid del empleado, así que /usuarios/<id> es su identidad.
-    try {
-      await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/usuarios/${id}.json`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ legajo: String(legajo).trim(), nombre }) });
-    } catch (e) { console.warn('No se pudo sincronizar /usuarios en la edición:', e); }
-    mapaConfiguracionPersonal[id] = { ...(mapaConfiguracionPersonal[id] || {}), ...datosActualizados };
-    registrarAuditoria('PERSONAL_EDITADO', `personal/${id}`, { legajo, nombre });
-    cerrarModalEditar();
-    recargarDatosEfectivo();
-    // Si se cambio el PIN y Auth se sincronizo sin avisos, mostramos el comprobante.
-    if (pin && !avisoAuth && typeof window.mostrarComprobantePin === 'function') {
-      window.mostrarComprobantePin({ legajo: String(legajo).trim(), nombre, pin: String(pin).trim(), rol: rolGuardar, modo: 'cambio' });
-    } else {
-      alert('Personal actualizado con éxito.' + avisoAuth);
-    }
-  } catch(err) { alert('Ocurrió un error al editar: ' + err.toString()); }
-  finally { btn.disabled = false; btn.innerText = 'Guardar Cambios'; }
 }
 
 // Activa / da de baja a un vigilador. Un legajo INACTIVO no puede fichar
@@ -2095,17 +2046,14 @@ async function cambiarEstadoPersonal(firebaseId, estabaActivo) {
   const accion = estabaActivo ? 'dar de baja' : 'reactivar';
   if (!confirm(`¿Seguro que querés ${accion} a este vigilador? Un legajo dado de baja no podrá fichar.`)) return;
   try {
-    const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/personal/${firebaseId}.json`), {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ estado: nuevoEstado })
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    // [#4] El estado ya NO se escribe directo en /personal (Reglas .write:false).
+    //      Pasa por el Worker (actualizarEmpleado), que patchea /personal con la
+    //      service account y audita el cambio server-side.
+    await window.llamarWorkerAdmin({ accion: 'actualizarEmpleado', uid: firebaseId, personal: { estado: nuevoEstado } });
     if (mapaConfiguracionPersonal[firebaseId]) mapaConfiguracionPersonal[firebaseId].estado = nuevoEstado;
-    registrarAuditoria('PERSONAL_ESTADO', `personal/${firebaseId}`, { estado: nuevoEstado });
     alert(estabaActivo ? 'Vigilador dado de baja. Ya no podrá fichar.' : 'Vigilador reactivado.');
     recargarDatosEfectivo();
-  } catch(err) { alert('No se pudo actualizar el estado: ' + err.toString()); }
+  } catch(err) { alert('No se pudo actualizar el estado: ' + ((err && err.message) || err)); }
 }
 
 async function eliminarPersonal(firebaseId) {
@@ -2124,47 +2072,16 @@ async function eliminarPersonal(firebaseId) {
       recargarDatosEfectivo();
       return;
     } catch (eAtomDel) {
+      // [#4] El panel ya NO borra /personal, /usuarios ni /credenciales de forma
+      //      directa (Reglas .write:false). Toda la baja pasa por el Worker;
+      //      cualquier error se informa y se ABORTA, sin ruta legacy.
       const msgAtomDel = String((eAtomDel && eAtomDel.message) || eAtomDel);
-      if (!/desconocida/i.test(msgAtomDel)) {
-        alert('No se pudo eliminar de forma atómica: ' + msgAtomDel);
-        return;
-      }
-      console.warn('El Worker no conoce darDeBajaEmpleado; usando la ruta clásica.', msgAtomDel);
+      alert('No se pudo eliminar el registro: ' + msgAtomDel);
+      return;
     }
+  } else {
+    alert('No se puede eliminar: el servicio de administración (Worker) no está configurado (URL_WORKER_AUTH vacío).');
   }
-  // ================== RUTA CLASICA (fallback) ==================
-  try {
-    // 1. Borrar la ficha de /personal (verificando que el servidor lo acepte).
-    const resP = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/personal/${firebaseId}.json`), { method: 'DELETE' });
-    if (!resP.ok) {
-      let detalle = '';
-      try { detalle = (await resP.json())?.error || ''; } catch (_) {}
-      throw new Error(detalle || `el servidor rechazó el borrado (HTTP ${resP.status}).`);
-    }
-    // 2. Limpieza real de las ramas asociadas (identidad y credenciales).
-    //    No bloquean la operación si ya no existen; se registran los fallos.
-    try { await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/usuarios/${firebaseId}.json`), { method: 'DELETE' }); } catch (_) {}
-    try { await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/credenciales/${firebaseId}.json`), { method: 'DELETE' }); } catch (_) {}
-    // 3. Eliminar la cuenta de Firebase Auth para que no quede una cuenta
-    //    huerfana capaz de seguir autenticandose. El borrado en Auth solo se
-    //    puede hacer del lado del servidor (Admin SDK): se delega al Worker.
-    //    Es tolerante a fallo: no bloquea la baja de datos, pero avisa al admin.
-    let avisoAuthElim = '';
-    if (URL_WORKER_AUTH) {
-      try {
-        const tokenAdminElim = await window.obtenerTokenAdmin();
-        const wrElim = await fetch(URL_WORKER_AUTH, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken: tokenAdminElim, uid: firebaseId, accion: 'eliminar' }) });
-        const wdElim = await wrElim.json().catch(() => ({}));
-        if (!wrElim.ok || !wdElim.ok) avisoAuthElim = '\n\n⚠️ La ficha se elimino, pero NO se pudo dar de baja la cuenta de acceso (Auth): ' + (wdElim.error || ('HTTP ' + wrElim.status)) + '. El Worker debe soportar accion:"eliminar".';
-      } catch (e) { avisoAuthElim = '\n\n⚠️ La ficha se elimino, pero no se pudo contactar el servicio de acceso (Auth) para borrar la cuenta.'; }
-    } else {
-      avisoAuthElim = '\n\n⚠️ La ficha se elimino, pero la cuenta de acceso (Auth) sigue activa (falta configurar URL_WORKER_AUTH).';
-    }
-    registrarAuditoria('PERSONAL_ELIMINADO', `personal/${firebaseId}`, { legajo: legajoElim });
-    delete mapaConfiguracionPersonal[firebaseId];
-    alert('Registro eliminado con éxito (ficha, identidad y credenciales).' + avisoAuthElim);
-    recargarDatosEfectivo();
-  } catch(err) { alert('No se pudo eliminar el registro: ' + (err.message || err) + '\n\nSi el problema persiste, verificá que estés logueado como administrador.'); }
 }
 
 async function abrirModalTurnosPersonal(id) {

@@ -335,11 +335,14 @@ async function registrarEmpleado(legajo, nombre, pin, fotoMaster = null, rol = '
     const credencial = await createUserWithEmailAndPassword(secondaryAuth, emailEmpleado, passwordEmpleado);
     const uid = credencial.user.uid;
 
-    // c. Guardar la ficha del empleado en personal/${uid}
+    // c. [#4] La ESCRITURA de /personal + /credenciales + /usuarios la hace el
+    //    Worker con la service account (las Reglas tienen esos nodos en
+    //    .write:false para el cliente). Aqui solo preparamos los datos y
+    //    delegamos: alta atomica + auditoria server-side.
     // El PIN no se guarda en texto plano: se deriva un hash con salt.
     const pinSaltNuevo = window.generarSaltVigix();
     const pinHashNuevo = await window.hashPinVigix(pinLimpio, pinSaltNuevo);
-    await set(ref(mainDb, `personal/${uid}`), {
+    const datosPersonal = {
       legajo: legajoLimpio,
       nombre: nombreLimpio,
       estado: "activo",
@@ -353,26 +356,22 @@ async function registrarEmpleado(legajo, nombre, pin, fotoMaster = null, rol = '
       fotoMaster: fotoMaster || null,
       horarioHabitual: { inicio: '', fin: '' },
       objetivosAsignados: []
-    });
-    // Credenciales en nodo aislado (acceso solo admin/dueño por Reglas).
-    await set(ref(mainDb, `credenciales/${uid}`), {
-      pinHash: pinHashNuevo,
-      pinSalt: pinSaltNuevo
-    });
+    };
 
-    // Mapa de identidad /usuarios/<uid> = { legajo, rol }. IMPRESCINDIBLE:
-    // las Reglas de Seguridad usan root.child('usuarios').child(auth.uid).child('legajo')
-    // para autorizar que el empleado lea SOLO su propia ficha e historial.
-    // Sin esta entrada, el empleado no podría ver sus datos ni fichar con
-    // validación completa. El rol se toma del selector del alta (por defecto
-    // 'empleado'; 'supervisor'/'admin' solo cuando el admin lo elige).
-    await set(ref(mainDb, `usuarios/${uid}`), {
-      legajo: legajoLimpio,
-      rol: rolLimpio
-    });
-
-    // d. Cerrar de inmediato la sesión secundaria
+    // d. Cerrar de inmediato la sesión secundaria (el Worker usa el token del
+    //    admin de la sesión principal, no esta).
     await signOut(secondaryAuth);
+
+    // e. Alta atomica en el servidor. Si falla, el Worker revierte TODO (incluida
+    //    la cuenta de Auth recien creada), asi que el legajo queda libre para
+    //    reintentar sin colisiones.
+    await window.llamarWorkerAdmin({
+      accion: 'crearEmpleadoDatos',
+      uid,
+      personal: datosPersonal,
+      credencial: { pinHash: pinHashNuevo, pinSalt: pinSaltNuevo },
+      usuario: { legajo: legajoLimpio, rol: rolLimpio }
+    });
 
     const etiquetaRol = rolLimpio === 'admin' ? 'Administrador'
                       : rolLimpio === 'supervisor' ? 'Supervisor'
