@@ -434,3 +434,18 @@ a{color:inherit;text-decoration:inherit}
 .objetivo-error{border-color:rgb(244 63 94 / 1)!important;box-shadow:0 0 0 3px rgb(244 63 94 / 0.35)!important;animation:shakeObjetivo .4s ease-in-out}
 /* Boton SALIDA bloqueado hasta corregir el objetivo (aditivo) */
 .btn-bloqueado{opacity:.45!important;cursor:not-allowed!important;filter:grayscale(.4)!important;pointer-events:none!important}
+
+/* Impresion aislada del comprobante de PIN (patron "mostrar una sola vez").
+   Al imprimir con body.print-comprobante se oculta todo menos el comprobante,
+   y la tarjeta se pasa a tinta sobre blanco para que salga legible en papel. */
+@media print{
+  body.print-comprobante>*:not(#modalComprobantePin){display:none!important}
+  body.print-comprobante #modalComprobantePin{position:static!important;display:block!important;background:#fff!important;backdrop-filter:none!important;padding:0!important}
+  body.print-comprobante #modalComprobantePin>div{max-width:100%!important;background:#fff!important;border:none!important;box-shadow:none!important}
+  body.print-comprobante #modalComprobantePin .no-print{display:none!important}
+  body.print-comprobante #modalComprobantePin .comprobante-card{border:1px solid #000!important;border-radius:0!important;padding:16px!important}
+  body.print-comprobante #modalComprobantePin .comprobante-card *{color:#000!important}
+  body.print-comprobante #modalComprobantePin .comprobante-card .border-b,
+  body.print-comprobante #modalComprobantePin .comprobante-card .border{border-color:#000!important}
+  body.print-comprobante #modalComprobantePin #comprobantePin{color:#000!important}
+}

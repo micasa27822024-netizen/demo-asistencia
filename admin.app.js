@@ -407,6 +407,130 @@ function generarPinEmpleado() {
   if (inputPin) inputPin.value = pin;
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+//  COMPROBANTE DE CREDENCIALES (PIN) — patron "mostrar una sola vez".
+//  El PIN NUNCA se guarda en texto plano. En el UNICO instante en que se
+//  conoce (alta o cambio de PIN, dentro del navegador del admin) se muestra
+//  este comprobante para descargarlo en PDF / imprimirlo / copiarlo y
+//  entregarselo al empleado. No se persiste en ningun lado: si se pierde, se
+//  resetea el PIN desde "Configurar" y se reemite. Asi se tiene un registro
+//  entregable SIN crear la vulnerabilidad de almacenar PINs recuperables.
+// ────────────────────────────────────────────────────────────────────────────
+var _comprobantePinActual = null;
+
+function etiquetaRolComprobante(rol) {
+  return rol === 'admin' ? 'Administrador'
+       : rol === 'supervisor' ? 'Supervisor'
+       : 'Empleado (vigilador)';
+}
+
+// Abre el comprobante con los datos recien generados. 'modo': 'alta' | 'cambio'.
+function mostrarComprobantePin(datos) {
+  datos = datos || {};
+  const pin = String(datos.pin || '').trim();
+  const legajo = String(datos.legajo || '').trim();
+  const nombre = String(datos.nombre || '').trim();
+  const rol = String(datos.rol || 'empleado').trim();
+  const modo = datos.modo === 'cambio' ? 'cambio' : 'alta';
+  const fecha = new Date().toLocaleString('es-AR', { hour12: false });
+  _comprobantePinActual = { pin, legajo, nombre, rol, modo, fecha };
+
+  const modal = document.getElementById('modalComprobantePin');
+  if (!modal) { // Fallback si esta version del HTML no tiene el modal.
+    alert('PIN de ' + nombre + ' (legajo ' + legajo + '): ' + pin + '\n\nAnotalo AHORA: no se vuelve a mostrar.');
+    return;
+  }
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('comprobanteNombre', nombre || '—');
+  set('comprobanteLegajo', legajo || '—');
+  set('comprobantePin', pin || '—');
+  set('comprobanteRol', etiquetaRolComprobante(rol));
+  set('comprobanteFecha', fecha);
+  const titulo = document.getElementById('comprobanteTitulo');
+  if (titulo) titulo.textContent = modo === 'cambio' ? 'PIN actualizado' : 'Nuevo acceso creado';
+  modal.classList.remove('hidden');
+}
+window.mostrarComprobantePin = mostrarComprobantePin;
+
+function cerrarComprobantePin() {
+  const modal = document.getElementById('modalComprobantePin');
+  if (modal) modal.classList.add('hidden');
+  _comprobantePinActual = null;
+}
+
+function copiarComprobantePin() {
+  if (!_comprobantePinActual) return;
+  const d = _comprobantePinActual;
+  const texto = 'Acceso Demo Asistencia / Vigix\n'
+    + 'Nombre: ' + d.nombre + '\n'
+    + 'Legajo: ' + d.legajo + '\n'
+    + 'PIN: ' + d.pin + '\n'
+    + 'Rol: ' + etiquetaRolComprobante(d.rol) + '\n'
+    + 'Emitido: ' + d.fecha;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texto).then(function(){ avisarCopiaComprobante(true); }, function(){ avisarCopiaComprobante(false); });
+  } else {
+    avisarCopiaComprobante(false);
+  }
+}
+
+function avisarCopiaComprobante(ok) {
+  const btn = document.getElementById('btnComprobanteCopiar');
+  if (!btn) return;
+  if (!btn.dataset.orig) btn.dataset.orig = btn.innerHTML;
+  btn.innerHTML = ok ? '<i class="fa-solid fa-check"></i> ¡Copiado!' : '<i class="fa-solid fa-triangle-exclamation"></i> Copialo a mano';
+  setTimeout(function(){ btn.innerHTML = btn.dataset.orig; }, 2500);
+}
+
+// Imprime SOLO el comprobante (CSS @media print en styles.css lo aisla).
+function imprimirComprobantePin() {
+  document.body.classList.add('print-comprobante');
+  const limpiar = function(){ document.body.classList.remove('print-comprobante'); window.removeEventListener('afterprint', limpiar); };
+  window.addEventListener('afterprint', limpiar);
+  setTimeout(function(){ try { window.print(); } catch (e) {} setTimeout(limpiar, 1500); }, 50);
+}
+
+// Genera un PDF descargable con jsPDF (ya se usa para los reportes).
+async function descargarComprobantePinPDF() {
+  if (!_comprobantePinActual) return;
+  const d = _comprobantePinActual;
+  const btn = document.getElementById('btnComprobantePDF');
+  const original = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generando...'; }
+  try {
+    await lazyExport();
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setDrawColor(16, 185, 129); doc.setLineWidth(0.8); doc.rect(14, 16, 182, 112);
+    doc.setFontSize(10); doc.setTextColor(16, 185, 129);
+    doc.text('DEMO ASISTENCIA S.A. · VIGIX', 20, 26);
+    doc.setFontSize(18); doc.setTextColor(20, 20, 20);
+    doc.text('Comprobante de acceso', 20, 38);
+    doc.setFontSize(10); doc.setTextColor(90, 90, 90);
+    doc.text('Entregar al empleado. Documento confidencial.', 20, 45);
+    doc.setDrawColor(220); doc.line(20, 50, 190, 50);
+    doc.setFontSize(12);
+    let y = 62;
+    const fila = function(etq, val){ doc.setTextColor(120,120,120); doc.text(etq, 20, y); doc.setTextColor(20,20,20); doc.text(String(val || '—'), 70, y); y += 11; };
+    fila('Nombre:', d.nombre);
+    fila('Legajo:', d.legajo);
+    fila('Rol:', etiquetaRolComprobante(d.rol));
+    doc.setTextColor(120,120,120); doc.text('PIN de acceso:', 20, y);
+    doc.setFontSize(22); doc.setTextColor(16, 120, 80); doc.text(String(d.pin || '—'), 70, y + 1);
+    doc.setFontSize(9); y += 14;
+    doc.setTextColor(120,120,120); doc.text('Emitido: ' + d.fecha, 20, y);
+    doc.setFontSize(8); doc.setTextColor(140,140,140);
+    doc.text('El PIN no se almacena en texto plano. Si se extravia, el administrador puede resetearlo y', 20, 118);
+    doc.text('reemitir este comprobante. Ingreso del empleado: legajo + PIN.', 20, 122);
+    const nombreArch = ('Acceso_' + (d.legajo || 'empleado') + '_' + new Date().toISOString().slice(0,10) + '.pdf').replace(/[^\w.\-]+/g, '_');
+    doc.save(nombreArch);
+  } catch (e) {
+    alert('No se pudo generar el PDF: ' + ((e && e.message) || e) + '\nPodes imprimir o copiar los datos como alternativa.');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = original; }
+  }
+}
+
 function validarPasswordAdmin(e) {
   e.preventDefault();
   let email = (document.getElementById('inputEmailAdmin') ? document.getElementById('inputEmailAdmin').value : '').trim();
@@ -1878,10 +2002,15 @@ async function guardarEdicionPersonal() {
       // Exito atomico: el Worker ya audito. Refrescamos cache local y cerramos
       // SIN ejecutar las escrituras sueltas de abajo (ruta no atomica).
       mapaConfiguracionPersonal[id] = { ...(mapaConfiguracionPersonal[id] || {}), ...datosActualizados };
-      alert('Personal actualizado con éxito.');
       cerrarModalEditar();
       recargarDatosEfectivo();
       btn.disabled = false; btn.innerText = 'Guardar Cambios';
+      // Si se cambio el PIN, mostramos el comprobante (unica vez que se ve en claro).
+      if (pin && typeof window.mostrarComprobantePin === 'function') {
+        window.mostrarComprobantePin({ legajo: String(legajo).trim(), nombre, pin: String(pin).trim(), rol: rolGuardar, modo: 'cambio' });
+      } else {
+        alert('Personal actualizado con éxito.');
+      }
       return;
     } catch (eAtom) {
       const msgAtom = String((eAtom && eAtom.message) || eAtom);
@@ -1935,9 +2064,14 @@ async function guardarEdicionPersonal() {
     } catch (e) { console.warn('No se pudo sincronizar /usuarios en la edición:', e); }
     mapaConfiguracionPersonal[id] = { ...(mapaConfiguracionPersonal[id] || {}), ...datosActualizados };
     registrarAuditoria('PERSONAL_EDITADO', `personal/${id}`, { legajo, nombre });
-    alert('Personal actualizado con éxito.' + avisoAuth);
     cerrarModalEditar();
     recargarDatosEfectivo();
+    // Si se cambio el PIN y Auth se sincronizo sin avisos, mostramos el comprobante.
+    if (pin && !avisoAuth && typeof window.mostrarComprobantePin === 'function') {
+      window.mostrarComprobantePin({ legajo: String(legajo).trim(), nombre, pin: String(pin).trim(), rol: rolGuardar, modo: 'cambio' });
+    } else {
+      alert('Personal actualizado con éxito.' + avisoAuth);
+    }
   } catch(err) { alert('Ocurrió un error al editar: ' + err.toString()); }
   finally { btn.disabled = false; btn.innerText = 'Guardar Cambios'; }
 }
@@ -2829,4 +2963,10 @@ function initInlineHandlers() {
   document.getElementById("btnCerrarAlertas").addEventListener("click", function(e) { cerrarModalAlertasFichadas() });
   document.getElementById("btnNotifNav").addEventListener("click", function(e) { solicitarNotificacionesNavegador() });
   document.getElementById("btnMarcarVistas2").addEventListener("click", function(e) { marcarTodasAlertasFichadasVistas() });
+  // Comprobante de PIN (mostrar una sola vez): botones del modal.
+  var _cbCerrar = document.getElementById("btnCerrarComprobante"); if (_cbCerrar) _cbCerrar.addEventListener("click", function(e) { cerrarComprobantePin() });
+  var _cbCerrar2 = document.getElementById("btnCerrarComprobante2"); if (_cbCerrar2) _cbCerrar2.addEventListener("click", function(e) { cerrarComprobantePin() });
+  var _cbPDF = document.getElementById("btnComprobantePDF"); if (_cbPDF) _cbPDF.addEventListener("click", function(e) { descargarComprobantePinPDF() });
+  var _cbImp = document.getElementById("btnComprobanteImprimir"); if (_cbImp) _cbImp.addEventListener("click", function(e) { imprimirComprobantePin() });
+  var _cbCop = document.getElementById("btnComprobanteCopiar"); if (_cbCop) _cbCop.addEventListener("click", function(e) { copiarComprobantePin() });
 }

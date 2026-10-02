@@ -1014,6 +1014,41 @@
     </div>
   </div>
 
+  <!-- MODAL COMPROBANTE DE PIN / ACCESO (patron "mostrar una sola vez") -->
+  <div id="modalComprobantePin" class="fixed inset-0 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-[80]">
+    <div class="bg-slate-800 border border-emerald-500/40 rounded-2xl p-5 md:p-6 max-w-md w-full relative shadow-2xl space-y-4">
+      <button id="btnCerrarComprobante" type="button" class="no-print absolute top-3 right-3 text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+      <div class="comprobante-card space-y-4">
+        <div class="flex items-center gap-3 border-b border-slate-700 pb-3 pr-8">
+          <div class="w-11 h-11 bg-emerald-500/15 border border-emerald-500/30 rounded-xl flex items-center justify-center text-emerald-400 text-lg"><i class="fa-solid fa-id-badge"></i></div>
+          <div>
+            <h3 id="comprobanteTitulo" class="font-bold text-white text-lg">Nuevo acceso creado</h3>
+            <p class="text-xs text-slate-400">Comprobante de acceso · Demo Asistencia S.A.</p>
+          </div>
+        </div>
+        <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-[12px] text-amber-200 no-print">
+          <i class="fa-solid fa-triangle-exclamation"></i> Guardá o imprimí este comprobante <strong>ahora</strong>: el PIN no se vuelve a mostrar. Si se pierde, podés resetearlo desde "Configurar".
+        </div>
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between gap-3"><span class="text-slate-400">Nombre</span><span id="comprobanteNombre" class="text-white font-semibold text-right"></span></div>
+          <div class="flex justify-between gap-3"><span class="text-slate-400">Legajo</span><span id="comprobanteLegajo" class="text-white font-semibold text-right"></span></div>
+          <div class="flex justify-between gap-3"><span class="text-slate-400">Rol</span><span id="comprobanteRol" class="text-white font-semibold text-right"></span></div>
+        </div>
+        <div class="bg-slate-950 border border-emerald-500/30 rounded-xl p-4 text-center">
+          <p class="text-[11px] uppercase tracking-widest text-slate-400 mb-1">PIN de acceso</p>
+          <p id="comprobantePin" class="text-3xl font-mono font-black tracking-[0.3em] text-emerald-400"></p>
+        </div>
+        <p class="text-[11px] text-slate-500">Emitido: <span id="comprobanteFecha"></span> · Ingreso del empleado: legajo + PIN.</p>
+      </div>
+      <div class="flex flex-wrap justify-end gap-2 pt-2 border-t border-slate-700 no-print">
+        <button id="btnComprobanteCopiar" type="button" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-xl text-xs font-semibold transition"><i class="fa-solid fa-copy"></i> Copiar datos</button>
+        <button id="btnComprobanteImprimir" type="button" class="bg-sky-600 hover:bg-sky-500 text-white px-3 py-2 rounded-xl text-xs font-bold transition"><i class="fa-solid fa-print"></i> Imprimir</button>
+        <button id="btnComprobantePDF" type="button" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-xl text-xs font-bold transition"><i class="fa-solid fa-file-pdf"></i> Descargar PDF</button>
+        <button id="btnCerrarComprobante2" type="button" class="bg-slate-800 border border-slate-600 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-xl text-xs font-semibold transition">Listo</button>
+      </div>
+    </div>
+  </div>
+
   <script src="licencia.js"></script>
   <script src="admin.app.js"></script>
 

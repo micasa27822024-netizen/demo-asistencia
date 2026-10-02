@@ -339,7 +339,13 @@ async function registrarEmpleado(legajo, nombre, pin, fotoMaster = null, rol = '
     const etiquetaRol = rolLimpio === 'admin' ? 'Administrador'
                       : rolLimpio === 'supervisor' ? 'Supervisor'
                       : 'Empleado (vigilador)';
-    alert(`✅ Usuario registrado con éxito.\nLegajo: ${legajoLimpio}\nNombre: ${nombreLimpio}\nRol: ${etiquetaRol}\nPIN de acceso: ${pinLimpio}`);
+    // Comprobante "mostrar una sola vez": el PIN solo se conoce en claro ahora.
+    // Se abre el modal para descargar/imprimir/copiar y entregarselo al empleado.
+    if (typeof window.mostrarComprobantePin === 'function') {
+      window.mostrarComprobantePin({ legajo: legajoLimpio, nombre: nombreLimpio, pin: pinLimpio, rol: rolLimpio, modo: 'alta' });
+    } else {
+      alert(`✅ Usuario registrado con éxito.\nLegajo: ${legajoLimpio}\nNombre: ${nombreLimpio}\nRol: ${etiquetaRol}\nPIN de acceso: ${pinLimpio}`);
+    }
     return { ok: true, uid, rol: rolLimpio };
   } catch (error) {
     // e. Manejo claro de errores
