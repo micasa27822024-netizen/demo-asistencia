@@ -76,7 +76,7 @@
       <form id="formValidarPass" class="space-y-4">
         <div class="relative">
           <i class="fa-solid fa-envelope absolute left-3 top-3.5 text-slate-400 text-sm"></i>
-          <input type="email" id="inputEmailAdmin" placeholder="Correo (ej: admin@vigix.com)" required autocomplete="username" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500 text-center text-sm">
+          <input type="email" id="inputEmailAdmin" placeholder="Legajo o correo (ej: 120000 o admin@vigix.com)" required autocomplete="username" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500 text-center text-sm">
         </div>
         <div class="relative">
           <i class="fa-solid fa-lock absolute left-3 top-3.5 text-slate-400 text-sm"></i>
@@ -408,6 +408,34 @@
             </thead>
             <tbody id="cuerpoTablaPersonal" class="divide-y divide-slate-700/50">
               <tr><td colspan="6" class="p-8 text-center text-slate-400">Cargando personal...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SECCION APARTE: SUPERVISORES Y ADMINISTRADORES (aditivo) -->
+      <!-- Los usuarios con rol supervisor/admin NO son vigiladores: se listan
+           separados de la tabla de personal para que no se mezclen. -->
+      <div class="bg-slate-800 rounded-2xl border border-indigo-500/30 overflow-hidden shadow-xl">
+        <div class="px-4 py-3 border-b border-slate-700 flex items-center gap-2">
+          <i class="fa-solid fa-user-shield text-indigo-400"></i>
+          <h3 class="text-sm font-bold text-white">Supervisores y Administradores</h3>
+          <span class="text-[11px] text-slate-400">Acceso al panel &mdash; no fichan como vigiladores</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm text-slate-300">
+            <thead class="bg-slate-950 text-slate-400 uppercase text-xs border-b border-slate-700">
+              <tr>
+                <th class="p-4">Legajo</th>
+                <th class="p-4">Nombre / Rol</th>
+                <th class="p-4 text-center">PIN</th>
+                <th class="p-4 text-center">Foto M&aacute;ster</th>
+                <th class="p-4 text-center">Estado</th>
+                <th class="p-4 text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="cuerpoTablaRoles" class="divide-y divide-slate-700/50">
+              <tr><td colspan="6" class="p-8 text-center text-slate-400">Cargando&hellip;</td></tr>
             </tbody>
           </table>
         </div>
@@ -856,12 +884,17 @@
             <input type="time" id="editHorarioFin" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
           </div>
         </div>
-        <div>
+        <div id="bloqueObjetivosEditar">
           <label class="block text-xs uppercase text-slate-400 mb-2">Objetivos autorizados para este vigilador</label>
           <div id="editObjetivosAsignados" class="max-h-40 overflow-y-auto bg-slate-950 border border-slate-700 rounded-xl p-3 space-y-2 text-xs">
             <span class="text-slate-500">Cargando objetivos...</span>
           </div>
-          <p class="text-[11px] text-slate-500 mt-1">Solo los objetivos marcados podrán aparecer en la pantalla de fichada de este vigilador.</p>
+          <p class="text-[11px] text-slate-500 mt-1">Solo los objetivos marcados podran aparecer en la pantalla de fichada de este vigilador.</p>
+        </div>
+        <div id="avisoRolSinObjetivos" class="hidden">
+          <div class="bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-3 text-[12px] text-indigo-200">
+            <i class="fa-solid fa-user-shield"></i> Este usuario es de <strong>rol de control</strong> (supervisor/administrador). No se le asignan objetivos de fichada: su funcion es supervisar, no fichar en un puesto.
+          </div>
         </div>
       </div>
 

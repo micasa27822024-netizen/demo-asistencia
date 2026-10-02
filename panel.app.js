@@ -9,7 +9,12 @@ window.onload = function() {
 
 function validarPassword(e) {
   e.preventDefault();
-  const email = (document.getElementById('inputEmail') ? document.getElementById('inputEmail').value : '').trim();
+  let email = (document.getElementById('inputEmail') ? document.getElementById('inputEmail').value : '').trim();
+  // Ingreso simplificado: si escribio SOLO el legajo (sin "@"), agregamos el
+  // dominio sintetico de los usuarios creados desde el panel ("@demo.asistencia").
+  // Si escribio un correo completo (ej: supervisor@vigix.com, creado a mano en la
+  // base), se respeta tal cual. Asi conviven ambos tipos de cuenta.
+  if (email && email.indexOf('@') === -1) email = email + '@demo.asistencia';
   const input = document.getElementById('inputPass').value;
   const errorMsg = document.getElementById('msgErrorPass');
   errorMsg.classList.add('hidden');

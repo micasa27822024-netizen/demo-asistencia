@@ -78,6 +78,7 @@ let datosFiltradosMarcaciones = [];
 let paginaActualMarcaciones = 1;
 let filasPorPaginaMarcaciones = 25;
 let datosPersonal = [];
+let mapaRolesUsuarios = {};  // uid -> rol ('empleado' | 'supervisor' | 'admin'). Para separar la lista.
 let datosObjetivos = [];
 let mapaConfiguracionPersonal = {};
 let asignacionesTurnosAdmin = [];
@@ -408,7 +409,12 @@ function generarPinEmpleado() {
 
 function validarPasswordAdmin(e) {
   e.preventDefault();
-  const email = (document.getElementById('inputEmailAdmin') ? document.getElementById('inputEmailAdmin').value : '').trim();
+  let email = (document.getElementById('inputEmailAdmin') ? document.getElementById('inputEmailAdmin').value : '').trim();
+  // Ingreso simplificado: si la persona escribio SOLO el legajo (sin "@"), le
+  // agregamos el dominio sintetico que usan los usuarios creados desde el panel
+  // ("legajo@demo.asistencia"). Si escribio un correo completo (ej: admin@vigix.com,
+  // creados a mano en la base), se respeta tal cual. Asi conviven ambos.
+  if (email && email.indexOf('@') === -1) email = email + '@demo.asistencia';
   const input = document.getElementById('inputPassAdmin').value;
   const errorMsg = document.getElementById('msgErrorPassAdmin');
   errorMsg.classList.add('hidden');
@@ -1003,6 +1009,19 @@ async function recargarDatosEfectivo() {
         }
       });
     }
+    // 1a. Cargar el mapa de roles /usuarios (uid -> rol) para separar la lista.
+    //     Lectura permitida al admin por Reglas (/usuarios .read = admin).
+    mapaRolesUsuarios = {};
+    try {
+      const resUsuarios = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/usuarios.json`));
+      const dataUsuarios = await resUsuarios.json();
+      if (dataUsuarios) {
+        Object.keys(dataUsuarios).forEach(uid => {
+          const u = dataUsuarios[uid] || {};
+          mapaRolesUsuarios[uid] = (u.rol || 'empleado');
+        });
+      }
+    } catch (_) { /* si falla, todos se muestran como personal (comportamiento previo) */ }
     renderizarTablaPersonal(datosPersonal);
 
     // 1b. Cargar TODOS los cambios de turno (para derivar el horario programado
@@ -1679,12 +1698,30 @@ function filtrarTablaNovedades() {
 
 function renderizarTablaPersonal(registros) {
   const cuerpo = document.getElementById('cuerpoTablaPersonal');
+  const cuerpoRoles = document.getElementById('cuerpoTablaRoles');
   cuerpo.innerHTML = "";
+  if (cuerpoRoles) cuerpoRoles.innerHTML = "";
   if (!registros || registros.length === 0) {
     cuerpo.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-slate-400">No hay personal registrado.</td></tr>`;
+    if (cuerpoRoles) cuerpoRoles.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-slate-400">No hay supervisores ni administradores.</td></tr>`;
     return;
   }
+  let nVig = 0, nRoles = 0;
   registros.forEach(fila => {
+    const firebaseId = fila[5];
+    const rol = mapaRolesUsuarios[firebaseId] || 'empleado';
+    const esRol = (rol === 'supervisor' || rol === 'admin');
+    const tr = construirFilaPersonal(fila, rol);
+    if (esRol && cuerpoRoles) { cuerpoRoles.appendChild(tr); nRoles++; }
+    else { cuerpo.appendChild(tr); nVig++; }
+  });
+  if (nVig === 0) cuerpo.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-slate-400">No hay vigiladores registrados.</td></tr>`;
+  if (cuerpoRoles && nRoles === 0) cuerpoRoles.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-slate-400">No hay supervisores ni administradores.</td></tr>`;
+}
+
+// Construye una fila de la tabla de personal. Si el usuario es supervisor/admin
+// se le agrega una etiqueta de rol junto al nombre (misma estructura de columnas).
+function construirFilaPersonal(fila, rol) {
     const legajoStr = String(fila[0]);
     const nombreStr = fila[1] || '';
     const pinStr = fila[3] || '****';
@@ -1696,6 +1733,14 @@ function renderizarTablaPersonal(registros) {
     const objetivos = Array.isArray(cfg.objetivosAsignados) ? cfg.objetivosAsignados : [];
     const horarioTexto = h.inicio && h.fin ? `${h.inicio} - ${h.fin}` : 'Sin horario habitual';
     const objetivosTexto = objetivos.length ? `${objetivos.length} autorizado(s)` : 'Sin objetivos asignados';
+    const esRol = (rol === 'supervisor' || rol === 'admin');
+    const badgeRol = esRol
+      ? `<span class="ml-2 align-middle text-[10px] font-bold uppercase px-2 py-0.5 rounded ${rol === 'admin' ? 'bg-rose-500/15 text-rose-300 border border-rose-500/40' : 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/40'}">${rol === 'admin' ? 'Administrador' : 'Supervisor'}</span>`
+      : '';
+    // Linea secundaria: para vigiladores el horario/objetivos; para roles, como ingresan al panel.
+    const subLinea = esRol
+      ? `Ingreso al panel: legajo ${escaparHtml(legajoStr)} + PIN`
+      : `${escaparHtml(horarioTexto)} · ${escaparHtml(objetivosTexto)}`;
     const btnFotoMaster = (fotoMaster && fotoMaster.length > 50)
       ? `<button data-accion="abrirFoto" data-a1="${escaparHtml(fotoMaster)}" class="inline-flex items-center gap-1 bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1 rounded-lg text-xs font-semibold transition"><i class="fa-solid fa-id-card"></i> Ver Foto</button>`
       : `<span class="text-xs text-slate-500">Sin Foto</span>`;
@@ -1704,22 +1749,23 @@ function renderizarTablaPersonal(registros) {
     const btnEstadoVig = esActivoVig
       ? `<button data-accion="cambiarEstadoPersonal" data-a1="${escaparHtml(firebaseId)}" data-a2="true" class="bg-orange-600/20 text-orange-400 hover:bg-orange-600/40 border border-orange-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1"><i class="fa-solid fa-user-slash"></i> Dar de baja</button>`
       : `<button data-accion="cambiarEstadoPersonal" data-a1="${escaparHtml(firebaseId)}" data-a2="false" class="bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/40 border border-emerald-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1"><i class="fa-solid fa-user-check"></i> Reactivar</button>`;
+    // El boton "Turnos" solo tiene sentido para vigiladores (fichan en un puesto).
+    const btnTurnos = esRol ? '' : `<button data-accion="abrirModalTurnosPersonal" data-a1="${escaparHtml(firebaseId)}" class="bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1"><i class="fa-solid fa-calendar-days"></i> Turnos</button>`;
     const tr = document.createElement('tr');
     tr.className = "hover:bg-slate-700/30 transition";
     tr.innerHTML = `
       <td class="p-4 font-bold text-amber-400">${escaparHtml(legajoStr)}</td>
-      <td class="p-4 font-medium text-white">${escaparHtml(nombreStr)}<div class="text-[11px] text-slate-500 mt-1">${escaparHtml(horarioTexto)} · ${escaparHtml(objetivosTexto)}</div></td>
+      <td class="p-4 font-medium text-white">${escaparHtml(nombreStr)}${badgeRol}<div class="text-[11px] text-slate-500 mt-1">${subLinea}</div></td>
       <td class="p-4 text-center font-mono text-slate-400">${escaparHtml(pinStr)}</td>
       <td class="p-4 text-center">${btnFotoMaster}</td>
       <td class="p-4 text-center"><span class="${claseEstadoVig} px-2 py-1 rounded text-xs">${escaparHtml(estadoStr)}</span></td>
       <td class="p-4 text-center"><div class="flex flex-wrap justify-center gap-2">
         <button data-accion="abrirModalEditar" data-a1="${escaparHtml(firebaseId)}" class="bg-amber-600/20 text-amber-400 hover:bg-amber-600/40 border border-amber-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1"><i class="fa-solid fa-sliders"></i> Configurar</button>
-        <button data-accion="abrirModalTurnosPersonal" data-a1="${escaparHtml(firebaseId)}" class="bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1"><i class="fa-solid fa-calendar-days"></i> Turnos</button>
+        ${btnTurnos}
         ${btnEstadoVig}
         <button data-accion="eliminarPersonal" data-a1="${escaparHtml(firebaseId)}" class="bg-rose-600/20 text-rose-400 hover:bg-rose-600/40 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1"><i class="fa-solid fa-trash"></i> Eliminar</button>
       </div></td>`;
-    cuerpo.appendChild(tr);
-  });
+    return tr;
 }
 
 async function abrirModalEditar(id) {
@@ -1738,6 +1784,14 @@ async function abrirModalEditar(id) {
     ? `<span class="text-emerald-400"><i class="fa-solid fa-check"></i> Posee foto máster cargada</span>`
     : `<span class="text-rose-400"><i class="fa-solid fa-xmark"></i> Sin foto máster</span>`;
   await cargarCheckboxObjetivosPersonal(cfg.objetivosAsignados || []);
+  // Roles de control (supervisor/admin): NO se les asignan objetivos de fichada.
+  // Se oculta el selector de objetivos y se muestra un aviso explicativo.
+  const rolActual = mapaRolesUsuarios[id] || 'empleado';
+  const esRolControl = (rolActual === 'supervisor' || rolActual === 'admin');
+  const bloqueObj = document.getElementById('bloqueObjetivosEditar');
+  const avisoRol = document.getElementById('avisoRolSinObjetivos');
+  if (bloqueObj) bloqueObj.classList.toggle('hidden', esRolControl);
+  if (avisoRol) avisoRol.classList.toggle('hidden', !esRolControl);
   document.getElementById('modalEditarPersonal').classList.remove('hidden');
 }
 
@@ -1779,13 +1833,17 @@ async function guardarEdicionPersonal() {
   if ((inicio && !fin) || (!inicio && fin)) return alert('Completá ambos horarios habituales o dejalos vacíos.');
   btn.disabled = true; btn.innerText = 'Guardando...';
   const objetivosAsignados = Array.from(document.querySelectorAll('.objetivo-personal-checkbox:checked')).map(cb => ({ id: cb.value, nombre: cb.dataset.nombre || '' }));
+  // Blindaje: a los roles de control (supervisor/admin) nunca se les guardan
+  // objetivos, aunque por algun motivo llegara a existir una seleccion previa.
+  const rolGuardar = mapaRolesUsuarios[id] || 'empleado';
+  const objetivosFinal = (rolGuardar === 'supervisor' || rolGuardar === 'admin') ? [] : objetivosAsignados;
   // El PIN nunca se guarda en texto plano: si se ingresó uno nuevo se deriva hash+salt;
   // si el campo queda vacío, se conserva el PIN actual.
   const fichaActual = mapaConfiguracionPersonal[id] || {};
   // Las Reglas FINALES exigen en /personal/<id>: legajo (STRING), nombre y estado.
   // Un PATCH que no reenvíe 'estado' (o con legajo numérico) es DENEGADO por .validate.
   // Por eso reenviamos estado (conservando el actual) y forzamos legajo como texto.
-  const datosActualizados = { legajo: String(legajo).trim(), nombre, estado: (fichaActual.estado || 'activo'), horarioHabitual: { inicio: inicio || '', fin: fin || '' }, objetivosAsignados };
+  const datosActualizados = { legajo: String(legajo).trim(), nombre, estado: (fichaActual.estado || 'activo'), horarioHabitual: { inicio: inicio || '', fin: fin || '' }, objetivosAsignados: objetivosFinal };
   // Las credenciales (pinHash/pinSalt) NO se guardan en /personal (nodo legible por
   // supervisores): se escriben en /credenciales/<id> (acceso solo admin/dueño por Reglas).
   let credencialNueva = null;
