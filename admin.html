@@ -524,6 +524,11 @@
           <input type="number" id="cfgVentanaLoteOffline" min="1" max="720" value="168" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
           <p class="text-[11px] text-slate-500 mt-1">Antigüedad máxima aceptada de un lote offline al sincronizar. Por defecto 168 h (7 días). Los lotes más viejos se rechazan.</p>
         </div>
+        <div class="mt-4 max-w-xs">
+          <label class="block text-xs uppercase text-slate-400 mb-1">Tolerancia de reloj del dispositivo (seg)</label>
+          <input type="number" id="cfgSkewRelojOffline" min="0" max="3600" value="300" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+          <p class="text-[11px] text-slate-500 mt-1">Margen de adelanto del reloj del dispositivo que el servidor acepta al sincronizar un lote offline. Las marcas con hora futura más allá de este margen se rechazan. Por defecto 300 s (5 min). 0 = sin margen.</p>
+        </div>
         <div class="flex items-center gap-3 mt-5">
           <button type="button" id="btnGuardarOffline" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-xl text-sm transition flex items-center gap-2">
             <i class="fa-solid fa-floppy-disk"></i> Guardar
@@ -634,6 +639,11 @@
             <label class="block text-xs uppercase text-slate-400 mb-1">Precisión GPS mínima (m)</label>
             <input type="number" id="cfgPrecisionMaxima" min="0" max="2000" value="0" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
             <p class="text-[11px] text-slate-500 mt-1">Umbral de precisión GPS que valida el servidor (Worker). Si la señal reportada por el dispositivo es peor que este valor, la fichada se BLOQUEA. 0 = desactivado (no bloquea por precisión).</p>
+          </div>
+          <div>
+            <label class="block text-xs uppercase text-slate-400 mb-1">Anti-repetición de fichadas (seg)</label>
+            <input type="number" id="cfgAntiReplaySegundos" min="0" max="3600" value="90" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+            <p class="text-[11px] text-slate-500 mt-1">Ventana en la que el servidor rechaza como duplicada una fichada repetida (mismo legajo, tipo y objetivo). Por defecto 90 s (activo). Poné 0 para desactivarlo.</p>
           </div>
         </div>
         <!-- SEGURIDAD BIOMÉTRICA (modo estricto / fail-closed) -->

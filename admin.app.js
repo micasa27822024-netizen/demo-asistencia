@@ -97,7 +97,7 @@ let alertasFichadasCache = [];
 let alertasFichadasConocidas = new Set();
 let alertasFichadasInicializadas = false;
 // Configuración global de reglas laborales y radio de fichaje (persistida en Firebase /configuracionGlobal).
-let configGlobalAdmin = { toleranciaIngresoMin: 15, toleranciaEgresoMin: 30, radioFichajeMetros: 100, modoDispositivo: 'compartido', biometriaEstricta: false, precisionMaximaMetros: 0, offlineHabilitado: false, ventanaLoteOfflineHoras: 168 };
+let configGlobalAdmin = { toleranciaIngresoMin: 15, toleranciaEgresoMin: 30, radioFichajeMetros: 100, modoDispositivo: 'compartido', biometriaEstricta: false, precisionMaximaMetros: 0, offlineHabilitado: false, ventanaLoteOfflineHoras: 168, antiReplaySegundos: 90, skewRelojOfflineSegundos: 300 };
 
 function iniciarSonidoSirena() {
   if (audioCtxPanico) return; 
@@ -568,6 +568,12 @@ function aplicarConfigGlobalAInputs() {
   if (oh) oh.checked = (configGlobalAdmin.offlineHabilitado === true);
   const vl = document.getElementById('cfgVentanaLoteOffline');
   if (vl) vl.value = configGlobalAdmin.ventanaLoteOfflineHoras;
+  // Clave nueva (#7): ventana anti-repeticion de fichadas (seg). 0 = desactivado.
+  const ar = document.getElementById('cfgAntiReplaySegundos');
+  if (ar) ar.value = configGlobalAdmin.antiReplaySegundos;
+  // Clave nueva (#5): tolerancia de reloj del dispositivo al sincronizar (seg).
+  const sk = document.getElementById('cfgSkewRelojOffline');
+  if (sk) sk.value = configGlobalAdmin.skewRelojOfflineSegundos;
 }
 
 async function cargarConfiguracionGlobal() {
@@ -583,6 +589,10 @@ async function cargarConfiguracionGlobal() {
       configGlobalAdmin.biometriaEstricta = (data.biometriaEstricta === true);
       configGlobalAdmin.offlineHabilitado = (data.offlineHabilitado === true);
       if (Number.isFinite(Number(data.ventanaLoteOfflineHoras)) && Number(data.ventanaLoteOfflineHoras) > 0) configGlobalAdmin.ventanaLoteOfflineHoras = Number(data.ventanaLoteOfflineHoras);
+      // Clave nueva (#7): ventana anti-repeticion (seg). Se acepta 0 (desactivado).
+      if (Number.isFinite(Number(data.antiReplaySegundos)) && Number(data.antiReplaySegundos) >= 0) configGlobalAdmin.antiReplaySegundos = Number(data.antiReplaySegundos);
+      // Clave nueva (#5): tolerancia de reloj del dispositivo (seg). Se acepta 0.
+      if (Number.isFinite(Number(data.skewRelojOfflineSegundos)) && Number(data.skewRelojOfflineSegundos) >= 0) configGlobalAdmin.skewRelojOfflineSegundos = Number(data.skewRelojOfflineSegundos);
     }
   } catch (err) {
     console.warn('No se pudo cargar la configuración global, se usan valores por defecto.', err);
@@ -599,11 +609,16 @@ async function guardarConfiguracionGlobal() {
   const precisionMaxima = Math.max(0, Math.min(2000, parseInt(precEl ? precEl.value : 0, 10) || 0));
   const beEl = document.getElementById('cfgBiometriaEstricta');
   const biometriaEstricta = !!(beEl && beEl.checked);
-  const payload = { toleranciaIngresoMin: tolIng, toleranciaEgresoMin: tolEgr, radioFichajeMetros: radio, precisionMaximaMetros: precisionMaxima, modoDispositivo: (configGlobalAdmin.modoDispositivo === 'individual' ? 'individual' : 'compartido'), biometriaEstricta: biometriaEstricta, actualizado: new Date().toISOString() };
+  // Clave nueva (#7): ventana anti-repeticion de fichadas (seg). 0 = desactivado.
+  const arEl = document.getElementById('cfgAntiReplaySegundos');
+  const antiReplaySegundos = Math.max(0, Math.min(3600, parseInt(arEl ? arEl.value : 90, 10) || 0));
+  const payload = { toleranciaIngresoMin: tolIng, toleranciaEgresoMin: tolEgr, radioFichajeMetros: radio, precisionMaximaMetros: precisionMaxima, modoDispositivo: (configGlobalAdmin.modoDispositivo === 'individual' ? 'individual' : 'compartido'), biometriaEstricta: biometriaEstricta, antiReplaySegundos: antiReplaySegundos, actualizado: new Date().toISOString() };
   if (estado) { estado.className = 'text-xs text-slate-400'; estado.innerText = 'Guardando...'; }
   try {
+    // PATCH (merge) en lugar de PUT para NO pisar el resto de /configuracionGlobal
+    // (flags offline, skew, etc. que se guardan desde otros botones).
     const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/configuracionGlobal.json`), {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
     });
     if (!res.ok) throw new Error('Respuesta no OK');
     configGlobalAdmin.toleranciaIngresoMin = tolIng;
@@ -611,6 +626,7 @@ async function guardarConfiguracionGlobal() {
     configGlobalAdmin.radioFichajeMetros = radio;
     configGlobalAdmin.precisionMaximaMetros = precisionMaxima;
     configGlobalAdmin.biometriaEstricta = biometriaEstricta;
+    configGlobalAdmin.antiReplaySegundos = antiReplaySegundos;
     if (estado) { estado.className = 'text-xs text-emerald-400 font-semibold'; estado.innerText = '✓ Configuración guardada.'; }
     filtrarTablaMarcaciones();
   } catch (err) {
@@ -653,15 +669,19 @@ async function guardarConfigOffline() {
   const estado = document.getElementById('cfgEstadoOffline');
   const habilitado = !!document.getElementById('cfgOfflineHabilitado').checked;
   const ventana = Math.max(1, Math.min(720, parseInt(document.getElementById('cfgVentanaLoteOffline').value, 10) || 168));
+  // Clave nueva (#5): tolerancia de reloj del dispositivo al sincronizar (seg).
+  const skEl = document.getElementById('cfgSkewRelojOffline');
+  const skewRelojOfflineSegundos = Math.max(0, Math.min(3600, parseInt(skEl ? skEl.value : 300, 10) || 0));
   if (estado) { estado.className = 'text-xs text-slate-400'; estado.innerText = 'Guardando...'; }
   try {
     const res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/configuracionGlobal.json`), {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ offlineHabilitado: habilitado, ventanaLoteOfflineHoras: ventana, offlineActualizado: new Date().toISOString() })
+      body: JSON.stringify({ offlineHabilitado: habilitado, ventanaLoteOfflineHoras: ventana, skewRelojOfflineSegundos: skewRelojOfflineSegundos, offlineActualizado: new Date().toISOString() })
     });
     if (!res.ok) throw new Error('Respuesta no OK');
     configGlobalAdmin.offlineHabilitado = habilitado;
     configGlobalAdmin.ventanaLoteOfflineHoras = ventana;
+    configGlobalAdmin.skewRelojOfflineSegundos = skewRelojOfflineSegundos;
     if (estado) {
       estado.className = 'text-xs text-emerald-400 font-semibold';
       estado.innerText = habilitado ? '✓ Fichaje offline HABILITADO.' : '✓ Fichaje offline deshabilitado.';
