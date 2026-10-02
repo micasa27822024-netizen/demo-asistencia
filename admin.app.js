@@ -1399,27 +1399,21 @@ async function aprobarFraudeManual() {
   if (!id) return;
 
   try {
-    const resAprob = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/fichadas/${id}.json`), {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      // 'verificacionOfflineResuelta' es la marca que saca la fichada del estado
-      // "Pendiente de verificacion": el origen offline NO se borra (queda como
-      // evidencia del hecho), pero la deteccion la respeta y deja de listarla.
-      body: JSON.stringify({ alertaFraude: false, requiereRevisionManual: false, verificacionOfflineResuelta: true, validacionFacial: 'VALIDADA_MANUAL', motivoFraude: "Validada manualmente por el administrador", motivoRevision: "Validada manualmente por el administrador" })
-    });
-    if (!resAprob.ok) { const t = await resAprob.text().catch(() => ''); throw new Error('HTTP ' + resAprob.status + ' ' + t); }
+    // MIGRADO A SERVER-SIDE (hallazgo #4): la validacion de la fichada la realiza
+    // el Worker con la service account y escribe la auditoria FICHADA_APROBADA de
+    // forma atomica (fail-closed). El cliente ya NO hace el PATCH por REST.
+    await window.llamarWorkerAdmin({ accion: 'validarFichada', fichadaId: id, motivo: 'Validada manualmente por el administrador' });
 
     // VERIFICACION EN LA BASE: releemos ESTA fichada (sin cache) y confirmamos
     // que la marca de resolucion quedo realmente escrita antes de dar el OK.
     // Asi el cartel de exito refleja el estado REAL de la base, no la respuesta
-    // del PATCH a ciegas.
+    // del Worker a ciegas.
     const resCheck = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/fichadas/${id}.json?ts=${Date.now()}`), { cache: 'no-store' });
     const fichadaBase = resCheck.ok ? await resCheck.json().catch(() => null) : null;
     if (!fichadaBase || fichadaBase.verificacionOfflineResuelta !== true) {
       throw new Error('la base no confirmo el cambio (el estado no persistio). Reintenta.');
     }
 
-    registrarAuditoria('FICHADA_APROBADA', `fichadas/${id}`, { motivo: 'Validada manualmente por el administrador' });
     alert("Fichada validada correctamente (confirmado en la base de datos).");
     cerrarModalAccionFraude();
     recargarDatosEfectivo();
