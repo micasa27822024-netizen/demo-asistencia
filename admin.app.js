@@ -902,6 +902,10 @@ document.addEventListener('click', function (ev) {
     case 'seleccionarResultadoNominatim': seleccionarResultadoNominatim(a1, parseInt(a2, 10)); break;
     case 'abrirModalEditarObjetivo': abrirModalEditarObjetivo(a1); break;
     case 'eliminarObjetivo': eliminarObjetivo(a1); break;
+    case 'toggleDiaRonda': toggleDiaRonda(a1); break;
+    case 'editarPuntoRonda': editarPuntoRonda(a1); break;
+    case 'eliminarPuntoRonda': eliminarPuntoRonda(a1); break;
+    case 'mostrarQRPunto': mostrarQRPunto(a1); break;
   }
 });
 
@@ -2528,6 +2532,7 @@ function abrirModalEditarObjetivo(firebaseId) {
   const mapa = obtenerMapaObjetivo('editar');
   if (validarCoordenadas(fila[3], fila[4])) colocarMarcadorObjetivo('editar', fila[3], fila[4]);
   else if (mapa) setTimeout(() => mapa.invalidateSize(), 150);
+  cargarRondaObjetivo(firebaseId);
 }
 
 function cerrarModalEditarObjetivo() {
@@ -2831,6 +2836,337 @@ async function exportarPDFNovedades() {
 // All former inline event handlers (onclick/onsubmit/onkeyup/onchange)
 // moved here as addEventListener calls to allow removing 'unsafe-inline' from CSP.
 
+// SISTEMA DE RONDAS CON QR - Paso 1 (panel admin). Aditivo. Carga/edita el
+// horario de la ronda y los puntos de control de cada objetivo y genera/imprime/
+// descarga el QR de cada punto. Todo via REST con ?auth de admin
+// (window.urlConAuthAdmin). No toca el Worker ni la logica previa.
+var DIAS_RONDA = [
+  { n: 1, t: 'Lun' }, { n: 2, t: 'Mar' }, { n: 3, t: 'Mie' },
+  { n: 4, t: 'Jue' }, { n: 5, t: 'Vie' }, { n: 6, t: 'Sab' }, { n: 0, t: 'Dom' }
+];
+var _puntosRondaActual = {};
+var _diasRondaSel = [];
+var _qrPuntoActual = null;
+
+// Token aleatorio e irrepetible por punto (lo valida el vigilador al escanear).
+function generarTokenPunto() {
+  var buf = new Uint8Array(16);
+  (window.crypto || window.msCrypto).getRandomValues(buf);
+  var hex = '';
+  for (var i = 0; i < buf.length; i++) hex += ('0' + buf[i].toString(16)).slice(-2);
+  return hex;
+}
+
+// Carga qrcodejs bajo demanda (CDN con SRI), igual que el resto de librerias.
+var _lazyQRPromise = null;
+function lazyQR() {
+  if (_lazyQRPromise) return _lazyQRPromise;
+  _lazyQRPromise = window.cargarCDN(
+    'qrcodejs',
+    'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js',
+    'sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSQX0FslNhTDadL4O5SAGapGt4FodqL8My0mA=='
+  );
+  return _lazyQRPromise;
+}
+
+function infoPuntoRonda(mensaje, tipo) {
+  var el = document.getElementById('infoPuntoRonda');
+  if (!el) return;
+  if (!mensaje) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+  var color = tipo === 'error' ? 'text-rose-400' : (tipo === 'ok' ? 'text-emerald-400' : 'text-slate-400');
+  el.className = 'text-xs ' + color;
+  el.innerHTML = mensaje;
+}
+
+function renderDiasRonda() {
+  var cont = document.getElementById('rondaDias');
+  if (!cont) return;
+  cont.innerHTML = '';
+  DIAS_RONDA.forEach(function (d) {
+    var on = _diasRondaSel.indexOf(d.n) >= 0;
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('data-accion', 'toggleDiaRonda');
+    b.setAttribute('data-a1', String(d.n));
+    b.className = on
+      ? 'px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white transition'
+      : 'px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 transition';
+    b.textContent = d.t;
+    cont.appendChild(b);
+  });
+}
+
+function toggleDiaRonda(n) {
+  n = parseInt(n, 10);
+  var i = _diasRondaSel.indexOf(n);
+  if (i >= 0) _diasRondaSel.splice(i, 1); else _diasRondaSel.push(n);
+  renderDiasRonda();
+}
+
+function cancelarEdicionPunto() {
+  var set = function (elid, val) { var e = document.getElementById(elid); if (e) e.value = val; };
+  set('puntoEditandoId', ''); set('puntoNombre', ''); set('puntoLat', ''); set('puntoLng', ''); set('puntoRadio', ''); set('puntoPrecision', '');
+  var f = document.getElementById('puntoFoto'); if (f) f.checked = false;
+  var t = document.getElementById('btnAgregarPuntoTexto'); if (t) t.textContent = 'Agregar punto';
+  var tit = document.getElementById('tituloFormPunto'); if (tit) tit.textContent = 'Agregar punto de control';
+  var cancel = document.getElementById('btnCancelarEdicionPunto'); if (cancel) cancel.classList.add('hidden');
+  infoPuntoRonda('', '');
+}
+
+// Carga config + puntos del objetivo abierto en el modal de edicion.
+async function cargarRondaObjetivo(id) {
+  _puntosRondaActual = {};
+  _diasRondaSel = [];
+  var set = function (elid, val) { var e = document.getElementById(elid); if (e) e.value = val; };
+  set('rondaHoraInicio', ''); set('rondaHoraFin', ''); set('rondaFrecuencia', ''); set('rondaTolerancia', '');
+  var chk = document.getElementById('rondaActiva'); if (chk) chk.checked = false;
+  cancelarEdicionPunto();
+  renderDiasRonda();
+  renderPuntosRonda({});
+  if (!id) return;
+  try {
+    var res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/objetivos/${id}/rondas.json?ts=${Date.now()}`), { cache: 'no-store' });
+    if (!res.ok) return;
+    var data = await res.json();
+    if (!data) return;
+    var cfg = data.config || {};
+    set('rondaHoraInicio', cfg.horaInicio || '');
+    set('rondaHoraFin', cfg.horaFin || '');
+    set('rondaFrecuencia', (cfg.frecuenciaMin != null) ? cfg.frecuenciaMin : '');
+    set('rondaTolerancia', (cfg.toleranciaMin != null) ? cfg.toleranciaMin : '');
+    if (chk) chk.checked = cfg.activo === true;
+    _diasRondaSel = Array.isArray(cfg.diasSemana) ? cfg.diasSemana.slice() : [];
+    renderDiasRonda();
+    _puntosRondaActual = data.puntos || {};
+    renderPuntosRonda(_puntosRondaActual);
+  } catch (err) {
+    console.warn('No se pudo cargar la ronda del objetivo:', err);
+  }
+}
+
+async function guardarConfigRonda() {
+  var id = document.getElementById('editObjetivoId').value || objetivoEditandoId;
+  if (!id) return alert('Primero guarda el objetivo.');
+  var btn = document.getElementById('btnGuardarConfigRonda');
+  var horaInicio = (document.getElementById('rondaHoraInicio').value || '').trim();
+  var horaFin = (document.getElementById('rondaHoraFin').value || '').trim();
+  var frecuencia = parseInt(document.getElementById('rondaFrecuencia').value, 10);
+  var tolerancia = parseInt(document.getElementById('rondaTolerancia').value, 10);
+  var activo = !!document.getElementById('rondaActiva').checked;
+  var payload = {
+    activo: activo, horaInicio: horaInicio, horaFin: horaFin,
+    frecuenciaMin: isNaN(frecuencia) ? 0 : frecuencia,
+    toleranciaMin: isNaN(tolerancia) ? 0 : tolerancia,
+    diasSemana: _diasRondaSel.slice().sort(function (a, b) { return a - b; }),
+    fechaActualizacion: new Date().toISOString()
+  };
+  btn.disabled = true; var orig = btn.innerHTML; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
+  try {
+    var res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/objetivos/${id}/rondas/config.json`), {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('Error al guardar el horario');
+    registrarAuditoria('RONDA_CONFIG_EDITADA', `objetivos/${id}`, { activo: activo, horaInicio: horaInicio, horaFin: horaFin });
+    alert('Horario de ronda guardado.');
+  } catch (err) {
+    alert('No se pudo guardar el horario: ' + err.toString());
+  } finally {
+    btn.disabled = false; btn.innerHTML = orig;
+  }
+}
+
+function usarGPSPunto() {
+  if (!navigator.geolocation) { infoPuntoRonda('Este navegador no permite obtener la ubicacion GPS.', 'error'); return; }
+  var btn = document.getElementById('btnGPSPunto');
+  var orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Obteniendo...';
+  navigator.geolocation.getCurrentPosition(function (pos) {
+    document.getElementById('puntoLat').value = pos.coords.latitude.toFixed(6);
+    document.getElementById('puntoLng').value = pos.coords.longitude.toFixed(6);
+    infoPuntoRonda('GPS actual tomado. Precision aprox: ' + Math.round(pos.coords.accuracy) + ' m.', 'ok');
+    btn.disabled = false; btn.innerHTML = orig;
+  }, function (err) {
+    var m = 'No se pudo obtener la ubicacion GPS.';
+    if (err.code === 1) m = 'El navegador bloqueo la ubicacion. Permiti el acceso para este sitio.';
+    infoPuntoRonda(m, 'error');
+    btn.disabled = false; btn.innerHTML = orig;
+  }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+}
+
+async function agregarPuntoRonda() {
+  var id = document.getElementById('editObjetivoId').value || objetivoEditandoId;
+  if (!id) return alert('Primero guarda el objetivo.');
+  var idPunto = (document.getElementById('puntoEditandoId').value || '').trim();
+  var nombre = (document.getElementById('puntoNombre').value || '').trim();
+  var lat = Number(document.getElementById('puntoLat').value);
+  var lng = Number(document.getElementById('puntoLng').value);
+  var radio = parseInt(document.getElementById('puntoRadio').value, 10);
+  var precision = parseInt(document.getElementById('puntoPrecision').value, 10);
+  var foto = !!document.getElementById('puntoFoto').checked;
+  if (!nombre) { infoPuntoRonda('Pone un nombre al punto.', 'error'); return; }
+  if (!validarCoordenadas(lat, lng)) { infoPuntoRonda('El punto necesita coordenadas validas. Usa el GPS o cargalas a mano.', 'error'); return; }
+  if (isNaN(radio) || radio < 5) radio = 30;
+  if (isNaN(precision) || precision < 5) precision = 50;
+  var btn = document.getElementById('btnAgregarPunto');
+  btn.disabled = true; var orig = btn.innerHTML; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
+  try {
+    if (idPunto) {
+      var prev = _puntosRondaActual[idPunto] || {};
+      var cuerpoEdit = {
+        nombre: nombre, lat: lat, lng: lng, radioMetros: radio, precisionGpsMin: precision,
+        fotoObligatoria: foto, token: prev.token || generarTokenPunto(),
+        orden: (prev.orden != null) ? prev.orden : (Object.keys(_puntosRondaActual).length + 1),
+        activo: (prev.activo !== false), fechaActualizacion: new Date().toISOString()
+      };
+      var resE = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/objetivos/${id}/rondas/puntos/${idPunto}.json`), {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpoEdit)
+      });
+      if (!resE.ok) throw new Error('Error al actualizar el punto');
+      registrarAuditoria('RONDA_PUNTO_EDITADO', `objetivos/${id}`, { idPunto: idPunto, nombre: nombre });
+    } else {
+      var cuerpoNuevo = {
+        nombre: nombre, lat: lat, lng: lng, radioMetros: radio, precisionGpsMin: precision,
+        fotoObligatoria: foto, token: generarTokenPunto(),
+        orden: Object.keys(_puntosRondaActual).length + 1,
+        activo: true, timestamp: new Date().toISOString()
+      };
+      var resN = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/objetivos/${id}/rondas/puntos.json`), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpoNuevo)
+      });
+      if (!resN.ok) throw new Error('Error al guardar el punto');
+      registrarAuditoria('RONDA_PUNTO_CREADO', `objetivos/${id}`, { nombre: nombre });
+    }
+    cancelarEdicionPunto();
+    await cargarRondaObjetivo(id);
+    infoPuntoRonda('Punto guardado. Ya podes generar su QR en la lista.', 'ok');
+  } catch (err) {
+    infoPuntoRonda('No se pudo guardar el punto: ' + err.toString(), 'error');
+  } finally {
+    btn.disabled = false; btn.innerHTML = orig;
+  }
+}
+
+function editarPuntoRonda(idPunto) {
+  var p = _puntosRondaActual[idPunto];
+  if (!p) return;
+  document.getElementById('puntoEditandoId').value = idPunto;
+  document.getElementById('puntoNombre').value = p.nombre || '';
+  document.getElementById('puntoLat').value = (p.lat != null) ? p.lat : '';
+  document.getElementById('puntoLng').value = (p.lng != null) ? p.lng : '';
+  document.getElementById('puntoRadio').value = (p.radioMetros != null) ? p.radioMetros : '';
+  document.getElementById('puntoPrecision').value = (p.precisionGpsMin != null) ? p.precisionGpsMin : '';
+  document.getElementById('puntoFoto').checked = p.fotoObligatoria === true;
+  document.getElementById('btnAgregarPuntoTexto').textContent = 'Guardar cambios';
+  document.getElementById('tituloFormPunto').textContent = 'Editar punto de control';
+  document.getElementById('btnCancelarEdicionPunto').classList.remove('hidden');
+  var sec = document.getElementById('seccionRondas'); if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function eliminarPuntoRonda(idPunto) {
+  var id = document.getElementById('editObjetivoId').value || objetivoEditandoId;
+  if (!id || !idPunto) return;
+  var p = _puntosRondaActual[idPunto] || {};
+  if (!confirm('Eliminar el punto "' + (p.nombre || idPunto) + '"? El QR impreso dejara de servir.')) return;
+  try {
+    var res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/objetivos/${id}/rondas/puntos/${idPunto}.json`), { method: 'DELETE' });
+    if (!res.ok) throw new Error('Error al eliminar');
+    registrarAuditoria('RONDA_PUNTO_ELIMINADO', `objetivos/${id}`, { idPunto: idPunto, nombre: p.nombre || '' });
+    await cargarRondaObjetivo(id);
+  } catch (err) {
+    alert('No se pudo eliminar el punto: ' + err.toString());
+  }
+}
+
+function renderPuntosRonda(puntos) {
+  var cuerpo = document.getElementById('cuerpoPuntosRonda');
+  if (!cuerpo) return;
+  var ids = Object.keys(puntos || {});
+  if (ids.length === 0) {
+    cuerpo.innerHTML = '<tr><td colspan="4" class="p-6 text-center text-slate-500">Sin puntos cargados.</td></tr>';
+    return;
+  }
+  ids.sort(function (a, b) { return (puntos[a].orden || 0) - (puntos[b].orden || 0); });
+  cuerpo.innerHTML = '';
+  ids.forEach(function (idPunto, i) {
+    var p = puntos[idPunto];
+    var tr = document.createElement('tr');
+    tr.className = 'border-t border-slate-800 hover:bg-slate-800/40 transition';
+    var foto = p.fotoObligatoria === true
+      ? '<span class="text-amber-400"><i class="fa-solid fa-camera"></i> foto</span>'
+      : '<span class="text-slate-500">sin foto</span>';
+    tr.innerHTML =
+      '<td class="p-3 text-slate-400 font-mono">' + (i + 1) + '</td>' +
+      '<td class="p-3"><div class="font-medium text-white">' + escaparHtml(p.nombre || '') + '</div>' +
+        '<div class="text-xs text-slate-500 font-mono">' + (p.lat != null ? formatearCoordenada(p.lat) : '?') + ', ' + (p.lng != null ? formatearCoordenada(p.lng) : '?') + '</div></td>' +
+      '<td class="p-3 text-xs text-slate-300">' + (p.radioMetros || 30) + ' m &middot; ' + foto + '</td>' +
+      '<td class="p-3 text-center whitespace-nowrap">' +
+        '<button data-accion="mostrarQRPunto" data-a1="' + escaparHtml(idPunto) + '" class="bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/40 border border-emerald-500/30 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1 mr-1" title="Ver / imprimir QR"><i class="fa-solid fa-qrcode"></i> QR</button>' +
+        '<button data-accion="editarPuntoRonda" data-a1="' + escaparHtml(idPunto) + '" class="bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1 mr-1" title="Editar"><i class="fa-solid fa-pen-to-square"></i></button>' +
+        '<button data-accion="eliminarPuntoRonda" data-a1="' + escaparHtml(idPunto) + '" class="bg-rose-600/20 text-rose-400 hover:bg-rose-600/40 border border-rose-500/30 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1" title="Eliminar"><i class="fa-solid fa-trash"></i></button>' +
+      '</td>';
+    cuerpo.appendChild(tr);
+  });
+}
+
+// Contenido del QR: VIGIX1|idObjetivo|idPunto|token
+function payloadQRPunto(idObjetivo, idPunto, token) {
+  return 'VIGIX1|' + idObjetivo + '|' + idPunto + '|' + token;
+}
+
+async function mostrarQRPunto(idPunto) {
+  var id = document.getElementById('editObjetivoId').value || objetivoEditandoId;
+  var p = _puntosRondaActual[idPunto];
+  if (!id || !p) return;
+  var nombreObj = document.getElementById('editNombreObjetivo').value || 'Objetivo';
+  var payload = payloadQRPunto(id, idPunto, p.token || '');
+  _qrPuntoActual = { idPunto: idPunto, nombre: p.nombre || '', payload: payload };
+  document.getElementById('qrObjetivoNombre').textContent = nombreObj;
+  document.getElementById('qrPuntoNombre').textContent = p.nombre || '';
+  document.getElementById('qrPayloadTexto').textContent = payload;
+  var cont = document.getElementById('qrContenedor');
+  cont.innerHTML = '<p class="text-xs">Generando QR...</p>';
+  document.getElementById('modalQRPunto').classList.remove('hidden');
+  try {
+    await lazyQR();
+    cont.innerHTML = '';
+    new QRCode(cont, { text: payload, width: 240, height: 240, correctLevel: QRCode.CorrectLevel.M });
+  } catch (err) {
+    cont.innerHTML = '<p class="text-xs text-rose-500">No se pudo generar el QR. Revisa tu conexion.</p>';
+  }
+}
+
+function cerrarModalQRPunto() {
+  document.getElementById('modalQRPunto').classList.add('hidden');
+  var cont = document.getElementById('qrContenedor'); if (cont) cont.innerHTML = '';
+  _qrPuntoActual = null;
+}
+
+function _canvasQRActual() {
+  var cont = document.getElementById('qrContenedor');
+  return cont ? cont.querySelector('canvas') : null;
+}
+
+function descargarQRPunto() {
+  var canvas = _canvasQRActual();
+  if (!canvas || !_qrPuntoActual) { alert('Espera a que el QR termine de generarse.'); return; }
+  try {
+    var url = canvas.toDataURL('image/png');
+    var a = document.createElement('a');
+    var nombre = (_qrPuntoActual.nombre || 'punto').replace(/[^a-z0-9]+/gi, '_').toLowerCase();
+    a.href = url; a.download = 'qr_' + nombre + '.png';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  } catch (err) {
+    alert('No se pudo descargar el PNG: ' + err.toString());
+  }
+}
+
+function imprimirQRPunto() {
+  if (!_canvasQRActual()) { alert('Espera a que el QR termine de generarse.'); return; }
+  document.body.classList.add('print-qr');
+  var limpiar = function () { document.body.classList.remove('print-qr'); window.removeEventListener('afterprint', limpiar); };
+  window.addEventListener('afterprint', limpiar);
+  setTimeout(function () { try { window.print(); } catch (e) {} setTimeout(limpiar, 1500); }, 50);
+}
+
 function initInlineHandlers() {
   document.getElementById("formValidarPass").addEventListener("submit", function(e) { validarPasswordAdmin(e) });
   document.getElementById("btnRecargar").addEventListener("click", function(e) { recargarDatosEfectivo() });
@@ -2889,6 +3225,14 @@ function initInlineHandlers() {
   document.getElementById("btnGPSEditar").addEventListener("click", function(e) { usarGPSObjetivo('editar') });
   document.getElementById("btnCerrarObj2").addEventListener("click", function(e) { cerrarModalEditarObjetivo() });
   document.getElementById("btnGuardarEdicionObjetivo").addEventListener("click", function(e) { guardarEdicionObjetivo() });
+  // --- Sistema de Rondas con QR (Paso 1) ---
+  var _bCfg = document.getElementById("btnGuardarConfigRonda"); if (_bCfg) _bCfg.addEventListener("click", function(e) { guardarConfigRonda() });
+  var _bGPSp = document.getElementById("btnGPSPunto"); if (_bGPSp) _bGPSp.addEventListener("click", function(e) { usarGPSPunto() });
+  var _bAddP = document.getElementById("btnAgregarPunto"); if (_bAddP) _bAddP.addEventListener("click", function(e) { agregarPuntoRonda() });
+  var _bCanP = document.getElementById("btnCancelarEdicionPunto"); if (_bCanP) _bCanP.addEventListener("click", function(e) { cancelarEdicionPunto() });
+  var _bCerQR = document.getElementById("btnCerrarQR"); if (_bCerQR) _bCerQR.addEventListener("click", function(e) { cerrarModalQRPunto() });
+  var _bDescQR = document.getElementById("btnDescargarQR"); if (_bDescQR) _bDescQR.addEventListener("click", function(e) { descargarQRPunto() });
+  var _bImpQR = document.getElementById("btnImprimirQR"); if (_bImpQR) _bImpQR.addEventListener("click", function(e) { imprimirQRPunto() });
   document.getElementById("btnCerrarAlertas").addEventListener("click", function(e) { cerrarModalAlertasFichadas() });
   document.getElementById("btnNotifNav").addEventListener("click", function(e) { solicitarNotificacionesNavegador() });
   document.getElementById("btnMarcarVistas2").addEventListener("click", function(e) { marcarTodasAlertasFichadasVistas() });

@@ -980,9 +980,147 @@
         </div>
       </div>
       <div id="infoUbicacionEditar" class="hidden bg-sky-500/10 border border-sky-500/20 rounded-xl p-3 text-xs text-sky-200"></div>
+
+      <!-- ===================================================================== -->
+      <!--  SISTEMA DE RONDAS CON QR - Paso 1 (admin): horario + puntos de control -->
+      <!--  Aditivo: solo aparece al editar un objetivo. No altera la logica previa.-->
+      <!-- ===================================================================== -->
+      <div id="seccionRondas" class="border-t border-slate-700 pt-2 space-y-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-emerald-500/20 border border-emerald-500/40 rounded-xl flex items-center justify-center text-emerald-400">
+            <i class="fa-solid fa-route"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <h4 class="font-bold text-white text-sm">Rondas con QR</h4>
+            <p class="text-xs text-slate-400">Puntos de control que el vigilador escanea durante su recorrido.</p>
+          </div>
+          <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+            <input type="checkbox" id="rondaActiva" class="vigix-check">
+            <span>Activar rondas</span>
+          </label>
+        </div>
+
+        <!-- Horario / frecuencia de la ronda -->
+        <div class="bg-slate-900 border border-slate-700 rounded-xl p-4 space-y-3">
+          <p class="text-xs uppercase text-slate-400 font-semibold">Horario de la ronda</p>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs uppercase text-slate-400 mb-1">Desde</label>
+              <input type="time" id="rondaHoraInicio" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
+            </div>
+            <div>
+              <label class="block text-xs uppercase text-slate-400 mb-1">Hasta</label>
+              <input type="time" id="rondaHoraFin" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
+            </div>
+            <div>
+              <label class="block text-xs uppercase text-slate-400 mb-1">Cada (min)</label>
+              <input type="number" id="rondaFrecuencia" min="0" placeholder="60" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
+            </div>
+            <div>
+              <label class="block text-xs uppercase text-slate-400 mb-1">Tolerancia (min)</label>
+              <input type="number" id="rondaTolerancia" min="0" placeholder="15" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs uppercase text-slate-400 mb-1">Dias</label>
+            <div id="rondaDias" class="flex flex-wrap gap-2"></div>
+          </div>
+          <div class="flex justify-end">
+            <button type="button" id="btnGuardarConfigRonda" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-sm transition inline-flex items-center gap-2">
+              <i class="fa-solid fa-floppy-disk"></i> Guardar horario
+            </button>
+          </div>
+        </div>
+
+        <!-- Alta / edicion de punto de control -->
+        <div class="bg-slate-900 border border-slate-700 rounded-xl p-4 space-y-3">
+          <p class="text-xs uppercase text-slate-400 font-semibold" id="tituloFormPunto">Agregar punto de control</p>
+          <input type="hidden" id="puntoEditandoId">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div class="md:col-span-2">
+              <label class="block text-xs uppercase text-slate-400 mb-1">Nombre del punto</label>
+              <input type="text" id="puntoNombre" placeholder="Ej: Porton trasero" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
+            </div>
+            <div>
+              <label class="block text-xs uppercase text-slate-400 mb-1">Latitud</label>
+              <input type="text" id="puntoLat" inputmode="decimal" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-emerald-300 font-mono">
+            </div>
+            <div>
+              <label class="block text-xs uppercase text-slate-400 mb-1">Longitud</label>
+              <input type="text" id="puntoLng" inputmode="decimal" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-emerald-300 font-mono">
+            </div>
+            <div>
+              <label class="block text-xs uppercase text-slate-400 mb-1">Radio (m)</label>
+              <input type="number" id="puntoRadio" min="5" placeholder="30" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
+            </div>
+            <div>
+              <label class="block text-xs uppercase text-slate-400 mb-1">Precision GPS max (m)</label>
+              <input type="number" id="puntoPrecision" min="5" placeholder="50" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
+            </div>
+          </div>
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+              <input type="checkbox" id="puntoFoto" class="vigix-check">
+              <span>Exigir foto al escanear</span>
+            </label>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" id="btnGPSPunto" class="bg-slate-700 hover:bg-slate-600 text-white font-bold px-3 py-2 rounded-xl text-sm transition inline-flex items-center gap-2">
+                <i class="fa-solid fa-location-crosshairs"></i> Usar GPS actual
+              </button>
+              <button type="button" id="btnCancelarEdicionPunto" class="hidden bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold px-3 py-2 rounded-xl text-sm transition">Cancelar</button>
+              <button type="button" id="btnAgregarPunto" class="bg-sky-600 hover:bg-sky-500 text-white font-bold px-4 py-2 rounded-xl text-sm transition inline-flex items-center gap-2">
+                <i class="fa-solid fa-plus"></i> <span id="btnAgregarPuntoTexto">Agregar punto</span>
+              </button>
+            </div>
+          </div>
+          <p id="infoPuntoRonda" class="hidden text-xs"></p>
+        </div>
+
+        <!-- Lista de puntos de control -->
+        <div class="bg-slate-900 border border-slate-700 rounded-xl overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+              <thead class="bg-slate-950 text-slate-400 uppercase text-xs">
+                <tr>
+                  <th class="p-3">#</th>
+                  <th class="p-3">Punto</th>
+                  <th class="p-3">Radio / Foto</th>
+                  <th class="p-3 text-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="cuerpoPuntosRonda">
+                <tr><td colspan="4" class="p-6 text-center text-slate-500">Sin puntos cargados.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <div class="flex justify-end gap-2 pt-2 border-t border-slate-700">
         <button id="btnCerrarObj2" type="button" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2.5 rounded-xl text-sm font-semibold transition">Cancelar</button>
         <button type="button" id="btnGuardarEdicionObjetivo" class="bg-sky-600 hover:bg-sky-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition">Guardar Cambios</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL VER / IMPRIMIR QR DE PUNTO DE RONDA -->
+  <div id="modalQRPunto" class="fixed inset-0 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-[60] overflow-y-auto">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full relative space-y-4 my-6 shadow-2xl">
+      <button id="btnCerrarQR" type="button" class="no-print absolute top-3 right-3 text-slate-400 hover:text-white text-xl">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <div class="qr-print-card vigix-qr-card rounded-xl p-5 text-center space-y-3">
+        <div>
+          <p class="text-xs uppercase tracking-widest font-bold" id="qrObjetivoNombre">Objetivo</p>
+          <p class="text-lg font-extrabold" id="qrPuntoNombre">Punto</p>
+        </div>
+        <div id="qrContenedor" class="vigix-qr-box"></div>
+        <p class="text-xs font-mono vigix-break" id="qrPayloadTexto"></p>
+        <p class="text-xs">Escanea este codigo con la app del vigilador.</p>
+      </div>
+      <div class="no-print flex flex-wrap justify-end gap-2 pt-2">
+        <button id="btnDescargarQR" type="button" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-sm transition inline-flex items-center gap-2"><i class="fa-solid fa-download"></i> Descargar PNG</button>
+        <button id="btnImprimirQR" type="button" class="bg-sky-600 hover:bg-sky-500 text-white font-bold px-4 py-2 rounded-xl text-sm transition inline-flex items-center gap-2"><i class="fa-solid fa-print"></i> Imprimir</button>
       </div>
     </div>
   </div>
