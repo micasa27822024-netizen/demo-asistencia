@@ -18,7 +18,7 @@
     // [AppCheck] Clave de SITIO de reCAPTCHA ENTERPRISE (es PUBLICA: va en el frontend).
     // La generas en Google Cloud -> Seguridad -> reCAPTCHA Enterprise (clave de
     // tipo "sitio web", basada en puntuacion). REEMPLAZA el valor ANTES de publicar.
-    const RECAPTCHA_SITE_KEY = "6LdhL9wtAAAAADsplK8-j2CIS3Oa-vFCBjdUoSZL";
+    const RECAPTCHA_SITE_KEY = "6Le1INwtAAAAAH5A0LnFlaQGZT2huPlaBxgXKfr6";
     // Solo en localhost: habilita el token de depuracion de App Check (en
     // produccion/GitHub Pages NO se activa). El token sale en la consola del
     // navegador y debes registrarlo en Firebase -> App Check -> "Depuracion".
