@@ -11,7 +11,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' https://cdnjs.cloudflare.com https://unpkg.com https://www.gstatic.com; style-src 'self' https://cdnjs.cloudflare.com https://unpkg.com; font-src 'self' data: https://cdnjs.cloudflare.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://*.googleapis.com https://www.gstatic.com https://nominatim.openstreetmap.org https://vigix-auth-admin.micasa27822024.workers.dev; worker-src 'self' blob:; manifest-src 'self'">
   <title>Demo Asistencia - Panel de Control</title>
   <!-- [CSP] Tailwind servido estático desde el mismo origen (admin.css) en vez del CDN Play (JIT exige 'unsafe-eval'/'unsafe-inline') -->
-  <link rel="stylesheet" href="admin.css" />
+  <link rel="stylesheet" href="admin.css?v=20261004" />
   <!-- Cargador bajo demanda: las librerías pesadas se cargan solo cuando se usan -->
   <script fetchpriority="low" src="lazy-cdn.js"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer">
@@ -1188,12 +1188,12 @@
   </div>
 
   <script src="licencia.js"></script>
-  <script src="admin.app.js"></script>
+  <script src="admin.app.js?v=20261004"></script>
 
   <!-- ============================================================================= -->
   <!--  ALTA DE EMPLEADOS - Firebase Web SDK v10 (Modular) con App secundaria        -->
   <!--  Bloque aditivo: no modifica ninguna lógica existente del panel.            -->
   <!-- ============================================================================= -->
-  <script type="module" src="admin.module.js"></script>
+  <script type="module" src="admin.module.js?v=20261004"></script>
 </body>
 </html>
