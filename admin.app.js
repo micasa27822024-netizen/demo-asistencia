@@ -2239,9 +2239,11 @@ async function obtenerMapaObjetivo(modo) {
   return mapa;
 }
 
-function colocarMarcadorObjetivo(modo, lat, lon, zoom = 18, draggable = true) {
+async function colocarMarcadorObjetivo(modo, lat, lon, zoom = 18, draggable = true) {
   if (!validarCoordenadas(lat, lon)) return;
-  const mapa = obtenerMapaObjetivo(modo);
+  // Esperar a que Leaflet (lazy) termine de cargar ANTES de usar 'L'.
+  // Antes esto era sincronico y usaba 'L' sin cargar -> 'L is not defined'.
+  const mapa = await obtenerMapaObjetivo(modo);
   if (!mapa) return;
 
   const esNuevo = modo === 'nuevo';
@@ -2270,7 +2272,7 @@ function establecerCoordenadasObjetivo(modo, lat, lon, mensaje = '') {
   const lonId = modo === 'nuevo' ? 'newLongitudObjetivo' : 'editLongitudObjetivo';
   document.getElementById(latId).value = formatearCoordenada(lat);
   document.getElementById(lonId).value = formatearCoordenada(lon);
-  colocarMarcadorObjetivo(modo, lat, lon);
+  Promise.resolve(colocarMarcadorObjetivo(modo, lat, lon)).catch(function (e) { console.warn('No se pudo colocar el marcador:', e); });
   if (mensaje) mostrarInfoUbicacion(modo, `${escaparHtml(mensaje)}<br><span class="font-mono">Lat: ${formatearCoordenada(lat)} &nbsp; Lon: ${formatearCoordenada(lon)}</span>`, 'success');
   return true;
 }
@@ -2342,8 +2344,9 @@ function seleccionarResultadoNominatim(modo, indice) {
   document.getElementById(direccionId).value = resultado.display_name || document.getElementById(direccionId).value;
   const contenedorId = modo === 'nuevo' ? 'resultadoDireccionNuevo' : 'resultadoDireccionEditar';
   document.getElementById(contenedorId).innerHTML = `<div class="bg-emerald-500/10 border border-emerald-500/20 text-emerald-200 rounded-xl p-3 text-xs"><i class="fa-solid fa-circle-check"></i> Ubicación seleccionada: <strong>${escaparHtml(resultado.display_name || '')}</strong><br><span class="text-[11px]">El marcador quedó en ${formatearCoordenada(lat)}, ${formatearCoordenada(lon)}. Podés arrastrarlo para corregir el punto.</span></div>`;
-  const mapa = obtenerMapaObjetivo(modo);
-  if (mapa) setTimeout(() => mapa.invalidateSize(), 100);
+  obtenerMapaObjetivo(modo).then(function (mapa) {
+    if (mapa) setTimeout(() => mapa.invalidateSize(), 100);
+  }).catch(function (e) { console.warn('No se pudo preparar el mapa del objetivo:', e); });
 }
 
 function aplicarCoordenadasManualesObjetivo(modo) {
@@ -2530,10 +2533,23 @@ function abrirModalEditarObjetivo(firebaseId) {
   document.getElementById('modalEditarObjetivo').classList.remove('hidden');
   document.body.classList.add('overflow-hidden');
   if (mapaObjetivoEditar) { mapaObjetivoEditar.remove(); mapaObjetivoEditar = null; marcadorObjetivoEditar = null; }
-  const mapa = obtenerMapaObjetivo('editar');
-  if (validarCoordenadas(fila[3], fila[4])) colocarMarcadorObjetivo('editar', fila[3], fila[4]);
-  else if (mapa) setTimeout(() => mapa.invalidateSize(), 150);
+  // Cargar config + puntos de la ronda PRIMERO. Antes el mapa (Leaflet lazy)
+  // se iniciaba de forma sincronica y lanzaba "L is not defined" al abrir el
+  // objetivo, abortando esta funcion ANTES de llegar a cargar los puntos: por
+  // eso la lista salia vacia hasta que se agregaba un punto nuevo. Ahora la
+  // carga de puntos NO depende del mapa.
   cargarRondaObjetivo(firebaseId);
+  // Mapa aislado: cualquier fallo del mapa queda contenido y nunca impide que
+  // aparezca la lista de puntos.
+  (async function () {
+    try {
+      const mapa = await obtenerMapaObjetivo('editar');
+      if (validarCoordenadas(fila[3], fila[4])) await colocarMarcadorObjetivo('editar', fila[3], fila[4]);
+      else if (mapa) setTimeout(() => mapa.invalidateSize(), 150);
+    } catch (e) {
+      console.warn('No se pudo inicializar el mapa del objetivo (no afecta a los puntos):', e);
+    }
+  })();
 }
 
 function cerrarModalEditarObjetivo() {
