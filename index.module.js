@@ -1,5 +1,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getAuth, signInWithCustomToken, signOut, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    // [AppCheck] SDK de App Check: valida que el cliente es TU app (atestacion de origen).
+    import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBYsTCQWwnqEaBzsC5P-9cTM6uBKCnKAmo",
@@ -13,6 +15,23 @@
 
     // Instancia dedicada para NO interferir con ninguna otra sesión de la app.
     const vigApp  = initializeApp(firebaseConfig, "VigAuthApp");
+    // [AppCheck] Clave de SITIO de reCAPTCHA ENTERPRISE (es PUBLICA: va en el frontend).
+    // La generas en Google Cloud -> Seguridad -> reCAPTCHA Enterprise (clave de
+    // tipo "sitio web", basada en puntuacion). REEMPLAZA el valor ANTES de publicar.
+    const RECAPTCHA_SITE_KEY = "6LdhL9wtAAAAADsplK8-j2CIS3Oa-vFCBjdUoSZL";
+    // Solo en localhost: habilita el token de depuracion de App Check (en
+    // produccion/GitHub Pages NO se activa). El token sale en la consola del
+    // navegador y debes registrarlo en Firebase -> App Check -> "Depuracion".
+    if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+      self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    }
+    // [AppCheck] Arranca la atestacion de origen para esta instancia de Firebase.
+    try {
+      initializeAppCheck(vigApp, {
+        provider: new ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY),
+        isTokenAutoRefreshEnabled: true
+      });
+    } catch (e) { console.warn("App Check no se pudo iniciar:", e); }
     const vigAuth = getAuth(vigApp);
     // La sesión sólo vive mientras la pestaña esté abierta (dispositivo
     // compartido). Al cerrar la pestaña, Firebase no restaura la sesión.
