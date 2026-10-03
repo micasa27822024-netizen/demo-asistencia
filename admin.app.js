@@ -901,6 +901,7 @@ document.addEventListener('click', function (ev) {
     case 'eliminarAsignacionTurno': eliminarAsignacionTurno(a1); break;
     case 'seleccionarResultadoNominatim': seleccionarResultadoNominatim(a1, parseInt(a2, 10)); break;
     case 'abrirModalEditarObjetivo': abrirModalEditarObjetivo(a1); break;
+    case 'reintentarCargarRonda': cargarRondaObjetivo(a1); break;
     case 'eliminarObjetivo': eliminarObjetivo(a1); break;
     case 'toggleDiaRonda': toggleDiaRonda(a1); break;
     case 'editarPuntoRonda': editarPuntoRonda(a1); break;
@@ -2924,24 +2925,49 @@ async function cargarRondaObjetivo(id) {
   renderDiasRonda();
   renderPuntosRonda({});
   if (!id) return;
+  // Lectura con auth fresca cada intento (token recalculado en urlConAuthAdmin).
+  var leerRondas = async function () {
+    var url = await window.urlConAuthAdmin(`${URL_FIREBASE}/objetivos/${id}/rondas.json?ts=${Date.now()}`);
+    return fetch(url, { cache: 'no-store' });
+  };
   try {
-    var res = await fetch(await window.urlConAuthAdmin(`${URL_FIREBASE}/objetivos/${id}/rondas.json?ts=${Date.now()}`), { cache: 'no-store' });
-    if (!res.ok) return;
+    var res = await leerRondas();
+    // Reintento unico: si la 1a lectura falla (401 transitorio tras renovar el
+    // token, o un corte de red), esperamos un instante y reintentamos ANTES de
+    // decidir que no hay puntos. Asi evitamos la lista vacia enganosa.
+    if (!res.ok) {
+      await new Promise(function (r) { setTimeout(r, 450); });
+      res = await leerRondas();
+    }
+    if (!res.ok) { renderErrorPuntosRonda(id); return; }
     var data = await res.json();
-    if (!data) return;
-    var cfg = data.config || {};
-    set('rondaHoraInicio', cfg.horaInicio || '');
-    set('rondaHoraFin', cfg.horaFin || '');
-    set('rondaFrecuencia', (cfg.frecuenciaMin != null) ? cfg.frecuenciaMin : '');
-    set('rondaTolerancia', (cfg.toleranciaMin != null) ? cfg.toleranciaMin : '');
-    if (chk) chk.checked = cfg.activo === true;
-    _diasRondaSel = Array.isArray(cfg.diasSemana) ? cfg.diasSemana.slice() : [];
-    renderDiasRonda();
-    _puntosRondaActual = data.puntos || {};
+    if (data) {
+      var cfg = data.config || {};
+      set('rondaHoraInicio', cfg.horaInicio || '');
+      set('rondaHoraFin', cfg.horaFin || '');
+      set('rondaFrecuencia', (cfg.frecuenciaMin != null) ? cfg.frecuenciaMin : '');
+      set('rondaTolerancia', (cfg.toleranciaMin != null) ? cfg.toleranciaMin : '');
+      if (chk) chk.checked = cfg.activo === true;
+      _diasRondaSel = Array.isArray(cfg.diasSemana) ? cfg.diasSemana.slice() : [];
+      renderDiasRonda();
+      _puntosRondaActual = data.puntos || {};
+    }
     renderPuntosRonda(_puntosRondaActual);
   } catch (err) {
     console.warn('No se pudo cargar la ronda del objetivo:', err);
+    renderErrorPuntosRonda(id);
   }
+}
+
+// Aviso visible (no silencioso) cuando la lectura de puntos falla, con boton
+// para reintentar sin tener que cerrar y reabrir el objetivo.
+function renderErrorPuntosRonda(id) {
+  var cuerpo = document.getElementById('cuerpoPuntosRonda');
+  if (!cuerpo) return;
+  cuerpo.innerHTML = '<tr><td colspan="4" class="p-6 text-center">' +
+    '<span class="text-rose-400 mr-1">No se pudieron cargar los puntos.</span>' +
+    '<button data-accion="reintentarCargarRonda" data-a1="' + escaparHtml(String(id || '')) + '" class="bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition inline-flex items-center gap-1"><i class="fa-solid fa-rotate-right"></i> Reintentar</button>' +
+    '</td></tr>';
 }
 
 async function guardarConfigRonda() {
