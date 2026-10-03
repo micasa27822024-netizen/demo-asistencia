@@ -2,8 +2,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithCustomToken, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { getDatabase, ref, set, get, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
-// [AppCheck] SDK de App Check: valida que el cliente es TU app (atestacion de origen).
-import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js";
 
 // ---- Configuración de tu proyecto Firebase ----
 const firebaseConfig = {
@@ -18,23 +16,6 @@ const firebaseConfig = {
 
 // ---- App PRINCIPAL (sesión del Administrador) ----
 const mainApp = initializeApp(firebaseConfig);
-// [AppCheck] Clave de SITIO de reCAPTCHA ENTERPRISE (es PUBLICA: va en el frontend).
-// La generas en Google Cloud -> Seguridad -> reCAPTCHA Enterprise (clave de
-// tipo "sitio web", basada en puntuacion). REEMPLAZA el valor ANTES de publicar.
-const RECAPTCHA_SITE_KEY = "6Le1INwtAAAAAH5A0LnFlaQGZT2huPlaBxgXKfr6";
-// Solo en localhost: habilita el token de depuracion de App Check (en
-// produccion/GitHub Pages NO se activa). El token sale en la consola del
-// navegador y debes registrarlo en Firebase -> App Check -> "Depuracion".
-if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
-  self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-}
-// [AppCheck] Arranca la atestacion de origen para la app PRINCIPAL del admin.
-try {
-  initializeAppCheck(mainApp, {
-    provider: new ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY),
-    isTokenAutoRefreshEnabled: true
-  });
-} catch (e) { console.warn("App Check no se pudo iniciar (mainApp):", e); }
 const mainDb  = getDatabase(mainApp);
 const mainAuth = getAuth(mainApp);
 
@@ -325,14 +306,6 @@ window.logoutAdminReal = logoutAdminReal;
 
 // ---- App SECUNDARIA (crea empleados SIN cerrar la sesión del admin) ----
 const secondaryApp  = initializeApp(firebaseConfig, "SecondaryApp");
-// [AppCheck] La app secundaria tambien habla con Firebase Auth (alta de
-// empleados), asi que necesita su propia atestacion de origen.
-try {
-  initializeAppCheck(secondaryApp, {
-    provider: new ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY),
-    isTokenAutoRefreshEnabled: true
-  });
-} catch (e) { console.warn("App Check no se pudo iniciar (secondaryApp):", e); }
 const secondaryAuth = getAuth(secondaryApp);
 
 /**
