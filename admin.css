@@ -24,3 +24,18 @@
   body.print-comprobante #modalComprobantePin .comprobante-card .border{border-color:#000!important}
   body.print-comprobante #modalComprobantePin #comprobantePin{color:#000!important}
 }
+
+/* ===== Sistema de Rondas con QR (aditivo, mismo origen, CSP-safe) ===== */
+.vigix-check{width:1rem;height:1rem;accent-color:#0ea5e9;cursor:pointer;vertical-align:middle}
+.vigix-qr-box{display:flex;justify-content:center}
+.vigix-qr-box canvas,.vigix-qr-box img{margin:0 auto}
+.vigix-qr-card{background:#fff}
+.vigix-qr-card,.vigix-qr-card *{color:#000}
+.vigix-break{word-break:break-all}
+@media print{
+  body.print-qr>*:not(#modalQRPunto){display:none!important}
+  body.print-qr #modalQRPunto{position:static!important;display:block!important;background:#fff!important;backdrop-filter:none!important;padding:0!important}
+  body.print-qr #modalQRPunto>div{max-width:100%!important;background:#fff!important;border:none!important;box-shadow:none!important;padding:0!important}
+  body.print-qr #modalQRPunto .no-print{display:none!important}
+  body.print-qr #modalQRPunto .qr-print-card{border:1px solid #000!important;border-radius:0!important}
+}
