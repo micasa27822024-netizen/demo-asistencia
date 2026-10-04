@@ -251,6 +251,8 @@ async function cargarDatos() {
     filtrarTabla();
     // Deriva y sincroniza las alertas de supervisión (llegadas tarde / salidas anticipadas).
     generarAlertasSupervision(datosLocales);
+    // [Opción A] Vigilancia de rondas: detecta puntos no marcados a tiempo.
+    evaluarRondasAtrasadas();
 
   } catch (err) {
     console.error(err);
@@ -1243,6 +1245,177 @@ async function exportarPDF() {
 }
 
 // =============================================================================
+//  [OPCIÓN A] ALERTAS DE RONDAS ATRASADAS (vigilancia del lado del cliente)
+//  Lee objetivos + rondasRegistros (solo lectura) y detecta puntos de control
+//  que debieron escanearse y aún no se marcaron dentro de su plazo
+//  (frecuencia + tolerancia). Se evalúa en el navegador del supervisor mientras
+//  el panel está abierto. El archivado queda en este dispositivo (localStorage).
+//  NO escribe en Firebase ni toca el Worker SA-ONLY.
+// =============================================================================
+const CLAVE_ALERTAS_RONDAS_ARCHIVADAS = 'vigix_alertas_rondas_archivadas';
+let alertasRondasDetectadas = [];
+
+function leerArchivadasRondasLocal() {
+  try { return JSON.parse(localStorage.getItem(CLAVE_ALERTAS_RONDAS_ARCHIVADAS) || '[]') || []; } catch (_) { return []; }
+}
+function guardarArchivadasRondasLocal(claves) {
+  try { localStorage.setItem(CLAVE_ALERTAS_RONDAS_ARCHIVADAS, JSON.stringify(Array.from(new Set(claves)))); } catch (_) {}
+}
+function _rondaHhmmAMin(hhmm) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || '').trim());
+  if (!m) return null;
+  const h = parseInt(m[1], 10), mi = parseInt(m[2], 10);
+  if (h < 0 || h > 23 || mi < 0 || mi > 59) return null;
+  return h * 60 + mi;
+}
+// Devuelve {inicioMs, finMs} de la ventana de ronda ACTIVA ahora, o null.
+// Soporta ventanas nocturnas que cruzan la medianoche (p. ej. 22:00 a 06:00).
+function _ventanaRondaActiva(config, ahora) {
+  const ini = _rondaHhmmAMin(config.horaInicio);
+  const fin = _rondaHhmmAMin(config.horaFin);
+  if (ini == null || fin == null || ini === fin) return null;
+  const dias = Array.isArray(config.diasSemana) ? config.diasSemana.map(Number) : [];
+  const nowMin = ahora.getHours() * 60 + ahora.getMinutes();
+  const diaHoy = ahora.getDay();
+  const base0 = new Date(ahora); base0.setHours(0, 0, 0, 0);
+  const ms0 = base0.getTime();
+  if (fin > ini) {
+    if (dias.indexOf(diaHoy) !== -1 && nowMin >= ini && nowMin <= fin) {
+      return { inicioMs: ms0 + ini * 60000, finMs: ms0 + fin * 60000 };
+    }
+    return null;
+  }
+  // Nocturna: tramo noche de HOY.
+  if (dias.indexOf(diaHoy) !== -1 && nowMin >= ini) {
+    return { inicioMs: ms0 + ini * 60000, finMs: ms0 + (24 * 60 + fin) * 60000 };
+  }
+  // Nocturna: tramo madrugada de HOY (la ronda empezó AYER).
+  const diaAyer = (diaHoy + 6) % 7;
+  if (dias.indexOf(diaAyer) !== -1 && nowMin <= fin) {
+    return { inicioMs: ms0 - 24 * 60 * 60000 + ini * 60000, finMs: ms0 + fin * 60000 };
+  }
+  return null;
+}
+
+async function evaluarRondasAtrasadas() {
+  const cont = document.getElementById('listaAlertasRondas');
+  if (!cont) return;
+  let objetivos = null, registros = null;
+  try {
+    [objetivos, registros] = await Promise.all([
+      window.fetchConAuthPanel(`${URL_BASE_FIREBASE}/objetivos.json?ts=${Date.now()}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
+      window.fetchConAuthPanel(`${URL_BASE_FIREBASE}/rondasRegistros.json?ts=${Date.now()}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null)
+    ]);
+  } catch (_) {}
+  const ahora = new Date();
+  const ahoraMs = ahora.getTime();
+  // Último escaneo por objetivo+punto.
+  const ultimoPorPunto = {};
+  if (registros && typeof registros === 'object') {
+    Object.values(registros).forEach(r => {
+      if (!r || !r.idObjetivo || !r.idPunto || !r.timestamp) return;
+      const t = new Date(r.timestamp).getTime();
+      if (isNaN(t)) return;
+      const k = `${r.idObjetivo}__${r.idPunto}`;
+      if (!ultimoPorPunto[k] || t > ultimoPorPunto[k]) ultimoPorPunto[k] = t;
+    });
+  }
+  const detectadas = [];
+  if (objetivos && typeof objetivos === 'object') {
+    const fechaClave = obtenerFechaLocalClave(ahora);
+    Object.entries(objetivos).forEach(([idObj, obj]) => {
+      if (!obj || !obj.rondas || !obj.rondas.config) return;
+      const config = obj.rondas.config;
+      if (config.activo !== true) return;
+      const frecuencia = Number(config.frecuenciaMin) || 0;
+      if (frecuencia <= 0) return; // sin cadencia definida: no se puede evaluar
+      const tolerancia = Math.max(0, Number(config.toleranciaMin) || 0);
+      const ventana = _ventanaRondaActiva(config, ahora);
+      if (!ventana) return; // fuera de horario / día no activo: sin obligación
+      const puntos = (obj.rondas.puntos && typeof obj.rondas.puntos === 'object') ? obj.rondas.puntos : {};
+      const nombreObj = obj.nombre || idObj;
+      Object.entries(puntos).forEach(([idPunto, punto]) => {
+        if (!punto || punto.activo === false) return;
+        const k = `${idObj}__${idPunto}`;
+        let ultimo = ultimoPorPunto[k] || null;
+        if (ultimo != null && ultimo < ventana.inicioMs) ultimo = null; // fuera de la ventana vigente
+        const baseMs = ultimo != null ? ultimo : ventana.inicioMs;
+        const limiteMs = baseMs + (frecuencia + tolerancia) * 60000;
+        if (ahoraMs <= limiteMs) return; // dentro de plazo
+        const atrasoMin = Math.round((ahoraMs - limiteMs) / 60000);
+        const clave = [sanitizarClaveFirebase(idObj), sanitizarClaveFirebase(idPunto), sanitizarClaveFirebase(fechaClave)].join('__');
+        detectadas.push({
+          clave, idObjetivo: idObj, nombreObjetivo: nombreObj,
+          idPunto, nombrePunto: punto.nombre || idPunto,
+          nunca: ultimo == null, ultimoMs: ultimo, atrasoMin, frecuencia, tolerancia
+        });
+      });
+    });
+  }
+  detectadas.sort((a, b) => b.atrasoMin - a.atrasoMin);
+  alertasRondasDetectadas = detectadas;
+  renderAlertasRondas();
+}
+
+function renderAlertasRondas() {
+  const cont = document.getElementById('listaAlertasRondas');
+  const contador = document.getElementById('contadorAlertasRondas');
+  if (!cont) return;
+  const chk = document.getElementById('chkMostrarArchivadasRondas');
+  const mostrarArch = !!(chk && chk.checked);
+  const archivadas = new Set(leerArchivadasRondasLocal());
+  const visibles = alertasRondasDetectadas.filter(a => mostrarArch ? true : !archivadas.has(a.clave));
+  const activas = alertasRondasDetectadas.filter(a => !archivadas.has(a.clave)).length;
+  if (contador) {
+    contador.textContent = String(activas);
+    contador.classList.toggle('hidden', activas === 0);
+  }
+  if (!visibles.length) {
+    cont.innerHTML = `<p class="text-sm text-slate-400 py-4 text-center"><i class="fa-solid fa-circle-check text-emerald-400"></i> No hay rondas atrasadas ${mostrarArch ? '' : 'pendientes '}en este momento.</p>`;
+    return;
+  }
+  cont.innerHTML = '';
+  visibles.forEach(a => {
+    const estaArch = archivadas.has(a.clave);
+    const colorBorde = estaArch ? 'border-slate-600' : (a.nunca ? 'border-rose-500/50' : 'border-amber-500/50');
+    const ultimoTxt = a.ultimoMs ? new Date(a.ultimoMs).toLocaleString('es-AR', { hour12: false }) : 'Sin marcas en esta ronda';
+    const estado = a.nunca
+      ? '<span class="font-semibold text-rose-300">Nunca marcado en esta ronda</span>'
+      : `<span class="font-semibold text-amber-300">Atrasado ${a.atrasoMin} min</span>`;
+    const div = document.createElement('div');
+    div.className = `flex flex-col md:flex-row md:items-center justify-between gap-2 bg-slate-900/70 border ${colorBorde} rounded-xl px-4 py-3 ${estaArch ? 'opacity-60' : ''}`;
+    div.innerHTML = `
+      <div class="flex items-start gap-3">
+        <i class="fa-solid ${a.nunca ? 'fa-triangle-exclamation text-rose-400' : 'fa-hourglass-half text-amber-400'} mt-0.5"></i>
+        <div class="text-xs">
+          <p class="font-bold text-white">${escaparHtml(a.nombrePunto)} <span class="text-slate-400 font-normal">· ${escaparHtml(a.nombreObjetivo)}</span></p>
+          <p class="text-slate-300">${estado} · Cada ${a.frecuencia} min (tol. ${a.tolerancia} min)</p>
+          <p class="text-slate-400">Última marca: ${escaparHtml(ultimoTxt)}</p>
+        </div>
+      </div>
+      <div class="flex-shrink-0">
+        ${estaArch
+          ? `<button type="button" data-accion-ronda="desarchivar" data-clave="${escaparHtml(a.clave)}" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 px-3 py-1.5 rounded-lg transition flex items-center gap-1.5"><i class="fa-solid fa-rotate-left"></i> Restaurar</button>`
+          : `<button type="button" data-accion-ronda="archivar" data-clave="${escaparHtml(a.clave)}" class="text-xs bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/40 px-3 py-1.5 rounded-lg transition flex items-center gap-1.5"><i class="fa-solid fa-box-archive"></i> Archivar</button>`}
+      </div>`;
+    cont.appendChild(div);
+  });
+}
+
+function archivarAlertaRonda(clave) {
+  const arch = new Set(leerArchivadasRondasLocal()); arch.add(clave);
+  guardarArchivadasRondasLocal(Array.from(arch)); renderAlertasRondas();
+}
+function desarchivarAlertaRonda(clave) {
+  const arch = new Set(leerArchivadasRondasLocal()); arch.delete(clave);
+  guardarArchivadasRondasLocal(Array.from(arch)); renderAlertasRondas();
+}
+window.evaluarRondasAtrasadas = evaluarRondasAtrasadas;
+window.renderAlertasRondas = renderAlertasRondas;
+window.archivarAlertaRonda = archivarAlertaRonda;
+window.desarchivarAlertaRonda = desarchivarAlertaRonda;
+
+// =============================================================================
 //  CABLEADO DE EVENTOS (CSP estricta: sin handlers inline en el HTML)
 //  Reemplaza los antiguos onclick/onchange/onkeyup del panel.html por
 //  addEventListener, y usa delegacion para los botones que se generan
@@ -1265,6 +1438,10 @@ document.addEventListener('DOMContentLoaded', function () {
   // --- Alertas de supervision ---
   on('chkMostrarArchivadasSup', 'change', function () { renderAlertasSupervision(); });
   on('btnRefrescarAlertas', 'click', function () { cargarDatos(); });
+
+  // --- Alertas de rondas atrasadas (Opcion A) ---
+  on('chkMostrarArchivadasRondas', 'change', function () { renderAlertasRondas(); });
+  on('btnRefrescarRondas', 'click', function () { evaluarRondasAtrasadas(); });
 
   // --- Auditoria de horas por empleado ---
   on('supFiltroMes', 'change', function () { aplicarFiltrosSupervisor(); });
@@ -1297,6 +1474,21 @@ document.addEventListener('DOMContentLoaded', function () {
         desarchivarAlertaSupervision(clave);
       } else {
         archivarAlertaSupervision(clave);
+      }
+    });
+  }
+
+  // --- Delegacion: botones Archivar / Restaurar de las alertas de rondas ---
+  const listaAlertasRondas = document.getElementById('listaAlertasRondas');
+  if (listaAlertasRondas) {
+    listaAlertasRondas.addEventListener('click', function (ev) {
+      const btn = ev.target.closest('[data-accion-ronda]');
+      if (!btn) return;
+      const clave = btn.getAttribute('data-clave');
+      if (btn.getAttribute('data-accion-ronda') === 'desarchivar') {
+        desarchivarAlertaRonda(clave);
+      } else {
+        archivarAlertaRonda(clave);
       }
     });
   }

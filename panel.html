@@ -214,6 +214,33 @@
       <div id="listaAlertasSupervision" class="space-y-2"></div>
     </div>
 
+    <!-- ===================================================================== -->
+    <!--  MÓDULO: ALERTAS DE RONDAS (Opción A - vigilancia del lado del cliente)   -->
+    <!--  Detecta puntos de ronda que NO se marcaron a tiempo (según la
+          frecuencia + tolerancia configuradas por objetivo). Se evalúa en el
+          navegador mientras el panel está abierto (en cada polling de 30s).
+          SOLO LECTURA: no escribe en Firebase ni toca el Worker. -->
+    <!-- ===================================================================== -->
+    <div id="seccionAlertasRondas" class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-route text-amber-400"></i> Rondas sin marcar a tiempo
+          <span id="contadorAlertasRondas" class="hidden ml-1 text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full">0</span>
+        </h3>
+        <div class="flex items-center gap-3">
+          <label class="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer select-none">
+            <input type="checkbox" id="chkMostrarArchivadasRondas" class="accent-emerald-500">
+            Ver archivadas
+          </label>
+          <button id="btnRefrescarRondas" class="bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5">
+            <i class="fa-solid fa-rotate-right"></i> Refrescar
+          </button>
+        </div>
+      </div>
+      <p class="text-xs text-slate-400">Se listan los <strong>puntos de control</strong> cuyo plazo venció (según la frecuencia y tolerancia que cargaste por objetivo) y aún no fueron escaneados dentro de la ronda de hoy. Solo se evalúan los objetivos con rondas <strong>activas</strong> y dentro de su horario. Podés archivar un aviso cuando ya lo revisaste (queda guardado en este dispositivo y no vuelve a aparecer hoy).</p>
+      <div id="listaAlertasRondas" class="space-y-2"></div>
+    </div>
+
     <!-- MÓDULO OPTIMIZADO: CONSULTA Y GESTIÓN DE HORAS POR VIGILADOR -->
     <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
       <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -388,12 +415,12 @@
   </div>
 
   <script src="licencia.js"></script>
-  <script src="panel.app.js"></script>
+  <script src="panel.app.js?v=20261004a"></script>
 
   <!-- ============================================================================= -->
   <!--  LOGIN REAL SUPERVISOR - Firebase Auth (Web SDK v10 modular)                  -->
   <!--  Bloque aditivo: no modifica ninguna lógica existente del panel.             -->
   <!-- ============================================================================= -->
-  <script type="module" src="panel.module.js"></script>
+  <script type="module" src="panel.module.js?v=20261004a"></script>
 </body>
 </html>
