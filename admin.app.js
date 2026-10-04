@@ -635,6 +635,7 @@ function cambiarTab(tab) {
   document.getElementById('tabObjetivos').classList.add('hidden');
   document.getElementById('tabDispositivos').classList.add('hidden');
   document.getElementById('tabConfiguracion').classList.add('hidden');
+  { var _tRR = document.getElementById('tabRondasReporte'); if (_tRR) _tRR.classList.add('hidden'); }
 
   document.getElementById('tabBtnMarcaciones').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
   document.getElementById('tabBtnAlertasUbicacion').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
@@ -645,6 +646,7 @@ function cambiarTab(tab) {
 
   document.getElementById('tabBtnDispositivos').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
   document.getElementById('tabBtnConfiguracion').className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition";
+  { var _bRR = document.getElementById('tabBtnRondasReporte'); if (_bRR) _bRR.className = "px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition"; }
   if (tab === 'marcaciones') {
     document.getElementById('tabMarcaciones').classList.remove('hidden');
     document.getElementById('tabBtnMarcaciones').className = "px-5 py-3 font-semibold text-sm border-b-2 border-emerald-500 text-emerald-400 flex items-center gap-2 transition";
@@ -673,7 +675,180 @@ function cambiarTab(tab) {
     document.getElementById('tabConfiguracion').classList.remove('hidden');
     document.getElementById('tabBtnConfiguracion').className = "px-5 py-3 font-semibold text-sm border-b-2 border-emerald-500 text-emerald-400 flex items-center gap-2 transition";
     aplicarConfigGlobalAInputs();
+  } else if (tab === 'rondasReporte') {
+    document.getElementById('tabRondasReporte').classList.remove('hidden');
+    document.getElementById('tabBtnRondasReporte').className = "px-5 py-3 font-semibold text-sm border-b-2 border-emerald-500 text-emerald-400 flex items-center gap-2 transition";
+    cargarReporteRondas();
   }
+}
+
+// ===================================================================
+//  PASO 3 - REPORTE DE RONDAS (admin / supervisor)   [ADITIVO, SOLO LECTURA]
+//  Lee el nodo rondasRegistros (append-only, lo que escanea el vigilador) y
+//  lo cruza con objetivos (nombre legible) y personal (nombre del vigilador por
+//  legajo). No escribe nada ni toca ninguna otra pestana. Admin y supervisor
+//  pueden leer el nodo completo (ver database.rules.json -> rondasRegistros).
+// ===================================================================
+var _reporteRondasCache = [];
+var _nombresObjetivosRonda = {};
+var _nombresVigiladoresRonda = {};
+
+async function cargarReporteRondas() {
+  var estado = document.getElementById('estadoReporteRondas');
+  if (estado) { estado.textContent = 'Cargando registros de rondas\u2026'; estado.className = 'text-xs text-slate-400'; }
+  try {
+    // Mapa idObjetivo -> nombre legible.
+    try {
+      var resObj = await fetch(await window.urlConAuthAdmin(URL_FIREBASE + '/objetivos.json?ts=' + Date.now()), { cache: 'no-store' });
+      var dataObj = resObj.ok ? await resObj.json() : null;
+      _nombresObjetivosRonda = {};
+      if (dataObj) Object.keys(dataObj).forEach(function (id) {
+        var d = dataObj[id];
+        _nombresObjetivosRonda[id] = (typeof d === 'string') ? d : ((d && d.nombre) || id);
+      });
+    } catch (_) {}
+    // Mapa legajo -> nombre del vigilador.
+    try {
+      var resPer = await fetch(await window.urlConAuthAdmin(URL_FIREBASE + '/personal.json?ts=' + Date.now()), { cache: 'no-store' });
+      var dataPer = resPer.ok ? await resPer.json() : null;
+      _nombresVigiladoresRonda = {};
+      if (dataPer) Object.keys(dataPer).forEach(function (id) {
+        var p = dataPer[id];
+        if (p && p.legajo != null) _nombresVigiladoresRonda[String(p.legajo)] = p.nombre || '';
+      });
+    } catch (_) {}
+    // Registros de rondas (nodo completo; admin/supervisor).
+    var res = await fetch(await window.urlConAuthAdmin(URL_FIREBASE + '/rondasRegistros.json?ts=' + Date.now()), { cache: 'no-store' });
+    if (!res.ok) {
+      if (estado) {
+        estado.textContent = (res.status === 401 || res.status === 403)
+          ? 'Sin permiso para leer las rondas. Revis\u00e1 que las Reglas (nodo rondasRegistros) est\u00e9n desplegadas.'
+          : ('No se pudieron cargar las rondas (error ' + res.status + ').');
+        estado.className = 'text-xs text-rose-400';
+      }
+      _reporteRondasCache = [];
+      renderReporteRondas();
+      return;
+    }
+    var data = await res.json();
+    var arr = [];
+    if (data) Object.keys(data).forEach(function (id) {
+      var r = data[id] || {};
+      r._id = id;
+      arr.push(r);
+    });
+    // Mas recientes primero.
+    arr.sort(function (a, b) { return (Date.parse(b.timestamp) || 0) - (Date.parse(a.timestamp) || 0); });
+    _reporteRondasCache = arr;
+    poblarFiltroObjetivosRonda();
+    renderReporteRondas();
+  } catch (e) {
+    if (estado) { estado.textContent = 'Error al cargar las rondas. Reintent\u00e1.'; estado.className = 'text-xs text-rose-400'; }
+    _reporteRondasCache = [];
+    renderReporteRondas();
+  }
+}
+
+function fmtFechaHoraRonda(iso) {
+  var ms = Date.parse(iso);
+  if (!ms) return '-';
+  try {
+    return new Date(ms).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  } catch (_) { return new Date(ms).toISOString(); }
+}
+
+function fechaLocalISORonda(iso) {
+  var ms = Date.parse(iso); if (!ms) return '';
+  var d = new Date(ms);
+  var mm = ('0' + (d.getMonth() + 1)).slice(-2);
+  var dd = ('0' + d.getDate()).slice(-2);
+  return d.getFullYear() + '-' + mm + '-' + dd;
+}
+
+function poblarFiltroObjetivosRonda() {
+  var sel = document.getElementById('filtroObjetivoRonda');
+  if (!sel) return;
+  var prev = sel.value;
+  var ids = {};
+  _reporteRondasCache.forEach(function (r) { if (r.idObjetivo) ids[r.idObjetivo] = true; });
+  var html = '<option value="">Todos los objetivos</option>';
+  Object.keys(ids).forEach(function (id) {
+    var nombre = _nombresObjetivosRonda[id] || id;
+    html += '<option value="' + escaparHtml(id) + '">' + escaparHtml(nombre) + '</option>';
+  });
+  sel.innerHTML = html;
+  if (prev) sel.value = prev;
+}
+
+function limpiarFiltrosRonda() {
+  var fo = document.getElementById('filtroObjetivoRonda'); if (fo) fo.value = '';
+  var ff = document.getElementById('filtroFechaRonda'); if (ff) ff.value = '';
+  var fl = document.getElementById('filtroLegajoRonda'); if (fl) fl.value = '';
+  renderReporteRondas();
+}
+
+function renderReporteRondas() {
+  var cuerpo = document.getElementById('cuerpoReporteRondas');
+  var estado = document.getElementById('estadoReporteRondas');
+  if (!cuerpo) return;
+  var fObj = (document.getElementById('filtroObjetivoRonda') || {}).value || '';
+  var fFecha = (document.getElementById('filtroFechaRonda') || {}).value || '';
+  var fLeg = ((document.getElementById('filtroLegajoRonda') || {}).value || '').trim();
+
+  var filtrados = _reporteRondasCache.filter(function (r) {
+    if (fObj && r.idObjetivo !== fObj) return false;
+    if (fLeg && String(r.legajo || '') !== fLeg) return false;
+    if (fFecha && fechaLocalISORonda(r.timestamp) !== fFecha) return false;
+    return true;
+  });
+
+  var total = filtrados.length, fueraRadio = 0, sinGps = 0;
+  filtrados.forEach(function (r) {
+    if (!r.gpsDisponible) sinGps++;
+    else if (!r.ubicacionValidada) fueraRadio++;
+  });
+  var elTot = document.getElementById('resumenRondasTotal'); if (elTot) elTot.textContent = total;
+  var elFR = document.getElementById('resumenRondasFuera'); if (elFR) elFR.textContent = fueraRadio;
+  var elSG = document.getElementById('resumenRondasSinGps'); if (elSG) elSG.textContent = sinGps;
+
+  if (estado) {
+    estado.textContent = total ? (total + ' paso(s) de ronda') : 'No hay pasos de ronda para los filtros elegidos.';
+    estado.className = 'text-xs text-slate-400';
+  }
+
+  if (!total) {
+    cuerpo.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-slate-400">No hay pasos de ronda registrados.</td></tr>';
+    return;
+  }
+
+  var html = '';
+  filtrados.forEach(function (r) {
+    var nombreObj = _nombresObjetivosRonda[r.idObjetivo] || r.idObjetivo || '-';
+    var nombreVig = _nombresVigiladoresRonda[String(r.legajo)] || '';
+    var ubicHtml;
+    if (!r.gpsDisponible) {
+      ubicHtml = '<span class="inline-block px-2 py-0.5 rounded-full text-xs font-bold border border-slate-500/30 text-slate-400 bg-slate-500/10">Sin GPS</span>';
+    } else if (r.ubicacionValidada) {
+      ubicHtml = '<span class="inline-block px-2 py-0.5 rounded-full text-xs font-bold border border-emerald-500/30 text-emerald-400 bg-emerald-500/10">En el punto' + (r.distanciaMetros != null ? ' \u00b7 ' + r.distanciaMetros + ' m' : '') + '</span>';
+    } else {
+      ubicHtml = '<span class="inline-block px-2 py-0.5 rounded-full text-xs font-bold border border-amber-500/30 text-amber-400 bg-amber-500/10">Fuera de radio' + (r.distanciaMetros != null ? ' \u00b7 ' + r.distanciaMetros + ' m' : '') + '</span>';
+    }
+    var mapaHtml = '';
+    if (r.latitud != null && r.longitud != null) {
+      var mapa = 'https://www.google.com/maps?q=' + encodeURIComponent(r.latitud + ',' + r.longitud);
+      mapaHtml = '<a href="' + escaparHtml(mapa) + '" target="_blank" rel="noopener" class="text-xs text-sky-400 hover:underline"><i class="fa-solid fa-map-location-dot"></i> Ver mapa</a>';
+    }
+    html +=
+      '<tr class="hover:bg-slate-800/40">' +
+        '<td class="p-3 text-slate-300 whitespace-nowrap">' + escaparHtml(fmtFechaHoraRonda(r.timestamp)) + '</td>' +
+        '<td class="p-3 text-slate-200">' + escaparHtml(nombreObj) + '</td>' +
+        '<td class="p-3 font-medium text-white">' + escaparHtml(r.nombrePunto || r.idPunto || '-') + '</td>' +
+        '<td class="p-3 text-slate-300">' + escaparHtml(nombreVig || '\u2014') + '<br><span class="text-xs text-slate-500">Leg: ' + escaparHtml(String(r.legajo || '-')) + '</span></td>' +
+        '<td class="p-3">' + ubicHtml + '</td>' +
+        '<td class="p-3 text-center">' + (mapaHtml || '<span class="text-slate-600 text-xs">\u2014</span>') + '</td>' +
+      '</tr>';
+  });
+  cuerpo.innerHTML = html;
 }
 
 // ====== CONFIGURACIÓN GLOBAL (tolerancias + radio) Y CÁLCULO DE CUMPLIMIENTO ======
@@ -3222,6 +3397,12 @@ function initInlineHandlers() {
   document.getElementById("tabBtnObjetivos").addEventListener("click", function(e) { cambiarTab('objetivos') });
   document.getElementById("tabBtnDispositivos").addEventListener("click", function(e) { cambiarTab('dispositivos') });
   document.getElementById("tabBtnConfiguracion").addEventListener("click", function(e) { cambiarTab('configuracion') });
+  { var _b = document.getElementById("tabBtnRondasReporte"); if (_b) _b.addEventListener("click", function(e) { cambiarTab('rondasReporte') }); }
+  { var _r = document.getElementById("btnActualizarReporteRondas"); if (_r) _r.addEventListener("click", function(e) { cargarReporteRondas() }); }
+  { var _fo = document.getElementById("filtroObjetivoRonda"); if (_fo) _fo.addEventListener("change", function(e) { renderReporteRondas() }); }
+  { var _ff = document.getElementById("filtroFechaRonda"); if (_ff) _ff.addEventListener("change", function(e) { renderReporteRondas() }); }
+  { var _fl = document.getElementById("filtroLegajoRonda"); if (_fl) _fl.addEventListener("keyup", function(e) { renderReporteRondas() }); }
+  { var _bl = document.getElementById("btnLimpiarFiltrosRonda"); if (_bl) _bl.addEventListener("click", function(e) { limpiarFiltrosRonda() }); }
   document.getElementById("inputBusqueda").addEventListener("keyup", function(e) { filtrarTablaMarcaciones() });
   document.getElementById("filtroAuditoria").addEventListener("change", function(e) { filtrarTablaMarcaciones() });
   document.getElementById("filtroTipo").addEventListener("change", function(e) { filtrarTablaMarcaciones() });

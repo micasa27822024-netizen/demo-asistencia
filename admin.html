@@ -141,6 +141,9 @@
       <button id="tabBtnObjetivos" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
         <i class="fa-solid fa-building"></i> Objetivos / Puestos
       </button>
+      <button id="tabBtnRondasReporte" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
+        <i class="fa-solid fa-route text-emerald-400"></i> Rondas
+      </button>
       <button id="tabBtnDispositivos" class="px-5 py-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
         <i class="fa-solid fa-mobile-screen"></i> Dispositivos
       </button>
@@ -527,6 +530,89 @@
             </thead>
             <tbody id="cuerpoTablaObjetivos" class="divide-y divide-slate-700/50">
               <tr><td colspan="6" class="p-8 text-center text-slate-400">Cargando objetivos...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ TAB RONDAS (Paso 3: reporte de rondas con QR) ============ -->
+    <!--  Aditivo y SOLO LECTURA: muestra lo que el vigilador escanea (nodo
+          rondasRegistros). Admin y supervisor pueden leerlo (ver
+          database.rules.json). No toca ninguna otra pestana ni la logica previa. -->
+    <div id="tabRondasReporte" class="hidden space-y-4">
+
+      <!-- Encabezado -->
+      <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-xl">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-emerald-500/20 border border-emerald-500/40 rounded-xl flex items-center justify-center text-emerald-400">
+            <i class="fa-solid fa-route"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <h3 class="font-bold text-white text-base">Rondas registradas</h3>
+            <p class="text-xs text-slate-400">Puntos de control que los vigiladores escanearon durante sus recorridos.</p>
+          </div>
+          <button type="button" id="btnActualizarReporteRondas" class="bg-slate-700 hover:bg-slate-600 text-white font-bold px-4 py-2 rounded-xl text-sm transition inline-flex items-center gap-2">
+            <i class="fa-solid fa-rotate"></i> Actualizar
+          </button>
+        </div>
+      </div>
+
+      <!-- Resumen -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4">
+          <p class="text-xs uppercase text-slate-400 font-semibold">Pasos registrados</p>
+          <p class="text-2xl font-black text-white mt-1" id="resumenRondasTotal">0</p>
+        </div>
+        <div class="bg-slate-800 border border-amber-500/30 rounded-2xl p-4">
+          <p class="text-xs uppercase text-amber-400 font-semibold">Fuera del radio</p>
+          <p class="text-2xl font-black text-amber-400 mt-1" id="resumenRondasFuera">0</p>
+        </div>
+        <div class="bg-slate-800 border border-slate-600/40 rounded-2xl p-4">
+          <p class="text-xs uppercase text-slate-400 font-semibold">Sin ubicación GPS</p>
+          <p class="text-2xl font-black text-slate-300 mt-1" id="resumenRondasSinGps">0</p>
+        </div>
+      </div>
+
+      <!-- Filtros -->
+      <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+        <div>
+          <label class="block text-xs uppercase text-slate-400 mb-1">Objetivo</label>
+          <select id="filtroObjetivoRonda" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+            <option value="">Todos los objetivos</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs uppercase text-slate-400 mb-1">Fecha</label>
+          <input type="date" id="filtroFechaRonda" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+        </div>
+        <div>
+          <label class="block text-xs uppercase text-slate-400 mb-1">Legajo vigilador</label>
+          <input type="text" id="filtroLegajoRonda" inputmode="numeric" placeholder="Ej: 0286" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+        </div>
+        <div>
+          <button type="button" id="btnLimpiarFiltrosRonda" class="w-full bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold px-3 py-2 rounded-xl text-sm transition">Limpiar filtros</button>
+        </div>
+      </div>
+
+      <p id="estadoReporteRondas" class="text-xs text-slate-400">Cargando registros de rondas…</p>
+
+      <!-- Tabla -->
+      <div class="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-slate-950 text-slate-400 uppercase text-xs">
+              <tr>
+                <th class="p-3">Fecha / Hora</th>
+                <th class="p-3">Objetivo</th>
+                <th class="p-3">Punto</th>
+                <th class="p-3">Vigilador</th>
+                <th class="p-3">Ubicación</th>
+                <th class="p-3 text-center">Mapa</th>
+              </tr>
+            </thead>
+            <tbody id="cuerpoReporteRondas" class="divide-y divide-slate-700/50">
+              <tr><td colspan="6" class="p-8 text-center text-slate-400">Cargando rondas…</td></tr>
             </tbody>
           </table>
         </div>
@@ -1192,12 +1278,12 @@
   </div>
 
   <script src="licencia.js"></script>
-  <script src="admin.app.js?v=20261004b"></script>
+  <script src="admin.app.js?v=20261004d"></script>
 
   <!-- ============================================================================= -->
   <!--  ALTA DE EMPLEADOS - Firebase Web SDK v10 (Modular) con App secundaria        -->
   <!--  Bloque aditivo: no modifica ninguna lógica existente del panel.            -->
   <!-- ============================================================================= -->
-  <script type="module" src="admin.module.js?v=20261004b"></script>
+  <script type="module" src="admin.module.js?v=20261004d"></script>
 </body>
 </html>
